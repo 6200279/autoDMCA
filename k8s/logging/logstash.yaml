@@ -1,0 +1,462 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: logging
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    http.port: 9600
+    log.level: info
+    path.logs: /usr/share/logstash/logs
+    
+    # Pipeline settings
+    pipeline.workers: 4
+    pipeline.batch.size: 1000
+    pipeline.batch.delay: 50
+    
+    # Queue settings
+    queue.type: memory
+    queue.max_bytes: 1gb
+    
+    # Monitoring
+    monitoring.enabled: false
+    xpack.monitoring.enabled: false
+
+  logstash.conf: |
+    input {
+      beats {
+        port => 5044
+        host => "0.0.0.0"
+      }
+      
+      # Kubernetes logs
+      http {
+        port => 8080
+        host => "0.0.0.0"
+        codec => json
+        additional_codecs => {
+          "application/json" => "json"
+        }
+      }
+      
+      # Application logs via syslog
+      syslog {
+        port => 5140
+        host => "0.0.0.0"
+      }
+    }
+    
+    filter {
+      # Parse Kubernetes logs
+      if [kubernetes] {
+        # Extract log level from message
+        grok {
+          match => { 
+            "message" => "(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z) \[(?<log_level>\w+)\] (?<log_message>.*)"
+          }
+          tag_on_failure => ["_grokparsefailure_kubernetes"]
+        }
+        
+        # Parse JSON logs from applications
+        if [log_message] =~ /^\{.*\}$/ {
+          json {
+            source => "log_message"
+            target => "parsed_json"
+          }
+        }
+        
+        # Add environment and service tags
+        mutate {
+          add_field => {
+            "environment" => "%{[kubernetes][labels][environment]}"
+            "service" => "%{[kubernetes][labels][app]}"
+            "pod_name" => "%{[kubernetes][pod][name]}"
+            "namespace" => "%{[kubernetes][namespace]}"
+            "node_name" => "%{[kubernetes][node][name]}"
+          }
+        }
+      }
+      
+      # Parse FastAPI/Uvicorn logs
+      if [service] == "backend" {
+        grok {
+          match => { 
+            "message" => "%{TIMESTAMP_ISO8601:timestamp} \| %{LOGLEVEL:level} \| %{DATA:logger} \| (?<request_id>[a-f0-9-]{36}) \| %{GREEDYDATA:message_content}"
+          }
+          tag_on_failure => ["_grokparsefailure_fastapi"]
+        }
+        
+        # Parse HTTP access logs
+        if [message] =~ /.*HTTP.*/ {
+          grok {
+            match => {
+              "message" => "%{IP:client_ip} - - \[%{HTTPDATE:timestamp}\] \"%{WORD:method} %{URIPATHPARAM:path} HTTP/%{NUMBER:http_version}\" %{INT:status_code} %{INT:response_size} \"%{DATA:referrer}\" \"%{DATA:user_agent}\" %{NUMBER:response_time}"
+            }
+            tag_on_failure => ["_grokparsefailure_http"]
+          }
+          
+          # Convert numeric fields
+          mutate {
+            convert => {
+              "status_code" => "integer"
+              "response_size" => "integer"
+              "response_time" => "float"
+            }
+          }
+          
+          # Add HTTP status categories
+          if [status_code] >= 500 {
+            mutate { add_field => { "status_category" => "5xx_error" } }
+          } else if [status_code] >= 400 {
+            mutate { add_field => { "status_category" => "4xx_error" } }
+          } else if [status_code] >= 300 {
+            mutate { add_field => { "status_category" => "3xx_redirect" } }
+          } else if [status_code] >= 200 {
+            mutate { add_field => { "status_category" => "2xx_success" } }
+          }
+        }
+      }
+      
+      # Parse Celery worker logs
+      if [service] =~ /celery-worker.*/ {
+        grok {
+          match => { 
+            "message" => "\[%{TIMESTAMP_ISO8601:timestamp}: %{LOGLEVEL:level}/%{DATA:process_type}\] %{GREEDYDATA:task_info}"
+          }
+          tag_on_failure => ["_grokparsefailure_celery"]
+        }
+        
+        # Extract task information
+        if [task_info] =~ /.*Task.*/ {
+          grok {
+            match => {
+              "task_info" => "Task %{DATA:task_name}\[%{DATA:task_id}\] %{DATA:task_status}.*"
+            }
+          }
+        }
+      }
+      
+      # Parse database logs
+      if [service] == "postgres" {
+        grok {
+          match => { 
+            "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{INT:pid}\] %{LOGLEVEL:level}:  %{GREEDYDATA:db_message}"
+          }
+          tag_on_failure => ["_grokparsefailure_postgres"]
+        }
+      }
+      
+      # Parse NGINX logs
+      if [service] == "nginx" {
+        grok {
+          match => {
+            "message" => "%{IPORHOST:client_ip} - %{DATA:user} \[%{HTTPDATE:timestamp}\] \"%{WORD:method} %{URIPATHPARAM:path} HTTP/%{NUMBER:http_version}\" %{INT:status_code} %{INT:response_size} \"%{DATA:referrer}\" \"%{DATA:user_agent}\" rt=%{NUMBER:request_time} uct=\"%{DATA:upstream_connect_time}\" uht=\"%{DATA:upstream_header_time}\" urt=\"%{DATA:upstream_response_time}\""
+          }
+          tag_on_failure => ["_grokparsefailure_nginx"]
+        }
+        
+        # Convert numeric fields
+        mutate {
+          convert => {
+            "status_code" => "integer"
+            "response_size" => "integer"
+            "request_time" => "float"
+            "upstream_connect_time" => "float"
+            "upstream_header_time" => "float"
+            "upstream_response_time" => "float"
+          }
+        }
+      }
+      
+      # Security log parsing for suspicious activities
+      if [message] =~ /.*(failed|error|exception|unauthorized|forbidden|attack|inject|exploit).*/i {
+        mutate {
+          add_field => { "security_alert" => "true" }
+          add_tag => ["security"]
+        }
+      }
+      
+      # Performance monitoring
+      if [response_time] and [response_time] > 2.0 {
+        mutate {
+          add_field => { "slow_request" => "true" }
+          add_tag => ["performance"]
+        }
+      }
+      
+      # Common field cleanup
+      mutate {
+        remove_field => ["@version", "host", "agent"]
+      }
+      
+      # Add GeoIP information for client IPs
+      if [client_ip] and [client_ip] !~ /^(10\.|172\.16\.|192\.168\.)/ {
+        geoip {
+          source => "client_ip"
+          target => "geoip"
+        }
+      }
+    }
+    
+    output {
+      elasticsearch {
+        hosts => ["elasticsearch:9200"]
+        index => "autodmca-logs-%{+YYYY.MM.dd}"
+        
+        # Index templates based on log type
+        template_name => "autodmca-logs"
+        template => "/usr/share/logstash/templates/autodmca-template.json"
+        template_overwrite => true
+        
+        # Document routing
+        routing => "%{service}"
+      }
+      
+      # Security alerts to separate index
+      if "security" in [tags] {
+        elasticsearch {
+          hosts => ["elasticsearch:9200"]
+          index => "security-alerts-%{+YYYY.MM.dd}"
+        }
+      }
+      
+      # Performance issues to separate index
+      if "performance" in [tags] {
+        elasticsearch {
+          hosts => ["elasticsearch:9200"]
+          index => "performance-issues-%{+YYYY.MM.dd}"
+        }
+      }
+      
+      # Debug output (remove in production)
+      # stdout {
+      #   codec => rubydebug
+      # }
+    }
+
+  autodmca-template.json: |
+    {
+      "index_patterns": ["autodmca-logs-*"],
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0,
+        "index.lifecycle.name": "autodmca-policy",
+        "index.lifecycle.rollover_alias": "autodmca-logs",
+        "refresh_interval": "30s",
+        "index.mapping.total_fields.limit": 2000
+      },
+      "mappings": {
+        "properties": {
+          "timestamp": {
+            "type": "date"
+          },
+          "level": {
+            "type": "keyword"
+          },
+          "message": {
+            "type": "text",
+            "analyzer": "standard"
+          },
+          "service": {
+            "type": "keyword"
+          },
+          "environment": {
+            "type": "keyword"
+          },
+          "client_ip": {
+            "type": "ip"
+          },
+          "status_code": {
+            "type": "integer"
+          },
+          "response_time": {
+            "type": "float"
+          },
+          "response_size": {
+            "type": "integer"
+          },
+          "method": {
+            "type": "keyword"
+          },
+          "path": {
+            "type": "keyword"
+          },
+          "user_agent": {
+            "type": "text"
+          },
+          "kubernetes": {
+            "properties": {
+              "namespace": {
+                "type": "keyword"
+              },
+              "pod": {
+                "properties": {
+                  "name": {
+                    "type": "keyword"
+                  }
+                }
+              },
+              "labels": {
+                "properties": {
+                  "app": {
+                    "type": "keyword"
+                  },
+                  "environment": {
+                    "type": "keyword"
+                  }
+                }
+              }
+            }
+          },
+          "geoip": {
+            "properties": {
+              "location": {
+                "type": "geo_point"
+              },
+              "country_name": {
+                "type": "keyword"
+              },
+              "city_name": {
+                "type": "keyword"
+              }
+            }
+          }
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: logging
+  labels:
+    app: logstash
+    component: processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+        component: processor
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+      - name: logstash
+        image: docker.elastic.co/logstash/logstash:8.8.0
+        ports:
+        - containerPort: 5044
+          name: beats
+          protocol: TCP
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 5140
+          name: syslog
+          protocol: TCP
+        - containerPort: 9600
+          name: monitoring
+          protocol: TCP
+        env:
+        - name: LS_JAVA_OPTS
+          value: "-Xms1g -Xmx2g"
+        - name: PIPELINE_WORKERS
+          value: "4"
+        - name: PIPELINE_BATCH_SIZE
+          value: "1000"
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "3Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/logstash/config/logstash.yml
+          subPath: logstash.yml
+          readOnly: true
+        - name: pipeline
+          mountPath: /usr/share/logstash/pipeline/logstash.conf
+          subPath: logstash.conf
+          readOnly: true
+        - name: template
+          mountPath: /usr/share/logstash/templates/autodmca-template.json
+          subPath: autodmca-template.json
+          readOnly: true
+        - name: data
+          mountPath: /usr/share/logstash/data
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9600
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9600
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: config
+        configMap:
+          name: logstash-config
+          items:
+          - key: logstash.yml
+            path: logstash.yml
+      - name: pipeline
+        configMap:
+          name: logstash-config
+          items:
+          - key: logstash.conf
+            path: logstash.conf
+      - name: template
+        configMap:
+          name: logstash-config
+          items:
+          - key: autodmca-template.json
+            path: autodmca-template.json
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: logging
+  labels:
+    app: logstash
+spec:
+  selector:
+    app: logstash
+  ports:
+  - port: 5044
+    targetPort: 5044
+    name: beats
+    protocol: TCP
+  - port: 8080
+    targetPort: 8080
+    name: http
+    protocol: TCP
+  - port: 5140
+    targetPort: 5140
+    name: syslog
+    protocol: TCP
+  - port: 9600
+    targetPort: 9600
+    name: monitoring
+    protocol: TCP
+  type: ClusterIP

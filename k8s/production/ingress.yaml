@@ -1,0 +1,180 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: autodmca-ingress
+  namespace: production
+  annotations:
+    # AWS Load Balancer Controller
+    kubernetes.io/ingress.class: "alb"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '5'
+    
+    # SSL Configuration
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-west-2:ACCOUNT:certificate/CERTIFICATE_ID"
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS-1-2-2017-01
+    
+    # Load balancing
+    alb.ingress.kubernetes.io/load-balancer-name: autodmca-prod-alb
+    alb.ingress.kubernetes.io/group.name: autodmca-prod
+    alb.ingress.kubernetes.io/target-group-attributes: |
+      stickiness.enabled=false,
+      deregistration_delay.timeout_seconds=30,
+      stickiness.type=lb_cookie,
+      stickiness.lb_cookie.duration_seconds=86400
+    
+    # Security
+    alb.ingress.kubernetes.io/wafv2-acl-arn: "arn:aws:wafv2:us-west-2:ACCOUNT:webacl/autodmca-prod-waf"
+    alb.ingress.kubernetes.io/shield-advanced-protection: 'true'
+    
+    # Access logging
+    alb.ingress.kubernetes.io/access-log-s3-bucket-name: autodmca-prod-alb-logs
+    alb.ingress.kubernetes.io/access-log-s3-bucket-prefix: production
+    alb.ingress.kubernetes.io/access-log-s3-enabled: 'true'
+    
+    # Rate limiting and DDoS protection
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-burst-multiplier: "2"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "100"
+    
+    # Custom headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options DENY always;
+      add_header X-Content-Type-Options nosniff always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' *.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' wss: https:; media-src 'self'; object-src 'none'; frame-src 'self' *.stripe.com; base-uri 'self'; form-action 'self';" always;
+spec:
+  tls:
+  - hosts:
+    - autodmca.com
+    - app.autodmca.com
+    - api.autodmca.com
+    secretName: tls-secret
+  rules:
+  - host: autodmca.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 8080
+  - host: app.autodmca.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 8080
+  - host: api.autodmca.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 8000
+---
+# WAF Web ACL for additional protection
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: waf-rules
+  namespace: production
+data:
+  waf-config.json: |
+    {
+      "Name": "autodmca-prod-waf",
+      "Rules": [
+        {
+          "Name": "RateLimitRule",
+          "Priority": 1,
+          "Statement": {
+            "RateBasedStatement": {
+              "Limit": 2000,
+              "AggregateKeyType": "IP"
+            }
+          },
+          "Action": {
+            "Block": {}
+          }
+        },
+        {
+          "Name": "SQLInjectionRule",
+          "Priority": 2,
+          "Statement": {
+            "ManagedRuleGroupStatement": {
+              "VendorName": "AWS",
+              "Name": "AWSManagedRulesSQLiRuleSet"
+            }
+          },
+          "Action": {
+            "Block": {}
+          }
+        },
+        {
+          "Name": "XSSRule",
+          "Priority": 3,
+          "Statement": {
+            "ManagedRuleGroupStatement": {
+              "VendorName": "AWS",
+              "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+            }
+          },
+          "Action": {
+            "Block": {}
+          }
+        }
+      ]
+    }

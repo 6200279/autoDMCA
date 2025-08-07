@@ -1,0 +1,281 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: logging
+data:
+  kibana.yml: |
+    server.name: kibana
+    server.host: "0.0.0.0"
+    server.port: 5601
+    
+    # Elasticsearch connection
+    elasticsearch.hosts: ["http://elasticsearch:9200"]
+    elasticsearch.requestTimeout: 60000
+    elasticsearch.shardTimeout: 30000
+    
+    # Security settings
+    xpack.security.enabled: false
+    xpack.monitoring.enabled: false
+    xpack.ml.enabled: false
+    xpack.watcher.enabled: false
+    
+    # UI settings
+    server.basePath: ""
+    server.rewriteBasePath: false
+    
+    # Logging
+    logging.appenders.console.type: console
+    logging.appenders.console.layout.type: json
+    logging.root.level: info
+    
+    # Performance settings
+    elasticsearch.maxSockets: 1024
+    elasticsearch.keepAlive: true
+    
+    # Default index pattern
+    kibana.index: ".kibana"
+    kibana.defaultAppId: "discover"
+    
+    # Advanced settings
+    server.maxPayload: 1048576
+    server.compression.enabled: true
+    
+    # Monitoring
+    monitoring.ui.container.elasticsearch.enabled: true
+    
+    # Maps (disable for better performance)
+    map.includeElasticMapsService: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: logging
+  labels:
+    app: kibana
+    component: visualization
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+        component: visualization
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:8.8.0
+        ports:
+        - containerPort: 5601
+          name: ui
+          protocol: TCP
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch:9200"
+        - name: SERVER_NAME
+          value: "kibana"
+        - name: SERVER_BASEPATH
+          value: "/kibana"
+        - name: SERVER_REWRITEBASEPATH
+          value: "true"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/kibana/config/kibana.yml
+          subPath: kibana.yml
+          readOnly: true
+        - name: data
+          mountPath: /usr/share/kibana/data
+        livenessProbe:
+          httpGet:
+            path: /kibana/api/status
+            port: 5601
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /kibana/api/status
+            port: 5601
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        startupProbe:
+          httpGet:
+            path: /kibana/api/status
+            port: 5601
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+      volumes:
+      - name: config
+        configMap:
+          name: kibana-config
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: logging
+  labels:
+    app: kibana
+spec:
+  selector:
+    app: kibana
+  ports:
+  - port: 5601
+    targetPort: 5601
+    name: ui
+    protocol: TCP
+  type: ClusterIP
+---
+# Ingress for Kibana access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kibana-ingress
+  namespace: logging
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^(/kibana)$ $1/ redirect;
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: kibana-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Kibana'
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - logs.autodmca.com
+    secretName: kibana-tls
+  rules:
+  - host: logs.autodmca.com
+    http:
+      paths:
+      - path: /kibana(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: kibana
+            port:
+              number: 5601
+---
+# Basic auth secret for Kibana access
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kibana-basic-auth
+  namespace: logging
+type: Opaque
+data:
+  # admin:$2y$10$... (bcrypt hash of password)
+  # Generate with: htpasswd -nb admin password | base64
+  auth: YWRtaW46JDJ5JDEwJC9yWVhFUFNaU2wxaUwxMmJOZ3RjL2VUR2JrclJJdFlCM0wwSmJNdFBPcEJjNVJOTVpYWS9t
+---
+# Index Lifecycle Management policy
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-ilm-policy
+  namespace: logging
+data:
+  create-policy.sh: |
+    #!/bin/bash
+    set -e
+    
+    # Wait for Elasticsearch to be ready
+    until curl -s http://elasticsearch:9200/_cluster/health?wait_for_status=yellow&timeout=60s; do
+      echo "Waiting for Elasticsearch..."
+      sleep 5
+    done
+    
+    # Create ILM policy for log management
+    curl -X PUT "http://elasticsearch:9200/_ilm/policy/autodmca-policy" \
+      -H 'Content-Type: application/json' \
+      -d '{
+        "policy": {
+          "phases": {
+            "hot": {
+              "min_age": "0ms",
+              "actions": {
+                "rollover": {
+                  "max_size": "5gb",
+                  "max_age": "1d"
+                },
+                "set_priority": {
+                  "priority": 100
+                }
+              }
+            },
+            "warm": {
+              "min_age": "7d",
+              "actions": {
+                "set_priority": {
+                  "priority": 50
+                }
+              }
+            },
+            "cold": {
+              "min_age": "30d",
+              "actions": {
+                "set_priority": {
+                  "priority": 0
+                }
+              }
+            },
+            "delete": {
+              "min_age": "90d",
+              "actions": {
+                "delete": {}
+              }
+            }
+          }
+        }
+      }'
+    
+    echo "ILM policy created successfully"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-setup
+  namespace: logging
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: setup
+        image: curlimages/curl:8.1.0
+        command: ["/bin/sh"]
+        args: ["/scripts/create-policy.sh"]
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+      volumes:
+      - name: scripts
+        configMap:
+          name: elasticsearch-ilm-policy
+          defaultMode: 0755

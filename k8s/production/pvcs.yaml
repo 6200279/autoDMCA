@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+  namespace: production
+  labels:
+    app: autodmca
+    component: storage
+    environment: production
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 500Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logs-pvc
+  namespace: production
+  labels:
+    app: autodmca
+    component: logging
+    environment: production
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: worker-logs-pvc
+  namespace: production
+  labels:
+    app: autodmca
+    component: worker-logging
+    environment: production
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beat-logs-pvc
+  namespace: production
+  labels:
+    app: autodmca
+    component: scheduler-logging
+    environment: production
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 10Gi
+---
+# EFS Storage Class for shared storage
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+  namespace: production
+provisioner: efs.csi.aws.com
+parameters:
+  creationToken: autodmca-prod-efs
+  performanceMode: generalPurpose
+  throughputMode: provisioned
+  provisionedThroughputInMibps: "1024"
+  directoryPerms: "0755"
+  gidRangeStart: "1001"
+  gidRangeEnd: "2000"
+  basePath: "/autodmca-prod"
+volumeBindingMode: Immediate
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+mountOptions:
+- tls
+- fsc  # Enable local caching
+- regional

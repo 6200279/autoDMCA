@@ -1,0 +1,312 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.amazonaws.com:587'
+      smtp_from: 'alerts@autodmca.com'
+      smtp_auth_username: 'SMTP_USERNAME'
+      smtp_auth_password: 'SMTP_PASSWORD'
+      slack_api_url: 'SLACK_WEBHOOK_URL'
+
+    templates:
+    - '/etc/alertmanager/templates/*.tmpl'
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'web.hook'
+      routes:
+      # Critical alerts go to PagerDuty and Slack immediately
+      - match:
+          severity: critical
+        receiver: 'critical-alerts'
+        group_wait: 0s
+        repeat_interval: 5m
+        continue: true
+      
+      # Database alerts
+      - match_re:
+          alertname: 'PostgreSQL.*|Redis.*'
+        receiver: 'database-alerts'
+        group_wait: 30s
+        repeat_interval: 30m
+      
+      # Application alerts
+      - match_re:
+          alertname: '.*DMCA.*|.*Infringement.*|.*Stripe.*'
+        receiver: 'application-alerts'
+        group_wait: 1m
+        repeat_interval: 1h
+      
+      # Infrastructure alerts
+      - match_re:
+          alertname: '.*CPU.*|.*Memory.*|.*Disk.*'
+        receiver: 'infrastructure-alerts'
+        group_wait: 2m
+        repeat_interval: 2h
+
+    receivers:
+    - name: 'web.hook'
+      webhook_configs:
+      - url: 'http://localhost:5001/'
+
+    - name: 'critical-alerts'
+      pagerduty_configs:
+      - routing_key: 'PAGERDUTY_INTEGRATION_KEY'
+        description: 'Critical Alert: {{ .GroupLabels.alertname }}'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          summary: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+      slack_configs:
+      - channel: '#alerts-critical'
+        title: '🚨 CRITICAL ALERT'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+        send_resolved: true
+      email_configs:
+      - to: 'oncall@autodmca.com'
+        subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        body: |
+          Alert Details:
+          {{ range .Alerts }}
+          - Alert: {{ .Annotations.summary }}
+          - Description: {{ .Annotations.description }}
+          - Severity: {{ .Labels.severity }}
+          - Instance: {{ .Labels.instance }}
+          - Time: {{ .StartsAt }}
+          {{ end }}
+
+    - name: 'database-alerts'
+      slack_configs:
+      - channel: '#alerts-database'
+        title: '🗄️ Database Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+        send_resolved: true
+      email_configs:
+      - to: 'database-team@autodmca.com'
+        subject: 'Database Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Database Alert Details:
+          {{ range .Alerts }}
+          - Alert: {{ .Annotations.summary }}
+          - Description: {{ .Annotations.description }}
+          - Database: {{ .Labels.database }}
+          - Instance: {{ .Labels.instance }}
+          - Time: {{ .StartsAt }}
+          {{ end }}
+
+    - name: 'application-alerts'
+      slack_configs:
+      - channel: '#alerts-application'
+        title: '🔧 Application Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+        send_resolved: true
+      email_configs:
+      - to: 'dev-team@autodmca.com'
+        subject: 'Application Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Application Alert Details:
+          {{ range .Alerts }}
+          - Alert: {{ .Annotations.summary }}
+          - Description: {{ .Annotations.description }}
+          - Service: {{ .Labels.service }}
+          - Instance: {{ .Labels.instance }}
+          - Time: {{ .StartsAt }}
+          {{ end }}
+
+    - name: 'infrastructure-alerts'
+      slack_configs:
+      - channel: '#alerts-infrastructure'
+        title: '🏗️ Infrastructure Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+        send_resolved: true
+      email_configs:
+      - to: 'ops-team@autodmca.com'
+        subject: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Infrastructure Alert Details:
+          {{ range .Alerts }}
+          - Alert: {{ .Annotations.summary }}
+          - Description: {{ .Annotations.description }}
+          - Node: {{ .Labels.node }}
+          - Instance: {{ .Labels.instance }}
+          - Time: {{ .StartsAt }}
+          {{ end }}
+
+    inhibit_rules:
+    # Inhibit any warning-level alerts if the same alertname has a critical alert
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'cluster', 'service']
+
+    # Inhibit ServiceDown alerts if there's a NodeDown alert
+    - source_match:
+        alertname: 'NodeDown'
+      target_match:
+        alertname: 'ServiceDown'
+      equal: ['instance']
+
+  notification-templates.tmpl: |
+    {{ define "slack.title" }}
+    {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}
+    {{ end }}
+
+    {{ define "slack.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Annotations.summary }}
+    *Description:* {{ .Annotations.description }}
+    *Graph:* <{{ .GeneratorURL }}|View in Prometheus>
+    *Details:*
+      • *Alertname:* {{ .Labels.alertname }}
+      • *Instance:* {{ .Labels.instance }}
+      • *Severity:* {{ .Labels.severity }}
+    {{ end }}
+    {{ end }}
+
+    {{ define "email.subject" }}
+    [{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} ({{ .Alerts.Firing | len }} firing)
+    {{ end }}
+
+    {{ define "email.body" }}
+    {{ if gt (len .Alerts.Firing) 0 }}
+    **FIRING ALERTS:**
+    {{ range .Alerts.Firing }}
+    - Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      Labels:
+    {{ range .Labels.SortedPairs }}  - {{ .Name }}: {{ .Value }}
+    {{ end }}  Started: {{ .StartsAt }}
+      Source: {{ .GeneratorURL }}
+    {{ end }}
+    {{ end }}
+
+    {{ if gt (len .Alerts.Resolved) 0 }}
+    **RESOLVED ALERTS:**
+    {{ range .Alerts.Resolved }}
+    - Alert: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      Resolved: {{ .EndsAt }}
+    {{ end }}
+    {{ end }}
+    {{ end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      serviceAccountName: alertmanager
+      securityContext:
+        fsGroup: 65534
+        runAsNonRoot: true
+        runAsUser: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.25.0
+        args:
+        - '--config.file=/etc/alertmanager/alertmanager.yml'
+        - '--storage.path=/alertmanager'
+        - '--web.listen-address=:9093'
+        - '--web.route-prefix=/'
+        - '--cluster.listen-address=[$(POD_IP)]:9094'
+        - '--cluster.peer=alertmanager-0.alertmanager.monitoring.svc.cluster.local:9094'
+        - '--cluster.peer=alertmanager-1.alertmanager.monitoring.svc.cluster.local:9094'
+        - '--log.level=info'
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        ports:
+        - containerPort: 9093
+          name: http
+        - containerPort: 9094
+          name: cluster
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alertmanager
+        - name: storage
+          mountPath: /alertmanager
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: alertmanager-config
+      - name: storage
+        persistentVolumeClaim:
+          claimName: alertmanager-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  ports:
+  - port: 9093
+    targetPort: 9093
+    name: http
+  - port: 9094
+    targetPort: 9094
+    name: cluster
+  selector:
+    app: alertmanager
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alertmanager-pvc
+  namespace: monitoring
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: gp3
+  resources:
+    requests:
+      storage: 10Gi

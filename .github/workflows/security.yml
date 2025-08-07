@@ -1,0 +1,243 @@
+name: Security Scanning
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Daily at 2 AM UTC
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Dependency vulnerability scanning
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Scan Python dependencies
+        run: |
+          cd backend
+          pip install -r requirements-updated.txt
+          safety check --json --output safety-report.json || true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Audit npm dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=moderate --json > audit-report.json || true
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-scan-results
+          path: |
+            backend/safety-report.json
+            frontend/audit-report.json
+
+  # SAST (Static Application Security Testing)
+  sast-scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: python, javascript
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/python
+            p/typescript
+            p/docker
+            p/kubernetes
+
+  # Container image scanning
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build backend image for scanning
+        run: |
+          docker build -t backend-scan ./backend
+
+      - name: Build frontend image for scanning
+        run: |
+          docker build -t frontend-scan ./frontend
+
+      - name: Run Trivy scanner on backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'backend-scan'
+          format: 'sarif'
+          output: 'backend-trivy.sarif'
+
+      - name: Run Trivy scanner on frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'frontend-scan'
+          format: 'sarif'
+          output: 'frontend-trivy.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'backend-trivy.sarif'
+        if: always()
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'frontend-trivy.sarif'
+        if: always()
+
+  # Secret scanning
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Infrastructure security scanning
+  iac-security:
+    name: Infrastructure as Code Security
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: terraform,docker,kubernetes
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+
+      - name: Upload Checkov scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: checkov-results.sarif
+        if: always()
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-sarif-action@v0.1.4
+        with:
+          sarif_file: tfsec.sarif
+
+      - name: Upload tfsec scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: tfsec.sarif
+        if: always()
+
+  # Security report compilation
+  security-report:
+    name: Compile Security Report
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, sast-scan, container-security, secret-scan, iac-security]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all scan results
+        uses: actions/download-artifact@v3
+        with:
+          name: dependency-scan-results
+          path: security-results/
+
+      - name: Generate security report
+        run: |
+          mkdir -p security-reports
+          echo "# Security Scan Report - $(date)" > security-reports/report.md
+          echo "## Summary" >> security-reports/report.md
+          echo "- Dependency Scan: ${{ needs.dependency-scan.result }}" >> security-reports/report.md
+          echo "- SAST Scan: ${{ needs.sast-scan.result }}" >> security-reports/report.md
+          echo "- Container Security: ${{ needs.container-security.result }}" >> security-reports/report.md
+          echo "- Secret Scan: ${{ needs.secret-scan.result }}" >> security-reports/report.md
+          echo "- IaC Security: ${{ needs.iac-security.result }}" >> security-reports/report.md
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: security-reports/
+
+      - name: Post security summary
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('security-reports/report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## 🔒 Security Scan Results\n\n' + report
+            });
+        if: github.event_name == 'pull_request'

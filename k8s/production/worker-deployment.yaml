@@ -1,0 +1,276 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-scanning
+  namespace: production
+  labels:
+    app: celery-worker
+    environment: production
+    worker-type: scanning
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: celery-worker
+      environment: production
+      worker-type: scanning
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+        environment: production
+        worker-type: scanning
+        version: blue
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9540"
+    spec:
+      serviceAccountName: worker-service-account
+      securityContext:
+        fsGroup: 1001
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+      - name: celery-worker
+        image: IMAGE_TAG_BACKEND
+        command: ["celery"]
+        args: ["-A", "app.core.celery", "worker", "--loglevel=warning", "--concurrency=8", "--pool=prefork", "--queues=scanning,image_processing", "--hostname=scanning-worker@%h"]
+        env:
+        - name: WORKER_TYPE
+          value: "scanning"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: secret-key
+        envFrom:
+        - configMapRef:
+            name: worker-config
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.core.celery
+            - inspect
+            - ping
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: worker-logs
+          mountPath: /app/logs
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: uploads-pvc
+      - name: worker-logs
+        persistentVolumeClaim:
+          claimName: worker-logs-pvc
+      - name: tmp
+        emptyDir:
+          sizeLimit: 2Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - celery-worker
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-dmca
+  namespace: production
+  labels:
+    app: celery-worker
+    environment: production
+    worker-type: dmca
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-worker
+      environment: production
+      worker-type: dmca
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+        environment: production
+        worker-type: dmca
+        version: blue
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9540"
+    spec:
+      serviceAccountName: worker-service-account
+      securityContext:
+        fsGroup: 1001
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+      - name: celery-worker
+        image: IMAGE_TAG_BACKEND
+        command: ["celery"]
+        args: ["-A", "app.core.celery", "worker", "--loglevel=warning", "--concurrency=4", "--pool=prefork", "--queues=dmca,email", "--hostname=dmca-worker@%h"]
+        env:
+        - name: WORKER_TYPE
+          value: "dmca"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: secret-key
+        envFrom:
+        - configMapRef:
+            name: worker-config
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.core.celery
+            - inspect
+            - ping
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+        - name: worker-logs
+          mountPath: /app/logs
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: uploads-pvc
+      - name: worker-logs
+        persistentVolumeClaim:
+          claimName: worker-logs-pvc
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: production
+  labels:
+    app: celery-beat
+    environment: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-beat
+      environment: production
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+        environment: production
+        version: blue
+    spec:
+      serviceAccountName: beat-service-account
+      securityContext:
+        fsGroup: 1001
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+      - name: celery-beat
+        image: IMAGE_TAG_BACKEND
+        command: ["celery"]
+        args: ["-A", "app.core.celery", "beat", "--loglevel=warning", "--scheduler=django_celery_beat.schedulers:DatabaseScheduler"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: redis-secret
+              key: url
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: secret-key
+        envFrom:
+        - configMapRef:
+            name: beat-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          exec:
+            command:
+            - pgrep
+            - -f
+            - "celery beat"
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        volumeMounts:
+        - name: beat-logs
+          mountPath: /app/logs
+      volumes:
+      - name: beat-logs
+        persistentVolumeClaim:
+          claimName: beat-logs-pvc
