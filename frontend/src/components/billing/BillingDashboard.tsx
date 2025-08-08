@@ -1,25 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  CardHeader,
-  Grid,
-  Typography,
-  Button,
-  LinearProgress,
-  Alert,
-  Chip,
-  Divider
-} from '@mui/material';
-import {
-  CreditCard,
-  Receipt,
-  TrendingUp,
-  Settings,
-  Warning,
-  CheckCircle
-} from '@mui/icons-material';
+import { Card } from 'primereact/card';
+import { Button } from 'primereact/button';
+import { ProgressBar } from 'primereact/progressbar';
+import { Message } from 'primereact/message';
+import { Tag } from 'primereact/tag';
 import { format } from 'date-fns';
 
 import { billingApi } from '../../services/api';
@@ -72,16 +56,16 @@ const BillingDashboard: React.FC = () => {
       case 'past_due':
         return 'warning';
       case 'canceled':
-        return 'error';
+        return 'danger';
       default:
-        return 'default';
+        return null;
     }
   };
 
   const getUsageColor = (percentage: number) => {
-    if (percentage >= 90) return 'error';
+    if (percentage >= 90) return 'danger';
     if (percentage >= 75) return 'warning';
-    return 'primary';
+    return 'info';
   };
 
   const calculateUsagePercentage = (current: number, limit: number) => {
@@ -90,134 +74,135 @@ const BillingDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ width: '100%', mt: 2 }}>
-        <LinearProgress />
-        <Typography variant="body2" sx={{ mt: 1, textAlign: 'center' }}>
+      <div className="w-full mt-2">
+        <ProgressBar mode="indeterminate" className="h-1" />
+        <p className="text-center text-sm text-gray-600 mt-2">
           Loading billing dashboard...
-        </Typography>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {error}
-        <Button onClick={fetchDashboardData} sx={{ ml: 2 }}>
-          Retry
-        </Button>
-      </Alert>
+      <Message 
+        severity="error" 
+        text={error}
+        className="mt-2"
+        content={
+          <div className="flex justify-between items-center w-full">
+            <span>{error}</span>
+            <Button 
+              label="Retry" 
+              size="small" 
+              onClick={fetchDashboardData}
+              className="ml-2"
+            />
+          </div>
+        }
+      />
     );
   }
 
   const { subscription, currentUsage, usageLimits, upcomingInvoice, recentInvoices } = dashboardData || {};
 
   return (
-    <Box sx={{ flexGrow: 1, p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Billing & Subscription
-      </Typography>
+    <div className="flex-1 p-6">
+      <h1 className="text-3xl font-bold mb-6">Billing & Subscription</h1>
 
-      <Grid container spacing={3}>
-        {/* Current Subscription */}
-        <Grid item xs={12} md={8}>
-          <SubscriptionCard
-            subscription={subscription}
-            onUpgrade={() => setUpgradeModalOpen(true)}
-            onRefresh={fetchDashboardData}
-          />
-        </Grid>
+      <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Current Subscription */}
+          <div className="lg:col-span-2">
+            <SubscriptionCard
+              subscription={subscription}
+              onUpgrade={() => setUpgradeModalOpen(true)}
+              onRefresh={fetchDashboardData}
+            />
+          </div>
 
-        {/* Quick Stats */}
-        <Grid item xs={12} md={4}>
-          <Grid container spacing={2}>
+          {/* Quick Stats */}
+          <div className="space-y-4">
             {/* Next Billing Date */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Receipt sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="subtitle2">Next Billing</Typography>
-                  </Box>
-                  {subscription?.currentPeriodEnd ? (
-                    <Typography variant="h6">
-                      {format(new Date(subscription.currentPeriodEnd), 'MMM dd, yyyy')}
-                    </Typography>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No active subscription
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+            <Card className="p-4">
+              <div className="flex items-center mb-3">
+                <i className="pi pi-receipt text-blue-500 mr-2"></i>
+                <span className="font-semibold text-sm">Next Billing</span>
+              </div>
+              {subscription?.currentPeriodEnd ? (
+                <h3 className="text-lg font-bold">
+                  {format(new Date(subscription.currentPeriodEnd), 'MMM dd, yyyy')}
+                </h3>
+              ) : (
+                <p className="text-gray-500 text-sm">
+                  No active subscription
+                </p>
+              )}
+            </Card>
 
             {/* Monthly Cost */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <TrendingUp sx={{ mr: 1, color: 'success.main' }} />
-                    <Typography variant="subtitle2">Monthly Cost</Typography>
-                  </Box>
-                  <Typography variant="h6">
-                    ${subscription?.amount || '0.00'}/{subscription?.interval || 'month'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </Grid>
+            <Card className="p-4">
+              <div className="flex items-center mb-3">
+                <i className="pi pi-chart-line text-green-500 mr-2"></i>
+                <span className="font-semibold text-sm">Monthly Cost</span>
+              </div>
+              <h3 className="text-lg font-bold">
+                ${subscription?.amount || '0.00'}/{subscription?.interval || 'month'}
+              </h3>
+            </Card>
+          </div>
+        </div>
 
         {/* Usage Overview */}
-        <Grid item xs={12}>
-          <UsageOverview
-            currentUsage={currentUsage}
-            usageLimits={usageLimits}
-            subscription={subscription}
-          />
-        </Grid>
+        <UsageOverview
+          currentUsage={currentUsage}
+          usageLimits={usageLimits}
+          subscription={subscription}
+        />
 
-        {/* Upcoming Invoice */}
-        {upcomingInvoice && (
-          <Grid item xs={12} md={6}>
-            <Card>
-              <CardHeader
-                title="Upcoming Invoice"
-                avatar={<Receipt />}
-              />
-              <CardContent>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Amount Due: <strong>${upcomingInvoice.total}</strong>
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Due Date: {format(new Date(upcomingInvoice.dueDate), 'MMM dd, yyyy')}
-                  </Typography>
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2">
-                  {upcomingInvoice.description}
-                </Typography>
-              </CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Upcoming Invoice */}
+          {upcomingInvoice && (
+            <Card
+              title="Upcoming Invoice"
+              className="h-fit"
+              pt={{
+                title: { className: "flex items-center gap-2" },
+                content: { className: "pt-0" }
+              }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <i className="pi pi-receipt text-blue-500"></i>
+                <h3 className="font-semibold">Upcoming Invoice</h3>
+              </div>
+              <div className="space-y-2 mb-4">
+                <p className="text-gray-600 text-sm">
+                  Amount Due: <strong>${upcomingInvoice.total}</strong>
+                </p>
+                <p className="text-gray-600 text-sm">
+                  Due Date: {format(new Date(upcomingInvoice.dueDate), 'MMM dd, yyyy')}
+                </p>
+              </div>
+              <hr className="my-3" />
+              <p className="text-sm">
+                {upcomingInvoice.description}
+              </p>
             </Card>
-          </Grid>
-        )}
+          )}
 
-        {/* Payment Methods */}
-        <Grid item xs={12} md={upcomingInvoice ? 6 : 12}>
-          <PaymentMethods onRefresh={fetchDashboardData} />
-        </Grid>
+          {/* Payment Methods */}
+          <div className={upcomingInvoice ? "" : "lg:col-span-2"}>
+            <PaymentMethods onRefresh={fetchDashboardData} />
+          </div>
+        </div>
 
         {/* Recent Invoices */}
-        <Grid item xs={12}>
-          <InvoiceHistory
-            invoices={recentInvoices}
-            showAll={false}
-            onRefresh={fetchDashboardData}
-          />
-        </Grid>
-      </Grid>
+        <InvoiceHistory
+          invoices={recentInvoices}
+          showAll={false}
+          onRefresh={fetchDashboardData}
+        />
+      </div>
 
       {/* Plan Upgrade Modal */}
       <PlanUpgradeModal
@@ -226,7 +211,7 @@ const BillingDashboard: React.FC = () => {
         currentPlan={subscription?.plan}
         onUpgradeComplete={fetchDashboardData}
       />
-    </Box>
+    </div>
   );
 };
 

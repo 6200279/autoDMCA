@@ -1,29 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  CardHeader,
-  Typography,
-  Button,
-  TextField,
-  Grid,
-  Alert,
-  Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Switch,
-  FormControlLabel,
-  CircularProgress
-} from '@mui/material';
-import {
-  Save,
-  Edit,
-  CreditCard,
-  Receipt
-} from '@mui/icons-material';
+import { Card } from 'primereact/card';
+import { Button } from 'primereact/button';
+import { InputText } from 'primereact/inputtext';
+import { Dropdown } from 'primereact/dropdown';
+import { InputSwitch } from 'primereact/inputswitch';
+import { Message } from 'primereact/message';
+import { ProgressSpinner } from 'primereact/progressspinner';
 
 import { billingApi } from '../../services/api';
 
@@ -129,297 +111,274 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
     }));
   };
 
+  const countryOptions = [
+    { label: 'United States', value: 'US' },
+    { label: 'Canada', value: 'CA' },
+    { label: 'United Kingdom', value: 'GB' },
+    { label: 'Germany', value: 'DE' },
+    { label: 'France', value: 'FR' },
+    { label: 'Australia', value: 'AU' }
+  ];
+
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <ProgressSpinner />
+      </div>
     );
   }
 
   return (
-    <Box sx={{ space: 3 }}>
+    <div className="space-y-6">
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <Message 
+          severity="error" 
+          text={error}
+          closable 
+          onClose={() => setError(null)}
+        />
       )}
 
       {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
+        <Message 
+          severity="success" 
+          text={success}
+          closable 
+          onClose={() => setSuccess(null)}
+        />
       )}
 
       {/* Billing Address */}
-      <Card sx={{ mb: 3 }}>
-        <CardHeader
-          title="Billing Address"
-          action={
-            <Button
-              startIcon={editing ? <Save /> : <Edit />}
-              onClick={editing ? handleSaveBillingAddress : () => setEditing(true)}
-              disabled={saving}
-              variant={editing ? 'contained' : 'outlined'}
-            >
-              {editing ? 'Save' : 'Edit'}
-            </Button>
-          }
-        />
-        <CardContent>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Company (Optional)"
-                value={billingAddress.company}
-                onChange={(e) => handleInputChange('company', e.target.value)}
-                disabled={!editing}
-              />
-            </Grid>
+      <Card className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Billing Address</h2>
+          <Button
+            label={editing ? 'Save' : 'Edit'}
+            icon={editing ? 'pi pi-save' : 'pi pi-pencil'}
+            onClick={editing ? handleSaveBillingAddress : () => setEditing(true)}
+            disabled={saving}
+            className={editing ? 'p-button-primary' : 'p-button-outlined'}
+          />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-2">Company (Optional)</label>
+            <InputText
+              value={billingAddress.company}
+              onChange={(e) => handleInputChange('company', e.target.value)}
+              disabled={!editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address Line 1"
-                value={billingAddress.line1}
-                onChange={(e) => handleInputChange('line1', e.target.value)}
-                disabled={!editing}
-                required={editing}
-              />
-            </Grid>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-2">Address Line 1</label>
+            <InputText
+              value={billingAddress.line1}
+              onChange={(e) => handleInputChange('line1', e.target.value)}
+              disabled={!editing}
+              required={editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address Line 2 (Optional)"
-                value={billingAddress.line2}
-                onChange={(e) => handleInputChange('line2', e.target.value)}
-                disabled={!editing}
-              />
-            </Grid>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-2">Address Line 2 (Optional)</label>
+            <InputText
+              value={billingAddress.line2}
+              onChange={(e) => handleInputChange('line2', e.target.value)}
+              disabled={!editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="City"
-                value={billingAddress.city}
-                onChange={(e) => handleInputChange('city', e.target.value)}
-                disabled={!editing}
-                required={editing}
-              />
-            </Grid>
+          <div>
+            <label className="block text-sm font-medium mb-2">City</label>
+            <InputText
+              value={billingAddress.city}
+              onChange={(e) => handleInputChange('city', e.target.value)}
+              disabled={!editing}
+              required={editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                label="State/Province"
-                value={billingAddress.state}
-                onChange={(e) => handleInputChange('state', e.target.value)}
-                disabled={!editing}
-              />
-            </Grid>
+          <div>
+            <label className="block text-sm font-medium mb-2">State/Province</label>
+            <InputText
+              value={billingAddress.state}
+              onChange={(e) => handleInputChange('state', e.target.value)}
+              disabled={!editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                label="Postal Code"
-                value={billingAddress.postalCode}
-                onChange={(e) => handleInputChange('postalCode', e.target.value)}
-                disabled={!editing}
-                required={editing}
-              />
-            </Grid>
+          <div>
+            <label className="block text-sm font-medium mb-2">Postal Code</label>
+            <InputText
+              value={billingAddress.postalCode}
+              onChange={(e) => handleInputChange('postalCode', e.target.value)}
+              disabled={!editing}
+              required={editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth disabled={!editing}>
-                <InputLabel>Country</InputLabel>
-                <Select
-                  value={billingAddress.country}
-                  onChange={(e) => handleInputChange('country', e.target.value)}
-                  label="Country"
-                >
-                  <MenuItem value="US">United States</MenuItem>
-                  <MenuItem value="CA">Canada</MenuItem>
-                  <MenuItem value="GB">United Kingdom</MenuItem>
-                  <MenuItem value="DE">Germany</MenuItem>
-                  <MenuItem value="FR">France</MenuItem>
-                  <MenuItem value="AU">Australia</MenuItem>
-                  {/* Add more countries as needed */}
-                </Select>
-              </FormControl>
-            </Grid>
+          <div>
+            <label className="block text-sm font-medium mb-2">Country</label>
+            <Dropdown
+              value={billingAddress.country}
+              onChange={(e) => handleInputChange('country', e.value)}
+              options={countryOptions}
+              disabled={!editing}
+              className="w-full"
+            />
+          </div>
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Tax ID (Optional)"
-                value={billingAddress.taxId}
-                onChange={(e) => handleInputChange('taxId', e.target.value)}
-                disabled={!editing}
-                helperText="VAT ID, Tax ID, or other tax identification number"
-              />
-            </Grid>
-          </Grid>
-        </CardContent>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium mb-2">Tax ID (Optional)</label>
+            <InputText
+              value={billingAddress.taxId}
+              onChange={(e) => handleInputChange('taxId', e.target.value)}
+              disabled={!editing}
+              className="w-full"
+            />
+            <small className="text-gray-500">VAT ID, Tax ID, or other tax identification number</small>
+          </div>
+        </div>
       </Card>
 
       {/* Email Preferences */}
-      <Card sx={{ mb: 3 }}>
-        <CardHeader title="Email Preferences" />
-        <CardContent>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            Choose which billing-related emails you'd like to receive.
-          </Typography>
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold mb-4">Email Preferences</h2>
+        <p className="text-gray-600 mb-6">
+          Choose which billing-related emails you'd like to receive.
+        </p>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={emailPreferences.invoiceReminders}
-                  onChange={(e) => handleEmailPreferenceChange('invoiceReminders', e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2">Invoice Reminders</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Receive reminders before invoices are due
-                  </Typography>
-                </Box>
-              }
+        <div className="space-y-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-medium">Invoice Reminders</h4>
+              <p className="text-sm text-gray-500">
+                Receive reminders before invoices are due
+              </p>
+            </div>
+            <InputSwitch
+              checked={emailPreferences.invoiceReminders}
+              onChange={(e) => handleEmailPreferenceChange('invoiceReminders', e.value)}
             />
+          </div>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={emailPreferences.paymentFailures}
-                  onChange={(e) => handleEmailPreferenceChange('paymentFailures', e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2">Payment Failures</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Get notified when payments fail
-                  </Typography>
-                </Box>
-              }
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-medium">Payment Failures</h4>
+              <p className="text-sm text-gray-500">
+                Get notified when payments fail
+              </p>
+            </div>
+            <InputSwitch
+              checked={emailPreferences.paymentFailures}
+              onChange={(e) => handleEmailPreferenceChange('paymentFailures', e.value)}
             />
+          </div>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={emailPreferences.usageWarnings}
-                  onChange={(e) => handleEmailPreferenceChange('usageWarnings', e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2">Usage Warnings</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Alerts when approaching plan limits
-                  </Typography>
-                </Box>
-              }
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-medium">Usage Warnings</h4>
+              <p className="text-sm text-gray-500">
+                Alerts when approaching plan limits
+              </p>
+            </div>
+            <InputSwitch
+              checked={emailPreferences.usageWarnings}
+              onChange={(e) => handleEmailPreferenceChange('usageWarnings', e.value)}
             />
+          </div>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={emailPreferences.planChanges}
-                  onChange={(e) => handleEmailPreferenceChange('planChanges', e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2">Plan Changes</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Confirmations for plan upgrades/downgrades
-                  </Typography>
-                </Box>
-              }
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-medium">Plan Changes</h4>
+              <p className="text-sm text-gray-500">
+                Confirmations for plan upgrades/downgrades
+              </p>
+            </div>
+            <InputSwitch
+              checked={emailPreferences.planChanges}
+              onChange={(e) => handleEmailPreferenceChange('planChanges', e.value)}
             />
+          </div>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={emailPreferences.trialReminders}
-                  onChange={(e) => handleEmailPreferenceChange('trialReminders', e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2">Trial Reminders</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Notifications about trial expiration
-                  </Typography>
-                </Box>
-              }
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-medium">Trial Reminders</h4>
+              <p className="text-sm text-gray-500">
+                Notifications about trial expiration
+              </p>
+            </div>
+            <InputSwitch
+              checked={emailPreferences.trialReminders}
+              onChange={(e) => handleEmailPreferenceChange('trialReminders', e.value)}
             />
-          </Box>
-        </CardContent>
+          </div>
+        </div>
       </Card>
 
       {/* Subscription Information */}
       {subscription && (
-        <Card>
-          <CardHeader
-            title="Subscription Information"
-            avatar={<Receipt />}
-          />
-          <CardContent>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Current Plan
-                </Typography>
-                <Typography variant="h6">
-                  {subscription.plan?.charAt(0).toUpperCase() + subscription.plan?.slice(1)} Plan
-                </Typography>
-              </Grid>
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <i className="pi pi-receipt text-blue-500"></i>
+            <h2 className="text-xl font-semibold">Subscription Information</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Current Plan</p>
+              <h3 className="text-lg font-semibold">
+                {subscription.plan?.charAt(0).toUpperCase() + subscription.plan?.slice(1)} Plan
+              </h3>
+            </div>
 
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Billing Cycle
-                </Typography>
-                <Typography variant="h6">
-                  ${subscription.amount}/{subscription.interval}
-                </Typography>
-              </Grid>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Billing Cycle</p>
+              <h3 className="text-lg font-semibold">
+                ${subscription.amount}/{subscription.interval}
+              </h3>
+            </div>
 
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Next Billing Date
-                </Typography>
-                <Typography variant="body1">
-                  {subscription.currentPeriodEnd 
-                    ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
-                    : 'N/A'
-                  }
-                </Typography>
-              </Grid>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Next Billing Date</p>
+              <p className="text-base">
+                {subscription.currentPeriodEnd 
+                  ? new Date(subscription.currentPeriodEnd).toLocaleDateString()
+                  : 'N/A'
+                }
+              </p>
+            </div>
 
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" color="text.secondary">
-                  Status
-                </Typography>
-                <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-                  {subscription.status}
-                </Typography>
-              </Grid>
-            </Grid>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Status</p>
+              <p className="text-base capitalize">
+                {subscription.status}
+              </p>
+            </div>
+          </div>
 
-            <Divider sx={{ my: 3 }} />
+          <hr className="my-6" />
 
-            <Typography variant="body2" color="text.secondary" paragraph>
-              To modify your subscription, manage payment methods, or view invoices, 
-              visit your <Button variant="text" size="small">Billing Dashboard</Button>.
-            </Typography>
-          </CardContent>
+          <p className="text-sm text-gray-600">
+            To modify your subscription, manage payment methods, or view invoices, 
+            visit your{' '}
+            <Button 
+              label="Billing Dashboard" 
+              className="p-button-text p-button-sm" 
+              style={{ padding: '0', minWidth: 'auto', height: 'auto' }}
+            />.
+          </p>
         </Card>
       )}
-    </Box>
+    </div>
   );
 };
 

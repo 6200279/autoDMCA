@@ -3,27 +3,18 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import {
-  Box,
-  Card,
-  CardContent,
-  TextField,
-  Button,
-  Typography,
-  Alert,
-  InputAdornment,
-  IconButton,
-  CircularProgress,
-  Container,
-  Link as MuiLink,
-} from '@mui/material';
-import {
-  Visibility,
-  VisibilityOff,
-  Email,
-  Lock,
-  Login as LoginIcon,
-} from '@mui/icons-material';
+import { Card } from 'primereact/card';
+import { InputText } from 'primereact/inputtext';
+import { Password } from 'primereact/password';
+import { Button } from 'primereact/button';
+import { Checkbox } from 'primereact/checkbox';
+import { Divider } from 'primereact/divider';
+import { Message } from 'primereact/message';
+import { ProgressSpinner } from 'primereact/progressspinner';
+import 'primereact/resources/themes/lara-light-blue/theme.css';
+import 'primereact/resources/primereact.min.css';
+import 'primeicons/primeicons.css';
+import 'primeflex/primeflex.css';
 
 import { useAuth } from '../hooks/useAuth';
 import { UserLogin } from '../types/api';
@@ -36,23 +27,24 @@ const loginSchema = yup.object({
     .required('Email is required'),
   password: yup
     .string()
-    .min(6, 'Password must be at least 6 characters')
+    .min(8, 'Password must be at least 8 characters')
     .required('Password is required'),
 });
 
 interface LoginFormData {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 /**
  * Login page component with form validation and authentication
- * Uses Material-UI components and React Hook Form for optimal UX
+ * Uses PrimeReact components and React Hook Form for optimal UX
  */
 const Login: React.FC = () => {
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
   
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -65,14 +57,18 @@ const Login: React.FC = () => {
     handleSubmit,
     formState: { errors, isValid },
     reset,
+    watch,
   } = useForm<LoginFormData>({
     resolver: yupResolver(loginSchema),
     mode: 'onChange',
     defaultValues: {
       email: '',
       password: '',
+      rememberMe: false,
     },
   });
+
+  const watchedFields = watch();
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
@@ -85,189 +81,228 @@ const Login: React.FC = () => {
       };
       
       await login(credentials);
+      
+      // Handle remember me functionality
+      if (data.rememberMe) {
+        localStorage.setItem('rememberMe', 'true');
+      }
+      
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Login failed. Please try again.');
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (err?.response?.status === 401) {
+        errorMessage = 'Invalid email or password. Please check your credentials.';
+      } else if (err?.response?.status === 429) {
+        errorMessage = 'Too many login attempts. Please try again later.';
+      } else if (err?.response?.status === 403) {
+        errorMessage = 'Account is locked or not verified. Please check your email.';
+      } else if (err?.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      }
+      
+      setError(errorMessage);
       reset({ password: '' }); // Clear password on error
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleTogglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
+  const handleRememberMeChange = (e: { checked: boolean }) => {
+    setRememberMe(e.checked);
+  };
+
+  const getFieldError = (fieldName: keyof LoginFormData): string | null => {
+    return errors[fieldName]?.message || null;
   };
 
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          py: 4,
-        }}
-      >
+    <div className="min-h-screen flex align-items-center justify-content-center" style={{ background: 'var(--surface-ground)' }}>
+      <div className="flex flex-column align-items-center justify-content-center w-full px-4">
         {/* Logo/Brand */}
-        <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{
-              fontWeight: 'bold',
-              background: 'linear-gradient(45deg, #1976d2, #dc004e)',
-              backgroundClip: 'text',
-              textFillColor: 'transparent',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              mb: 1,
-            }}
-          >
+        <div className="text-center mb-6">
+          <h1 className="text-6xl font-bold mb-2" style={{ 
+            background: 'linear-gradient(45deg, var(--primary-color), #dc004e)', 
+            WebkitBackgroundClip: 'text', 
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            color: 'transparent'
+          }}>
             AutoDMCA
-          </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
+          </h1>
+          <p className="text-color-secondary text-xl">
             Automated Content Protection Platform
-          </Typography>
-        </Box>
+          </p>
+        </div>
 
-        <Card sx={{ width: '100%', maxWidth: 400 }}>
-          <CardContent sx={{ p: 4 }}>
-            <Box sx={{ textAlign: 'center', mb: 3 }}>
-              <LoginIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-              <Typography variant="h4" component="h2" gutterBottom>
-                Sign In
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
+        {/* Login Card */}
+        <Card 
+          className="w-full max-w-md shadow-3" 
+          style={{ borderRadius: '12px' }}
+        >
+          <div className="p-6">
+            {/* Header */}
+            <div className="text-center mb-5">
+              <i className="pi pi-sign-in text-6xl text-primary mb-3"></i>
+              <h2 className="text-3xl font-semibold mb-2 text-color">Sign In</h2>
+              <p className="text-color-secondary">
                 Welcome back! Please sign in to your account.
-              </Typography>
-            </Box>
+              </p>
+            </div>
 
+            {/* Error Message */}
             {error && (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                {error}
-              </Alert>
+              <div className="mb-4">
+                <Message 
+                  severity="error" 
+                  text={error}
+                  className="w-full"
+                />
+              </div>
             )}
 
-            <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
+            {/* Login Form */}
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-column gap-4">
               {/* Email Field */}
-              <Controller
-                name="email"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Email Address"
-                    type="email"
-                    autoComplete="email"
-                    autoFocus
-                    error={!!errors.email}
-                    helperText={errors.email?.message}
-                    disabled={isLoading}
-                    sx={{ mb: 2 }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Email color="action" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+              <div className="field">
+                <label htmlFor="email" className="block text-color font-medium mb-2">
+                  Email Address *
+                </label>
+                <Controller
+                  name="email"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="p-inputgroup">
+                      <span className="p-inputgroup-addon">
+                        <i className="pi pi-envelope"></i>
+                      </span>
+                      <InputText
+                        {...field}
+                        id="email"
+                        type="email"
+                        placeholder="Enter your email address"
+                        className={`w-full ${errors.email ? 'p-invalid' : ''}`}
+                        autoComplete="email"
+                        autoFocus
+                        disabled={isLoading}
+                        aria-describedby={errors.email ? 'email-error' : undefined}
+                      />
+                    </div>
+                  )}
+                />
+                {errors.email && (
+                  <small id="email-error" className="p-error block mt-1">
+                    {errors.email.message}
+                  </small>
                 )}
-              />
+              </div>
 
               {/* Password Field */}
-              <Controller
-                name="password"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    error={!!errors.password}
-                    helperText={errors.password?.message}
-                    disabled={isLoading}
-                    sx={{ mb: 3 }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock color="action" />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={handleTogglePasswordVisibility}
-                            edge="end"
-                            disabled={isLoading}
-                            aria-label="toggle password visibility"
-                          >
-                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+              <div className="field">
+                <label htmlFor="password" className="block text-color font-medium mb-2">
+                  Password *
+                </label>
+                <Controller
+                  name="password"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="p-inputgroup">
+                      <span className="p-inputgroup-addon">
+                        <i className="pi pi-lock"></i>
+                      </span>
+                      <Password
+                        {...field}
+                        id="password"
+                        placeholder="Enter your password"
+                        className={`w-full ${errors.password ? 'p-invalid' : ''}`}
+                        inputClassName="w-full"
+                        autoComplete="current-password"
+                        disabled={isLoading}
+                        feedback={false}
+                        toggleMask
+                        aria-describedby={errors.password ? 'password-error' : undefined}
+                      />
+                    </div>
+                  )}
+                />
+                {errors.password && (
+                  <small id="password-error" className="p-error block mt-1">
+                    {errors.password.message}
+                  </small>
                 )}
-              />
+              </div>
+
+              {/* Remember Me */}
+              <div className="field-checkbox">
+                <Controller
+                  name="rememberMe"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex align-items-center">
+                      <Checkbox
+                        {...field}
+                        id="rememberMe"
+                        checked={field.value || false}
+                        onChange={(e) => {
+                          field.onChange(e.checked);
+                          handleRememberMeChange(e);
+                        }}
+                        disabled={isLoading}
+                      />
+                      <label htmlFor="rememberMe" className="ml-2 text-color">
+                        Remember me for 30 days
+                      </label>
+                    </div>
+                  )}
+                />
+              </div>
 
               {/* Submit Button */}
               <Button
                 type="submit"
-                fullWidth
-                variant="contained"
-                size="large"
+                label={isLoading ? 'Signing In...' : 'Sign In'}
+                icon={isLoading ? '' : 'pi pi-sign-in'}
+                className="w-full p-3 text-lg font-medium"
                 disabled={!isValid || isLoading}
-                sx={{ mb: 2, py: 1.5 }}
-              >
-                {isLoading ? (
-                  <>
-                    <CircularProgress size={20} sx={{ mr: 1 }} />
-                    Signing In...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </Button>
+                loading={isLoading}
+                loadingIcon="pi pi-spin pi-spinner"
+                aria-label={isLoading ? 'Signing in, please wait' : 'Sign in to your account'}
+              />
+
+              <Divider className="my-4" />
 
               {/* Links */}
-              <Box sx={{ textAlign: 'center', mt: 2 }}>
-                <Typography variant="body2" color="text.secondary">
+              <div className="text-center">
+                <p className="text-color-secondary mb-3">
                   Don't have an account?{' '}
-                  <MuiLink component={Link} to="/register" underline="hover">
+                  <Link 
+                    to="/register" 
+                    className="text-primary font-medium no-underline hover:underline"
+                    aria-label="Go to registration page"
+                  >
                     Sign up here
-                  </MuiLink>
-                </Typography>
-              </Box>
-
-              <Box sx={{ textAlign: 'center', mt: 1 }}>
-                <MuiLink
-                  component={Link}
-                  to="/forgot-password"
-                  variant="body2"
-                  underline="hover"
-                  color="text.secondary"
+                  </Link>
+                </p>
+                <Link 
+                  to="/forgot-password" 
+                  className="text-color-secondary no-underline hover:underline text-sm"
+                  aria-label="Go to password recovery page"
                 >
                   Forgot your password?
-                </MuiLink>
-              </Box>
-            </Box>
-          </CardContent>
+                </Link>
+              </div>
+            </form>
+          </div>
         </Card>
 
         {/* Footer */}
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
+        <div className="text-center mt-6">
+          <p className="text-color-secondary text-sm">
             © 2024 AutoDMCA. All rights reserved.
-          </Typography>
-        </Box>
-      </Box>
-    </Container>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

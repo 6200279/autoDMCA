@@ -1,22 +1,8 @@
 import React from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  Box,
-  Typography,
-  LinearProgress,
-  Grid,
-  Alert,
-  Chip
-} from '@mui/material';
-import {
-  Person,
-  Search,
-  Report,
-  Warning,
-  CheckCircle
-} from '@mui/icons-material';
+import { Card } from 'primereact/card';
+import { ProgressBar } from 'primereact/progressbar';
+import { Message } from 'primereact/message';
+import { Tag } from 'primereact/tag';
 
 interface UsageOverviewProps {
   currentUsage: any;
@@ -30,9 +16,9 @@ const UsageOverview: React.FC<UsageOverviewProps> = ({
   subscription
 }) => {
   const getUsageColor = (percentage: number) => {
-    if (percentage >= 90) return 'error';
+    if (percentage >= 90) return 'danger';
     if (percentage >= 75) return 'warning';
-    return 'primary';
+    return 'info';
   };
 
   const getUsageStatus = (percentage: number) => {
@@ -52,13 +38,12 @@ const UsageOverview: React.FC<UsageOverviewProps> = ({
 
   if (!currentUsage || !usageLimits) {
     return (
-      <Card>
-        <CardHeader title="Usage Overview" />
-        <CardContent>
-          <Alert severity="info">
-            No usage data available. Usage tracking will begin once you have an active subscription.
-          </Alert>
-        </CardContent>
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold mb-4">Usage Overview</h2>
+        <Message 
+          severity="info" 
+          text="No usage data available. Usage tracking will begin once you have an active subscription." 
+        />
       </Card>
     );
   }
@@ -81,7 +66,7 @@ const UsageOverview: React.FC<UsageOverviewProps> = ({
   const usageMetrics = [
     {
       title: 'Protected Profiles',
-      icon: <Person />,
+      icon: 'pi pi-user',
       current: currentUsage.protectedProfiles,
       limit: usageLimits.maxProtectedProfiles,
       percentage: protectedProfilesPercentage,
@@ -89,7 +74,7 @@ const UsageOverview: React.FC<UsageOverviewProps> = ({
     },
     {
       title: 'Monthly Scans',
-      icon: <Search />,
+      icon: 'pi pi-search',
       current: currentUsage.monthlyScans,
       limit: usageLimits.maxMonthlyScans,
       percentage: monthlyScansPercentage,
@@ -97,7 +82,7 @@ const UsageOverview: React.FC<UsageOverviewProps> = ({
     },
     {
       title: 'Takedown Requests',
-      icon: <Report />,
+      icon: 'pi pi-file',
       current: currentUsage.takedownRequests,
       limit: usageLimits.maxTakedownRequests,
       percentage: takedownRequestsPercentage,
@@ -108,140 +93,125 @@ const UsageOverview: React.FC<UsageOverviewProps> = ({
   const hasWarnings = usageMetrics.some(metric => metric.percentage >= 75);
 
   return (
-    <Card>
-      <CardHeader
-        title="Usage Overview"
-        subheader={currentUsage.periodStart && currentUsage.periodEnd ? (
-          `Billing period: ${new Date(currentUsage.periodStart).toLocaleDateString()} - ${new Date(currentUsage.periodEnd).toLocaleDateString()}`
-        ) : undefined}
-        action={
-          hasWarnings ? (
-            <Chip
-              icon={<Warning />}
-              label="Usage Warning"
-              color="warning"
-              size="small"
-            />
-          ) : (
-            <Chip
-              icon={<CheckCircle />}
-              label="Healthy Usage"
-              color="success"
-              size="small"
-            />
-          )
-        }
-      />
-      <CardContent>
+    <Card className="p-6">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h2 className="text-xl font-semibold">Usage Overview</h2>
+          {currentUsage.periodStart && currentUsage.periodEnd && (
+            <p className="text-sm text-gray-600 mt-1">
+              Billing period: {new Date(currentUsage.periodStart).toLocaleDateString()} - {new Date(currentUsage.periodEnd).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+        {hasWarnings ? (
+          <Tag
+            icon="pi pi-exclamation-triangle"
+            value="Usage Warning"
+            severity="warning"
+          />
+        ) : (
+          <Tag
+            icon="pi pi-check-circle"
+            value="Healthy Usage"
+            severity="success"
+          />
+        )}
+      </div>
+      
+      <div className="space-y-4">
         {/* Overall Status Alert */}
         {hasWarnings && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            <Typography variant="body2">
-              You're approaching usage limits for some features. Consider upgrading your plan
-              to avoid service interruptions.
-            </Typography>
-          </Alert>
+          <Message 
+            severity="warn" 
+            text="You're approaching usage limits for some features. Consider upgrading your plan to avoid service interruptions."
+          />
         )}
 
         {/* Usage Metrics */}
-        <Grid container spacing={3}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {usageMetrics.map((metric, index) => {
             const status = getUsageStatus(metric.percentage);
             const color = getUsageColor(metric.percentage);
 
             return (
-              <Grid item xs={12} md={4} key={index}>
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Box sx={{ mr: 1, color: `${color}.main` }}>
-                      {metric.icon}
-                    </Box>
-                    <Typography variant="subtitle2">
-                      {metric.title}
-                    </Typography>
-                    {status === 'exceeded' && (
-                      <Chip
-                        label="Exceeded"
-                        color="error"
-                        size="small"
-                        sx={{ ml: 1 }}
-                      />
-                    )}
-                    {status === 'critical' && (
-                      <Chip
-                        label="Critical"
-                        color="warning"
-                        size="small"
-                        sx={{ ml: 1 }}
-                      />
-                    )}
-                  </Box>
+              <div key={index} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <i className={`${metric.icon} ${
+                    color === 'danger' ? 'text-red-500' : 
+                    color === 'warning' ? 'text-yellow-500' : 
+                    'text-blue-500'
+                  }`}></i>
+                  <span className="font-semibold text-sm">
+                    {metric.title}
+                  </span>
+                  {status === 'exceeded' && (
+                    <Tag
+                      value="Exceeded"
+                      severity="danger"
+                      className="text-xs"
+                    />
+                  )}
+                  {status === 'critical' && (
+                    <Tag
+                      value="Critical"
+                      severity="warning"
+                      className="text-xs"
+                    />
+                  )}
+                </div>
 
-                  <Box sx={{ mb: 1 }}>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ display: 'flex', justifyContent: 'space-between' }}
-                    >
-                      <span>{formatUsageText(metric.current, metric.limit, metric.unit)}</span>
-                      <span>{Math.round(metric.percentage)}%</span>
-                    </Typography>
-                  </Box>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>{formatUsageText(metric.current, metric.limit, metric.unit)}</span>
+                  <span>{Math.round(metric.percentage)}%</span>
+                </div>
 
-                  <LinearProgress
-                    variant="determinate"
-                    value={metric.percentage}
-                    color={color}
-                    sx={{
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: 'grey.200',
-                      '& .MuiLinearProgress-bar': {
-                        borderRadius: 4,
-                      },
-                    }}
-                  />
+                <ProgressBar
+                  value={metric.percentage}
+                  className="h-2"
+                  pt={{
+                    value: {
+                      className: color === 'danger' ? 'bg-red-500' : 
+                                color === 'warning' ? 'bg-yellow-500' : 
+                                'bg-blue-500'
+                    }
+                  }}
+                />
 
-                  {/* Usage details */}
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    {metric.current > 0 && metric.limit > 0 && (
-                      <>
-                        {metric.limit - metric.current} {metric.unit} remaining
-                      </>
-                    )}
-                    {metric.current >= metric.limit && metric.limit > 0 && (
-                      <>
-                        Limit exceeded by {metric.current - metric.limit} {metric.unit}
-                      </>
-                    )}
-                  </Typography>
-                </Box>
-              </Grid>
+                <p className="text-xs text-gray-500">
+                  {metric.current > 0 && metric.limit > 0 && (
+                    <>
+                      {metric.limit - metric.current} {metric.unit} remaining
+                    </>
+                  )}
+                  {metric.current >= metric.limit && metric.limit > 0 && (
+                    <>
+                      Limit exceeded by {metric.current - metric.limit} {metric.unit}
+                    </>
+                  )}
+                </p>
+              </div>
             );
           })}
-        </Grid>
+        </div>
 
         {/* Additional Information */}
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+        <div className="mt-6 p-4 bg-gray-50 rounded">
+          <p className="text-sm text-gray-600">
             <strong>Usage Reset:</strong> Usage limits reset at the beginning of each billing cycle.
             {subscription?.currentPeriodEnd && (
               <> Next reset: {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</>
             )}
-          </Typography>
-        </Box>
+          </p>
+        </div>
 
         {/* Upgrade Suggestion */}
         {hasWarnings && (
-          <Box sx={{ mt: 2 }}>
-            <Alert severity="info">
-              <Typography variant="body2">
-                Need more capacity? Upgrade to a higher plan for increased limits and additional features.
-              </Typography>
-            </Alert>
-          </Box>
+          <Message 
+            severity="info" 
+            text="Need more capacity? Upgrade to a higher plan for increased limits and additional features."
+          />
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 };

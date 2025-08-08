@@ -1,32 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Typography,
-  Button,
-  Card,
-  CardContent,
-  Grid,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Switch,
-  FormControlLabel,
-  Alert,
-  Chip,
-  CircularProgress,
-  Divider
-} from '@mui/material';
-import {
-  Check,
-  Star,
-  Close,
-  TrendingUp
-} from '@mui/icons-material';
+import { Dialog } from 'primereact/dialog';
+import { Button } from 'primereact/button';
+import { Card } from 'primereact/card';
+import { InputSwitch } from 'primereact/inputswitch';
+import { Message } from 'primereact/message';
+import { Tag } from 'primereact/tag';
+import { ProgressSpinner } from 'primereact/progressspinner';
 
 import { billingApi } from '../../services/api';
 
@@ -159,59 +138,51 @@ const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
 
   return (
     <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="lg"
-      fullWidth
-      PaperProps={{
-        sx: { minHeight: '70vh' }
-      }}
-    >
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h5">
+      visible={open}
+      onHide={onClose}
+      style={{ width: '90vw', maxWidth: '1200px', minHeight: '70vh' }}
+      header={
+        <div className="flex justify-between items-center w-full">
+          <h2 className="text-xl font-semibold">
             {currentPlan ? 'Change Subscription Plan' : 'Choose Your Plan'}
-          </Typography>
-          <Button onClick={onClose} sx={{ minWidth: 'auto', p: 1 }}>
-            <Close />
-          </Button>
-        </Box>
-      </DialogTitle>
-
-      <DialogContent>
+          </h2>
+        </div>
+      }
+      className="p-dialog-maximized"
+    >
+      <div className="p-6">
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
+          <div className="flex justify-center p-8">
+            <ProgressSpinner />
+          </div>
         ) : (
           <>
             {error && (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                {error}
-              </Alert>
+              <Message 
+                severity="error" 
+                text={error}
+                className="mb-6"
+              />
             )}
 
             {/* Billing Toggle */}
-            <Box sx={{ mb: 4, textAlign: 'center' }}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isYearly}
-                    onChange={(e) => setIsYearly(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography>Annual billing</Typography>
-                    <Chip label="Save up to 17%" color="success" size="small" />
-                  </Box>
-                }
-              />
-            </Box>
+            <div className="mb-8 text-center">
+              <div className="flex items-center justify-center gap-4">
+                <span>Monthly billing</span>
+                <InputSwitch
+                  checked={isYearly}
+                  onChange={(e) => setIsYearly(e.value)}
+                />
+                <span>Annual billing</span>
+                <Tag 
+                  value="Save up to 17%" 
+                  severity="success" 
+                />
+              </div>
+            </div>
 
             {/* Plans Grid */}
-            <Grid container spacing={3}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {plans.map((plan) => {
                 const features = getPlanFeatures(plan);
                 const price = getPrice(plan);
@@ -220,154 +191,130 @@ const PlanUpgradeModal: React.FC<PlanUpgradeModalProps> = ({
                 const isDowngradeOption = isDowngrade(plan.plan);
 
                 return (
-                  <Grid item xs={12} md={6} key={plan.plan}>
+                  <div key={plan.plan} className="relative">
                     <Card
-                      sx={{
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        position: 'relative',
-                        border: selectedPlan === plan.plan ? 2 : 1,
-                        borderColor: selectedPlan === plan.plan ? 'primary.main' : 'divider',
-                        '&:hover': {
-                          borderColor: 'primary.main',
-                          cursor: 'pointer'
-                        }
-                      }}
+                      className={`h-full cursor-pointer transition-all hover:shadow-lg ${
+                        selectedPlan === plan.plan 
+                          ? 'border-2 border-blue-500' 
+                          : 'border border-gray-200'
+                      }`}
                       onClick={() => setSelectedPlan(plan.plan)}
                     >
                       {/* Popular Badge */}
                       {plan.plan === 'professional' && (
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            top: -10,
-                            left: '50%',
-                            transform: 'translateX(-50%)',
-                            zIndex: 1
-                          }}
-                        >
-                          <Chip
-                            label="Most Popular"
-                            color="primary"
-                            size="small"
-                            icon={<Star />}
+                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                          <Tag
+                            value="Most Popular"
+                            icon="pi pi-star"
+                            severity="info"
                           />
-                        </Box>
+                        </div>
                       )}
 
-                      <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                      <div className="p-6 h-full flex flex-col">
                         {/* Plan Header */}
-                        <Box sx={{ textAlign: 'center', mb: 3 }}>
-                          <Typography variant="h5" gutterBottom>
+                        <div className="text-center mb-6">
+                          <h3 className="text-xl font-semibold mb-2">
                             {plan.name}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" paragraph>
+                          </h3>
+                          <p className="text-gray-600 text-sm mb-4">
                             {plan.description}
-                          </Typography>
+                          </p>
 
                           {/* Current Plan Badge */}
                           {isCurrent && (
-                            <Chip
-                              label="Current Plan"
-                              color="success"
-                              size="small"
-                              sx={{ mb: 2 }}
+                            <Tag
+                              value="Current Plan"
+                              severity="success"
+                              className="mb-4"
                             />
                           )}
 
                           {/* Pricing */}
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="h3" component="span" sx={{ fontWeight: 'bold' }}>
+                          <div className="mb-4">
+                            <span className="text-3xl font-bold">
                               ${price}
-                            </Typography>
-                            <Typography variant="h6" component="span" color="text.secondary">
+                            </span>
+                            <span className="text-lg text-gray-600 ml-1">
                               /{isYearly ? 'year' : 'month'}
-                            </Typography>
-                          </Box>
+                            </span>
+                          </div>
 
                           {/* Savings */}
                           {isYearly && savings > 0 && (
-                            <Typography variant="body2" color="success.main">
+                            <p className="text-sm text-green-600 font-medium">
                               Save ${savings}/year
-                            </Typography>
+                            </p>
                           )}
-                        </Box>
+                        </div>
 
-                        <Divider sx={{ my: 2 }} />
+                        <hr className="my-4" />
 
                         {/* Features List */}
-                        <List dense>
+                        <div className="space-y-3 flex-grow">
                           {features.map((feature, index) => (
-                            <ListItem key={index} sx={{ px: 0 }}>
-                              <ListItemIcon sx={{ minWidth: 32 }}>
-                                {feature.included ? (
-                                  <Check color="success" />
-                                ) : (
-                                  <Close color="disabled" />
-                                )}
-                              </ListItemIcon>
-                              <ListItemText
-                                primary={feature.name}
-                                sx={{
-                                  opacity: feature.included ? 1 : 0.5,
-                                  textDecoration: feature.included ? 'none' : 'line-through'
-                                }}
-                              />
-                            </ListItem>
+                            <div key={index} className="flex items-center gap-3">
+                              <i className={`${
+                                feature.included 
+                                  ? 'pi pi-check text-green-500' 
+                                  : 'pi pi-times text-gray-400'
+                              }`}></i>
+                              <span className={`text-sm ${
+                                feature.included 
+                                  ? 'text-gray-900' 
+                                  : 'text-gray-400 line-through'
+                              }`}>
+                                {feature.name}
+                              </span>
+                            </div>
                           ))}
-                        </List>
+                        </div>
 
                         {/* Action Button */}
-                        <Box sx={{ mt: 'auto', pt: 3 }}>
+                        <div className="mt-6">
                           {isCurrent ? (
                             <Button
-                              fullWidth
-                              variant="outlined"
+                              label="Current Plan"
+                              icon="pi pi-check"
                               disabled
-                              startIcon={<Check />}
-                            >
-                              Current Plan
-                            </Button>
+                              outlined
+                              className="w-full"
+                            />
                           ) : (
                             <Button
-                              fullWidth
-                              variant={selectedPlan === plan.plan ? 'contained' : 'outlined'}
-                              color={isDowngradeOption ? 'warning' : 'primary'}
+                              label={`${isDowngradeOption ? 'Downgrade' : 'Upgrade'} to ${plan.name}`}
+                              icon={
+                                upgrading 
+                                  ? "pi pi-spin pi-spinner"
+                                  : isDowngradeOption 
+                                    ? "pi pi-arrow-down" 
+                                    : "pi pi-arrow-up"
+                              }
                               onClick={() => handleUpgrade(plan.plan)}
                               disabled={upgrading}
-                              startIcon={
-                                upgrading ? (
-                                  <CircularProgress size={16} />
-                                ) : isDowngradeOption ? (
-                                  <TrendingUp sx={{ transform: 'rotate(180deg)' }} />
-                                ) : (
-                                  <TrendingUp />
-                                )
-                              }
-                            >
-                              {isDowngradeOption ? 'Downgrade' : 'Upgrade'} to {plan.name}
-                            </Button>
+                              severity={isDowngradeOption ? "warning" : "info"}
+                              className={`w-full ${selectedPlan === plan.plan ? '' : 'p-button-outlined'}`}
+                            />
                           )}
-                        </Box>
-                      </CardContent>
+                        </div>
+                      </div>
                     </Card>
-                  </Grid>
+                  </div>
                 );
               })}
-            </Grid>
+            </div>
 
             {/* Additional Information */}
-            <Box sx={{ mt: 4, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="body2" color="text.secondary">
+            <div className="mt-8 p-4 bg-gray-50 rounded">
+              <p className="text-sm text-gray-600">
                 <strong>Note:</strong> Plan changes take effect immediately. 
                 {currentPlan && ' You will be charged or credited prorated amounts based on the remaining time in your current billing cycle.'}
                 {!currentPlan && ' You can cancel anytime before your trial ends.'}
-              </Typography>
-            </Box>
+              </p>
+            </div>
           </>
         )}
-      </DialogContent>
+      </div>
     </Dialog>
   );
 };

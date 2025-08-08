@@ -1,28 +1,11 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardActions,
-  Box,
-  Typography,
-  Button,
-  Chip,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  CircularProgress
-} from '@mui/material';
-import {
-  Star,
-  Cancel,
-  Refresh,
-  Warning,
-  CheckCircle
-} from '@mui/icons-material';
+import { Card } from 'primereact/card';
+import { Button } from 'primereact/button';
+import { Tag } from 'primereact/tag';
+import { Message } from 'primereact/message';
+import { Dialog } from 'primereact/dialog';
+import { InputTextarea } from 'primereact/inputtextarea';
+import { ProgressSpinner } from 'primereact/progressspinner';
 import { format } from 'date-fns';
 
 import { billingApi } from '../../services/api';
@@ -52,22 +35,22 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
       case 'past_due':
         return 'warning';
       case 'canceled':
-        return 'error';
+        return 'danger';
       default:
-        return 'default';
+        return null;
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'active':
-        return <CheckCircle />;
+        return 'pi pi-check-circle';
       case 'trialing':
-        return <Star />;
+        return 'pi pi-star';
       case 'past_due':
-        return <Warning />;
+        return 'pi pi-exclamation-triangle';
       case 'canceled':
-        return <Cancel />;
+        return 'pi pi-times-circle';
       default:
         return null;
     }
@@ -117,23 +100,19 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
 
   if (!subscription) {
     return (
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            No Active Subscription
-          </Typography>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            You're currently on the free plan with limited features.
-          </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={onUpgrade}
-            startIcon={<Star />}
-          >
-            Upgrade Now
-          </Button>
-        </CardContent>
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold mb-3">
+          No Active Subscription
+        </h2>
+        <p className="text-gray-600 mb-4">
+          You're currently on the free plan with limited features.
+        </p>
+        <Button
+          label="Upgrade Now"
+          icon="pi pi-star"
+          onClick={onUpgrade}
+          className="p-button-primary"
+        />
       </Card>
     );
   }
@@ -142,191 +121,184 @@ const SubscriptionCard: React.FC<SubscriptionCardProps> = ({
   const isCanceled = subscription.status === 'canceled';
   const isPastDue = subscription.status === 'past_due';
 
+  const statusIconClass = getStatusIcon(subscription.status);
+
   return (
     <>
-      <Card>
-        <CardHeader
-          title={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h6">
-                {getPlanDisplayName(subscription.plan)}
-              </Typography>
-              <Chip
-                icon={getStatusIcon(subscription.status)}
-                label={subscription.status?.toUpperCase()}
-                color={getStatusColor(subscription.status)}
-                size="small"
-              />
-            </Box>
-          }
-          subheader={
-            <Typography variant="body2" color="text.secondary">
-              ${subscription.amount}/{subscription.interval}
-            </Typography>
-          }
-        />
+      <Card className="p-6">
+        <div className="mb-4">
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="text-xl font-semibold">
+              {getPlanDisplayName(subscription.plan)}
+            </h2>
+            <Tag
+              icon={statusIconClass}
+              value={subscription.status?.toUpperCase()}
+              severity={getStatusColor(subscription.status)}
+            />
+          </div>
+          <p className="text-gray-600 text-sm">
+            ${subscription.amount}/{subscription.interval}
+          </p>
+        </div>
         
-        <CardContent>
+        <div className="space-y-4">
           {/* Trial Notice */}
           {isTrialing && subscription.trialEnd && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Trial Period</strong>
-                <br />
-                Your trial ends on {format(new Date(subscription.trialEnd), 'MMM dd, yyyy')}
-              </Typography>
-            </Alert>
+            <Message 
+              severity="info" 
+              text={
+                <div>
+                  <strong>Trial Period</strong>
+                  <br />
+                  Your trial ends on {format(new Date(subscription.trialEnd), 'MMM dd, yyyy')}
+                </div>
+              }
+            />
           )}
 
           {/* Past Due Notice */}
           {isPastDue && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Payment Past Due</strong>
-                <br />
-                Please update your payment method to continue service.
-              </Typography>
-            </Alert>
+            <Message 
+              severity="warn" 
+              text={
+                <div>
+                  <strong>Payment Past Due</strong>
+                  <br />
+                  Please update your payment method to continue service.
+                </div>
+              }
+            />
           )}
 
           {/* Cancellation Notice */}
           {isCanceled && subscription.endsAt && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              <Typography variant="body2">
-                <strong>Subscription Canceled</strong>
-                <br />
-                Your subscription will end on {format(new Date(subscription.endsAt), 'MMM dd, yyyy')}
-              </Typography>
-            </Alert>
+            <Message 
+              severity="error" 
+              text={
+                <div>
+                  <strong>Subscription Canceled</strong>
+                  <br />
+                  Your subscription will end on {format(new Date(subscription.endsAt), 'MMM dd, yyyy')}
+                </div>
+              }
+            />
           )}
 
           {/* Billing Information */}
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary">
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600">
               <strong>Current Period:</strong>{' '}
               {subscription.currentPeriodStart && subscription.currentPeriodEnd
                 ? `${format(new Date(subscription.currentPeriodStart), 'MMM dd')} - ${format(new Date(subscription.currentPeriodEnd), 'MMM dd, yyyy')}`
                 : 'N/A'}
-            </Typography>
+            </p>
             
             {subscription.stripeCustomerId && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              <p className="text-sm text-gray-600">
                 <strong>Customer ID:</strong> {subscription.stripeCustomerId}
-              </Typography>
+              </p>
             )}
-          </Box>
+          </div>
 
           {/* Plan Features */}
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Plan Features:
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              <Chip
-                label={`${subscription.maxProtectedProfiles} Protected Profile${subscription.maxProtectedProfiles > 1 ? 's' : ''}`}
-                size="small"
-                variant="outlined"
+          <div>
+            <h4 className="font-semibold text-sm mb-2">Plan Features:</h4>
+            <div className="flex flex-wrap gap-2">
+              <Tag
+                value={`${subscription.maxProtectedProfiles} Protected Profile${subscription.maxProtectedProfiles > 1 ? 's' : ''}`}
+                className="p-tag-outlined"
               />
-              <Chip
-                label={`${subscription.maxMonthlyScans} Monthly Scans`}
-                size="small"
-                variant="outlined"
+              <Tag
+                value={`${subscription.maxMonthlyScans} Monthly Scans`}
+                className="p-tag-outlined"
               />
-              <Chip
-                label={`${subscription.maxTakedownRequests} Takedown Requests`}
-                size="small"
-                variant="outlined"
+              <Tag
+                value={`${subscription.maxTakedownRequests} Takedown Requests`}
+                className="p-tag-outlined"
               />
               {subscription.aiFaceRecognition && (
-                <Chip label="AI Face Recognition" size="small" variant="outlined" color="primary" />
+                <Tag value="AI Face Recognition" severity="info" className="p-tag-outlined" />
               )}
               {subscription.prioritySupport && (
-                <Chip label="Priority Support" size="small" variant="outlined" color="primary" />
+                <Tag value="Priority Support" severity="info" className="p-tag-outlined" />
               )}
               {subscription.customBranding && (
-                <Chip label="Custom Branding" size="small" variant="outlined" color="primary" />
+                <Tag value="Custom Branding" severity="info" className="p-tag-outlined" />
               )}
               {subscription.apiAccess && (
-                <Chip label="API Access" size="small" variant="outlined" color="primary" />
+                <Tag value="API Access" severity="info" className="p-tag-outlined" />
               )}
-            </Box>
-          </Box>
-        </CardContent>
+            </div>
+          </div>
+        </div>
 
-        <CardActions>
+        <div className="flex gap-2 mt-6">
           {!isCanceled && (
             <Button
-              variant="contained"
-              color="primary"
+              label={subscription.plan === 'basic' ? 'Upgrade Plan' : 'Change Plan'}
+              icon="pi pi-star"
               onClick={onUpgrade}
-              startIcon={<Star />}
-            >
-              {subscription.plan === 'basic' ? 'Upgrade Plan' : 'Change Plan'}
-            </Button>
+              className="p-button-primary"
+            />
           )}
 
           {!isCanceled && (
             <Button
-              variant="outlined"
-              color="error"
+              label="Cancel"
+              icon="pi pi-times"
               onClick={() => setCancelDialogOpen(true)}
-              startIcon={<Cancel />}
-            >
-              Cancel
-            </Button>
+              className="p-button-outlined p-button-danger"
+            />
           )}
 
           {isCanceled && (
             <Button
-              variant="contained"
-              color="primary"
+              label="Reactivate"
+              icon={reactivating ? "pi pi-spin pi-spinner" : "pi pi-refresh"}
               onClick={handleReactivateSubscription}
               disabled={reactivating}
-              startIcon={reactivating ? <CircularProgress size={16} /> : <Refresh />}
-            >
-              Reactivate
-            </Button>
+              className="p-button-primary"
+            />
           )}
-        </CardActions>
+        </div>
       </Card>
 
       {/* Cancel Subscription Dialog */}
       <Dialog
-        open={cancelDialogOpen}
-        onClose={() => setCancelDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
+        header="Cancel Subscription"
+        visible={cancelDialogOpen}
+        onHide={() => setCancelDialogOpen(false)}
+        style={{ width: '450px' }}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button 
+              label="Keep Subscription" 
+              outlined
+              onClick={() => setCancelDialogOpen(false)}
+            />
+            <Button
+              label="Cancel Subscription"
+              icon={cancelling ? "pi pi-spin pi-spinner" : "pi pi-times"}
+              onClick={handleCancelSubscription}
+              disabled={cancelling}
+              severity="danger"
+            />
+          </div>
+        }
       >
-        <DialogTitle>Cancel Subscription</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" paragraph>
-            Are you sure you want to cancel your subscription? You'll continue to have access
-            until the end of your current billing period.
-          </Typography>
-          
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Reason for cancellation (optional)"
-            value={cancellationReason}
-            onChange={(e) => setCancellationReason(e.target.value)}
-            placeholder="Help us improve by letting us know why you're canceling..."
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCancelDialogOpen(false)}>
-            Keep Subscription
-          </Button>
-          <Button
-            onClick={handleCancelSubscription}
-            color="error"
-            disabled={cancelling}
-            startIcon={cancelling ? <CircularProgress size={16} /> : <Cancel />}
-          >
-            Cancel Subscription
-          </Button>
-        </DialogActions>
+        <p className="mb-4">
+          Are you sure you want to cancel your subscription? You'll continue to have access
+          until the end of your current billing period.
+        </p>
+        
+        <InputTextarea
+          value={cancellationReason}
+          onChange={(e) => setCancellationReason(e.target.value)}
+          placeholder="Help us improve by letting us know why you're canceling..."
+          rows={3}
+          className="w-full"
+        />
       </Dialog>
     </>
   );

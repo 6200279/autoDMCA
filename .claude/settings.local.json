@@ -3,7 +3,8 @@
     "allow": [
       "Bash(claude mcp add:*)",
       "Bash(claude mcp:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(timeout 10 npm run dev)"
     ],
     "deny": []
   }

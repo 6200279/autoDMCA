@@ -1,33 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  Box,
-  Typography,
-  Button,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  ListItemAvatar,
-  Avatar,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Alert,
-  Chip,
-  CircularProgress
-} from '@mui/material';
-import {
-  CreditCard,
-  Add,
-  Delete,
-  Star,
-  AccountBalance
-} from '@mui/icons-material';
+import { Card } from 'primereact/card';
+import { Button } from 'primereact/button';
+import { Dialog } from 'primereact/dialog';
+import { Message } from 'primereact/message';
+import { Tag } from 'primereact/tag';
+import { ProgressSpinner } from 'primereact/progressspinner';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   Elements,
@@ -103,83 +80,72 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ onRefresh }) => {
 
   return (
     <>
-      <Card>
-        <CardHeader
-          title="Payment Methods"
-          action={
-            <Button
-              startIcon={<Add />}
-              onClick={() => setAddModalOpen(true)}
-              variant="outlined"
-              size="small"
-            >
-              Add Card
-            </Button>
-          }
-        />
-        <CardContent>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-              <CircularProgress />
-            </Box>
-          ) : paymentMethods.length === 0 ? (
-            <Alert severity="info">
-              No payment methods added yet. Add a card to manage your subscription.
-            </Alert>
-          ) : (
-            <List disablePadding>
-              {paymentMethods.map((method) => (
-                <ListItem key={method.id} divider>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                      {method.type === 'card' ? (
-                        <CreditCard />
-                      ) : (
-                        <AccountBalance />
+      <Card className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Payment Methods</h2>
+          <Button
+            label="Add Card"
+            icon="pi pi-plus"
+            onClick={() => setAddModalOpen(true)}
+            outlined
+            size="small"
+          />
+        </div>
+        
+        {loading ? (
+          <div className="flex justify-center p-4">
+            <ProgressSpinner />
+          </div>
+        ) : paymentMethods.length === 0 ? (
+          <Message 
+            severity="info" 
+            text="No payment methods added yet. Add a card to manage your subscription." 
+          />
+        ) : (
+          <div className="space-y-4">
+            {paymentMethods.map((method) => (
+              <div key={method.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white">
+                    <i className={method.type === 'card' ? 'pi pi-credit-card' : 'pi pi-building'}></i>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {method.cardBrand?.toUpperCase()} •••• {method.cardLast4}
+                      </span>
+                      {method.isDefault && (
+                        <Tag
+                          value="Default"
+                          icon="pi pi-star"
+                          severity="info"
+                        />
                       )}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body1">
-                          {method.cardBrand?.toUpperCase()} •••• {method.cardLast4}
-                        </Typography>
-                        {method.isDefault && (
-                          <Chip
-                            label="Default"
-                            size="small"
-                            color="primary"
-                            icon={<Star />}
-                          />
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      method.type === 'card' ? (
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      {method.type === 'card' ? (
                         `Expires ${formatExpiryDate(method.cardExpMonth, method.cardExpYear)}`
                       ) : (
                         `${method.bankName} •••• ${method.bankLast4}`
-                      )
-                    }
-                  />
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      onClick={() => {
-                        setSelectedPaymentMethod(method);
-                        setDeleteConfirmOpen(true);
-                      }}
-                      disabled={method.isDefault}
-                    >
-                      <Delete />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </CardContent>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  icon="pi pi-trash"
+                  onClick={() => {
+                    setSelectedPaymentMethod(method);
+                    setDeleteConfirmOpen(true);
+                  }}
+                  disabled={method.isDefault}
+                  severity="danger"
+                  outlined
+                  size="small"
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* Add Payment Method Modal */}
@@ -197,34 +163,35 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ onRefresh }) => {
 
       {/* Delete Confirmation Dialog */}
       <Dialog
-        open={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-        maxWidth="sm"
-        fullWidth
+        header="Remove Payment Method"
+        visible={deleteConfirmOpen}
+        onHide={() => setDeleteConfirmOpen(false)}
+        style={{ width: '450px' }}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button 
+              label="Cancel" 
+              outlined
+              onClick={() => setDeleteConfirmOpen(false)}
+            />
+            <Button 
+              label="Remove" 
+              onClick={handleDeletePaymentMethod} 
+              severity="danger" 
+            />
+          </div>
+        }
       >
-        <DialogTitle>Remove Payment Method</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to remove this payment method?
-          </Typography>
-          {selectedPaymentMethod && (
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-              <Typography variant="body2">
-                <strong>
-                  {selectedPaymentMethod.cardBrand?.toUpperCase()} •••• {selectedPaymentMethod.cardLast4}
-                </strong>
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirmOpen(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleDeletePaymentMethod} color="error">
-            Remove
-          </Button>
-        </DialogActions>
+        <p className="mb-4">
+          Are you sure you want to remove this payment method?
+        </p>
+        {selectedPaymentMethod && (
+          <div className="mt-4 p-3 bg-gray-50 rounded">
+            <p className="font-medium text-sm">
+              {selectedPaymentMethod.cardBrand?.toUpperCase()} •••• {selectedPaymentMethod.cardLast4}
+            </p>
+          </div>
+        )}
       </Dialog>
     </>
   );
@@ -300,65 +267,58 @@ const AddPaymentMethodModal: React.FC<AddPaymentMethodModalProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog 
+      header="Add Payment Method" 
+      visible={open} 
+      onHide={onClose} 
+      style={{ width: '500px' }}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button 
+            label="Cancel" 
+            outlined
+            onClick={onClose} 
+            disabled={processing}
+          />
+          <Button
+            label="Add Card"
+            icon={processing ? "pi pi-spin pi-spinner" : "pi pi-plus"}
+            disabled={!stripe || processing}
+            onClick={handleSubmit}
+          />
+        </div>
+      }
+    >
       <form onSubmit={handleSubmit}>
-        <DialogTitle>Add Payment Method</DialogTitle>
-        <DialogContent>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+        {error && (
+          <Message 
+            severity="error" 
+            text={error}
+            className="mb-4"
+          />
+        )}
 
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              Enter your card details below. This card will be securely stored for future payments.
-            </Typography>
+        <div className="mt-4">
+          <p className="text-sm text-gray-600 mb-4">
+            Enter your card details below. This card will be securely stored for future payments.
+          </p>
 
-            <Box
-              sx={{
-                mt: 2,
-                p: 2,
-                border: 1,
-                borderColor: 'divider',
-                borderRadius: 1,
-                '& .StripeElement': {
-                  padding: '12px 0',
-                },
-                '& .StripeElement--focus': {
-                  borderColor: 'primary.main',
-                },
-              }}
-            >
-              <CardElement
-                options={{
-                  style: {
-                    base: {
-                      fontSize: '16px',
-                      color: '#424770',
-                      '::placeholder': {
-                        color: '#aab7c4',
-                      },
+          <div className="mt-4 p-4 border border-gray-200 rounded">
+            <CardElement
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#424770',
+                    '::placeholder': {
+                      color: '#aab7c4',
                     },
                   },
-                }}
-              />
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} disabled={processing}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={!stripe || processing}
-            startIcon={processing ? <CircularProgress size={16} /> : <Add />}
-          >
-            Add Card
-          </Button>
-        </DialogActions>
+                },
+              }}
+            />
+          </div>
+        </div>
       </form>
     </Dialog>
   );
