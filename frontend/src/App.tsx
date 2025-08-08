@@ -1,12 +1,16 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import { SnackbarProvider } from 'notistack';
+import { Toast } from 'primereact/toast';
+
+// PrimeReact CSS (theme will be loaded dynamically)
+import 'primereact/resources/primereact.min.css';
+import 'primeicons/primeicons.css';
+import 'primeflex/primeflex.css';
 
 import { AuthProvider } from './contexts/AuthContext';
-import { useAuth } from './hooks/useAuth';
+import { LayoutProvider } from './contexts/LayoutContext';
+import { useAuth } from './contexts/AuthContext';
 
 // Pages
 import Login from './pages/Login';
@@ -17,10 +21,12 @@ import Infringements from './pages/Infringements';
 import TakedownRequests from './pages/TakedownRequests';
 import Settings from './pages/Settings';
 import Billing from './pages/Billing';
+import NotFound from './pages/NotFound';
 
 // Components
 import Layout from './components/common/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,17 +37,12 @@ const queryClient = new QueryClient({
   },
 });
 
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-});
+// Configure PrimeReact globally
+const configurePrimeReact = () => {
+  // You can add global PrimeReact configuration here if needed
+};
+
+configurePrimeReact();
 
 function AppContent() {
   const { user } = useAuth();
@@ -49,26 +50,88 @@ function AppContent() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
-        <Route
-          path="/*"
+        {/* Public routes */}
+        <Route 
+          path="/login" 
+          element={user ? <Navigate to="/dashboard" replace /> : <Login />} 
+        />
+        <Route 
+          path="/register" 
+          element={user ? <Navigate to="/dashboard" replace /> : <Register />} 
+        />
+        
+        {/* Protected routes */}
+        <Route 
+          path="/dashboard" 
           element={
             <ProtectedRoute>
               <Layout>
-                <Routes>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/profiles" element={<Profiles />} />
-                  <Route path="/infringements" element={<Infringements />} />
-                  <Route path="/takedowns" element={<TakedownRequests />} />
-                  <Route path="/billing" element={<Billing />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/" element={<Navigate to="/dashboard" />} />
-                </Routes>
+                <Dashboard />
               </Layout>
             </ProtectedRoute>
-          }
+          } 
         />
+        <Route 
+          path="/protection/profiles" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Profiles />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/infringements" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Infringements />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/takedowns" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <TakedownRequests />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/settings" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Settings />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/billing" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Billing />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* Legacy route redirects for compatibility */}
+        <Route path="/profiles" element={<Navigate to="/protection/profiles" replace />} />
+        <Route path="/infringements" element={<Navigate to="/protection/infringements" replace />} />
+        <Route path="/takedown-requests" element={<Navigate to="/protection/takedowns" replace />} />
+        
+        {/* Redirect root to dashboard */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        
+        {/* 404 Not Found */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
   );
@@ -76,16 +139,15 @@ function AppContent() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <SnackbarProvider maxSnack={3}>
-          <AuthProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <LayoutProvider>
             <AppContent />
-          </AuthProvider>
-        </SnackbarProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+          </LayoutProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
