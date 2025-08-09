@@ -1,7 +1,5 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toast } from 'primereact/toast';
 
 // PrimeReact CSS (theme will be loaded dynamically)
 import 'primereact/resources/primereact.min.css';
@@ -19,8 +17,17 @@ import Dashboard from './pages/Dashboard';
 import Profiles from './pages/Profiles';
 import Infringements from './pages/Infringements';
 import TakedownRequests from './pages/TakedownRequests';
+import Submissions from './pages/Submissions';
+import Reports from './pages/Reports';
+import SocialMediaProtection from './pages/SocialMediaProtection';
+import AIContentMatching from './pages/AIContentMatching';
 import Settings from './pages/Settings';
 import Billing from './pages/Billing';
+import AdminPanel from './pages/AdminPanel';
+import DMCATemplates from './pages/DMCATemplates';
+import SearchEngineDelisting from './pages/SearchEngineDelisting';
+import ContentWatermarking from './pages/ContentWatermarking';
+import BrowserExtension from './pages/BrowserExtension';
 import NotFound from './pages/NotFound';
 
 // Components
@@ -102,6 +109,76 @@ function AppContent() {
           } 
         />
         <Route 
+          path="/protection/submissions" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Submissions />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/social-media" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <SocialMediaProtection />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/ai-matching" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <AIContentMatching />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/templates" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <DMCATemplates />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/search-delisting" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <SearchEngineDelisting />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/browser-extension" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <BrowserExtension />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/protection/watermarking" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ContentWatermarking />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
           path="/settings" 
           element={
             <ProtectedRoute>
@@ -121,11 +198,40 @@ function AppContent() {
             </ProtectedRoute>
           } 
         />
+        <Route 
+          path="/reports" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Reports />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute roles={['admin']}>
+              <Layout>
+                <AdminPanel />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
         
         {/* Legacy route redirects for compatibility */}
         <Route path="/profiles" element={<Navigate to="/protection/profiles" replace />} />
         <Route path="/infringements" element={<Navigate to="/protection/infringements" replace />} />
         <Route path="/takedown-requests" element={<Navigate to="/protection/takedowns" replace />} />
+        <Route path="/templates" element={<Navigate to="/protection/templates" replace />} />
+        <Route path="/dmca-templates" element={<Navigate to="/protection/templates" replace />} />
+        <Route path="/submissions" element={<Navigate to="/protection/submissions" replace />} />
+        <Route path="/social-media" element={<Navigate to="/protection/social-media" replace />} />
+        <Route path="/ai-matching" element={<Navigate to="/protection/ai-matching" replace />} />
+        <Route path="/content-matching" element={<Navigate to="/protection/ai-matching" replace />} />
+        <Route path="/search-delisting" element={<Navigate to="/protection/search-delisting" replace />} />
+        <Route path="/watermarking" element={<Navigate to="/protection/watermarking" replace />} />
+        <Route path="/browser-extension" element={<Navigate to="/protection/browser-extension" replace />} />
         
         {/* Redirect root to dashboard */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

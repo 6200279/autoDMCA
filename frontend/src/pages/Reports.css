@@ -1,0 +1,241 @@
+.analytics-reports-page {
+  min-height: 100vh;
+  background: var(--surface-ground);
+}
+
+.analytics-reports-page .p-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--surface-border);
+}
+
+.analytics-reports-page .p-card-title {
+  color: var(--text-color);
+  font-weight: 600;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.analytics-reports-page .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  border-radius: 8px 8px 0 0;
+  font-weight: 500;
+}
+
+.analytics-reports-page .p-tabview .p-tabview-panels {
+  padding: 1.5rem;
+  background: var(--surface-card);
+}
+
+/* KPI Cards */
+.analytics-reports-page .kpi-card {
+  transition: all 0.3s ease;
+  border-radius: 12px;
+}
+
+.analytics-reports-page .kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.analytics-reports-page .kpi-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+/* Chart containers */
+.analytics-reports-page .chart-container {
+  position: relative;
+  height: 100%;
+  min-height: 300px;
+  padding: 1rem;
+}
+
+.analytics-reports-page canvas {
+  max-height: 400px !important;
+}
+
+/* Table styling */
+.analytics-reports-page .p-datatable {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.analytics-reports-page .p-datatable .p-datatable-thead > tr > th {
+  background: var(--surface-section);
+  color: var(--text-color);
+  font-weight: 600;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.analytics-reports-page .p-datatable .p-datatable-tbody > tr {
+  transition: background-color 0.2s ease;
+}
+
+.analytics-reports-page .p-datatable .p-datatable-tbody > tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Progress bars */
+.analytics-reports-page .p-progressbar {
+  border-radius: 6px;
+  height: 8px;
+}
+
+.analytics-reports-page .p-progressbar .p-progressbar-value {
+  border-radius: 6px;
+}
+
+/* Tags and badges */
+.analytics-reports-page .p-tag {
+  border-radius: 6px;
+  font-weight: 500;
+  padding: 0.4rem 0.75rem;
+}
+
+.analytics-reports-page .p-badge {
+  border-radius: 6px;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.875rem;
+}
+
+/* Filter panel */
+.analytics-reports-page .p-panel .p-panel-header {
+  background: var(--surface-card);
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.analytics-reports-page .p-panel .p-panel-content {
+  background: var(--surface-card);
+  border-radius: 0 0 8px 8px;
+  padding: 1.5rem;
+}
+
+/* Filters */
+.analytics-reports-page .p-dropdown,
+.analytics-reports-page .p-multiselect,
+.analytics-reports-page .p-calendar {
+  border-radius: 6px;
+  border: 1px solid var(--surface-border);
+}
+
+.analytics-reports-page .p-dropdown:not(.p-disabled):hover,
+.analytics-reports-page .p-multiselect:not(.p-disabled):hover,
+.analytics-reports-page .p-calendar:not(.p-disabled):hover {
+  border-color: var(--primary-color);
+}
+
+/* Dialog styling */
+.analytics-reports-page .p-dialog {
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.analytics-reports-page .p-dialog .p-dialog-header {
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--surface-border);
+  border-radius: 12px 12px 0 0;
+  padding: 1.5rem;
+}
+
+.analytics-reports-page .p-dialog .p-dialog-content {
+  background: var(--surface-card);
+  padding: 1.5rem;
+  border-radius: 0 0 12px 12px;
+}
+
+/* Skeleton loading */
+.analytics-reports-page .p-skeleton {
+  border-radius: 8px;
+}
+
+/* Notification panel styles */
+.notification-panel {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+.notification-item {
+  margin-bottom: 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.notification-item:hover {
+  background: var(--surface-hover);
+}
+
+.notification-unread {
+  background: var(--highlight-bg);
+  border-left: 3px solid var(--primary-color);
+}
+
+.notification-icon {
+  margin-left: 0.5rem;
+}
+
+/* Theme toggle styling */
+.theme-toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 20px;
+  background: var(--surface-section);
+  border: 1px solid var(--surface-border);
+}
+
+.theme-toggle-container i {
+  color: var(--text-color-secondary);
+  font-size: 0.875rem;
+}
+
+/* Real-time indicator */
+.analytics-reports-page .real-time-indicator {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+/* Export button styling */
+.analytics-reports-page .p-splitbutton .p-button {
+  border-radius: 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .analytics-reports-page .p-tabview .p-tabview-panels {
+    padding: 1rem;
+  }
+  
+  .analytics-reports-page .chart-container {
+    padding: 0.5rem;
+    min-height: 250px;
+  }
+  
+  .analytics-reports-page canvas {
+    max-height: 300px !important;
+  }
+}
+
+/* Dark theme adjustments */
+.p-dark .analytics-reports-page .p-card {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+.p-dark .analytics-reports-page .kpi-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.p-dark .analytics-reports-page .notification-panel {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}

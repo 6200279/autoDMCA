@@ -59,20 +59,20 @@ const PaymentMethods: React.FC<PaymentMethodsProps> = ({ onRefresh }) => {
     }
   };
 
-  const getCardBrandIcon = (brand: string) => {
-    switch (brand?.toLowerCase()) {
-      case 'visa':
-        return '💳';
-      case 'mastercard':
-        return '💳';
-      case 'amex':
-        return '💳';
-      case 'discover':
-        return '💳';
-      default:
-        return '💳';
-    }
-  };
+  // const getCardBrandIcon = (brand: string) => {
+  //   switch (brand?.toLowerCase()) {
+  //     case 'visa':
+  //       return '💳';
+  //     case 'mastercard':
+  //       return '💳';
+  //     case 'amex':
+  //       return '💳';
+  //     case 'discover':
+  //       return '💳';
+  //     default:
+  //       return '💳';
+  //   }
+  // };
 
   const formatExpiryDate = (month: number, year: number) => {
     return `${month.toString().padStart(2, '0')}/${year.toString().slice(-2)}`;
@@ -253,7 +253,7 @@ const AddPaymentMethodModal: React.FC<AddPaymentMethodModalProps> = ({
       if (setupIntent && setupIntent.payment_method) {
         // Add payment method to backend
         await billingApi.addPaymentMethod({
-          paymentMethodId: setupIntent.payment_method.id,
+          paymentMethodId: (setupIntent.payment_method as any).id,
           setAsDefault: false
         });
 

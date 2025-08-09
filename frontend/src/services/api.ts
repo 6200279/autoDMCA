@@ -149,4 +149,200 @@ export const takedownApi = {
   generateTemplate: (data: any) => api.post('/takedowns/generate-template', data),
 };
 
+// Submission API endpoints
+export const submissionApi = {
+  getSubmissions: (params?: any) => api.get('/submissions', { params }),
+  getSubmission: (id: string) => api.get(`/submissions/${id}`),
+  createSubmission: (data: any) => api.post('/submissions', data),
+  updateSubmission: (id: string, data: any) => api.put(`/submissions/${id}`, data),
+  deleteSubmission: (id: string) => api.delete(`/submissions/${id}`),
+  cancelSubmission: (id: string) => api.post(`/submissions/${id}/cancel`),
+  retrySubmission: (id: string) => api.post(`/submissions/${id}/retry`),
+  getSubmissionProgress: (id: string) => api.get(`/submissions/${id}/progress`),
+  uploadFiles: (files: File[]) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    return api.post('/submissions/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  validateUrls: (urls: string[]) => api.post('/submissions/validate-urls', { urls }),
+  bulkCreate: (data: any) => api.post('/submissions/bulk', data),
+};
+
+// Admin API endpoints
+export const adminApi = {
+  // Dashboard
+  getDashboardStats: () => api.get('/admin/dashboard'),
+  getSystemMetrics: () => api.get('/admin/metrics'),
+  getSystemHealth: () => api.get('/admin/health'),
+  
+  // User Management
+  getUsers: (params?: any) => api.get('/admin/users', { params }),
+  getUser: (id: number) => api.get(`/admin/users/${id}`),
+  updateUser: (id: number, data: any) => api.put(`/admin/users/${id}`, data),
+  suspendUser: (id: number, data: any) => api.post(`/admin/users/${id}/suspend`, data),
+  activateUser: (id: number) => api.post(`/admin/users/${id}/activate`),
+  deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
+  impersonateUser: (id: number) => api.post(`/admin/users/${id}/impersonate`),
+  bulkUserOperation: (data: any) => api.post('/admin/users/bulk-action', data),
+  exportUsers: (params?: any) => api.get('/admin/users/export', { params }),
+  getUserAnalytics: (params?: any) => api.get('/admin/analytics/users', { params }),
+  
+  // Subscription Management
+  getUserSubscription: (userId: number) => api.get(`/admin/users/${userId}/subscription`),
+  updateUserSubscription: (userId: number, data: any) => api.put(`/admin/users/${userId}/subscription`, data),
+  cancelUserSubscription: (userId: number, data: any) => api.post(`/admin/users/${userId}/subscription/cancel`, data),
+  getSubscriptionAnalytics: () => api.get('/admin/analytics/subscriptions'),
+  
+  // System Configuration
+  getSystemConfigs: (params?: any) => api.get('/admin/config', { params }),
+  updateSystemConfig: (key: string, data: any) => api.put(`/admin/config/${key}`, data),
+  getPlatformConfigs: () => api.get('/admin/platforms'),
+  updatePlatformConfig: (id: string, data: any) => api.put(`/admin/platforms/${id}`, data),
+  testPlatformConnection: (id: string) => api.post(`/admin/platforms/${id}/test`),
+  
+  // Activity & Audit Logs
+  getAdminActivities: (params?: any) => api.get('/admin/activities', { params }),
+  getAuditLogs: (params?: any) => api.get('/admin/audit-logs', { params }),
+  
+  // Notifications
+  getAdminNotifications: (params?: any) => api.get('/admin/notifications', { params }),
+  markNotificationRead: (id: number) => api.put(`/admin/notifications/${id}/read`),
+  createAnnouncement: (data: any) => api.post('/admin/announcements', data),
+  
+  // System Operations
+  enableMaintenanceMode: (data: any) => api.post('/admin/maintenance/enable', data),
+  disableMaintenanceMode: () => api.post('/admin/maintenance/disable'),
+  toggleFeatureFlag: (flag: string, data: any) => api.post(`/admin/feature-flags/${flag}/toggle`, data),
+  getFeatureFlags: () => api.get('/admin/feature-flags'),
+  
+  // Backup & Export
+  createBackup: () => api.post('/admin/backup/create'),
+  getBackupStatus: () => api.get('/admin/backup/status'),
+  exportSystemData: (type: string, params?: any) => api.get(`/admin/export/${type}`, { params }),
+  
+  // Analytics & Reports
+  getRevenueSummary: (params?: any) => api.get('/admin/analytics/revenue', { params }),
+  getUsageStatistics: (params?: any) => api.get('/admin/analytics/usage', { params }),
+  getPlatformPerformance: (params?: any) => api.get('/admin/analytics/platforms', { params }),
+  getSecurityReport: (params?: any) => api.get('/admin/security/report', { params }),
+};
+
+// Browser Extension API endpoints
+export const extensionApi = {
+  // Extension Management
+  getExtensions: () => api.get('/extensions'),
+  getExtension: (id: string) => api.get(`/extensions/${id}`),
+  installExtension: (extensionId: string, browserData: any) => api.post(`/extensions/${extensionId}/install`, browserData),
+  uninstallExtension: (extensionId: string) => api.delete(`/extensions/${extensionId}/install`),
+  activateExtension: (extensionId: string) => api.post(`/extensions/${extensionId}/activate`),
+  deactivateExtension: (extensionId: string) => api.post(`/extensions/${extensionId}/deactivate`),
+  syncExtension: (extensionId: string) => api.post(`/extensions/${extensionId}/sync`),
+  updateExtension: (extensionId: string) => api.post(`/extensions/${extensionId}/update`),
+  
+  // Extension Settings
+  getExtensionSettings: (extensionId: string) => api.get(`/extensions/${extensionId}/settings`),
+  updateExtensionSettings: (extensionId: string, settings: any) => api.put(`/extensions/${extensionId}/settings`, settings),
+  resetExtensionSettings: (extensionId: string) => api.post(`/extensions/${extensionId}/settings/reset`),
+  
+  // Extension Activity
+  getExtensionActivities: (params?: any) => api.get('/extensions/activities', { params }),
+  getExtensionActivity: (extensionId: string, params?: any) => api.get(`/extensions/${extensionId}/activities`, { params }),
+  recordActivity: (activityData: any) => api.post('/extensions/activities', activityData),
+  
+  // Extension Permissions
+  getExtensionPermissions: (extensionId: string) => api.get(`/extensions/${extensionId}/permissions`),
+  updateExtensionPermissions: (extensionId: string, permissions: any) => api.put(`/extensions/${extensionId}/permissions`, permissions),
+  revokePermission: (extensionId: string, permission: string) => api.delete(`/extensions/${extensionId}/permissions/${permission}`),
+  
+  // Extension Statistics
+  getExtensionStats: (extensionId?: string) => api.get('/extensions/stats', { params: extensionId ? { extensionId } : {} }),
+  getBrowserDistribution: () => api.get('/extensions/stats/browsers'),
+  getActivityTrends: (params?: any) => api.get('/extensions/stats/trends', { params }),
+  
+  // Extension Updates
+  checkForUpdates: (extensionId?: string) => api.get('/extensions/updates', { params: extensionId ? { extensionId } : {} }),
+  getUpdateDetails: (extensionId: string) => api.get(`/extensions/${extensionId}/updates`),
+  scheduleUpdate: (extensionId: string, scheduleData: any) => api.post(`/extensions/${extensionId}/updates/schedule`, scheduleData),
+  
+  // Extension Configuration
+  getExtensionConfig: (extensionId: string) => api.get(`/extensions/${extensionId}/config`),
+  updateExtensionConfig: (extensionId: string, config: any) => api.put(`/extensions/${extensionId}/config`, config),
+  validateExtensionConfig: (extensionId: string, config: any) => api.post(`/extensions/${extensionId}/config/validate`, config),
+  
+  // Extension Content Reporting
+  reportContent: (reportData: any) => api.post('/extensions/report', reportData),
+  bulkReportContent: (reportDataArray: any[]) => api.post('/extensions/report/bulk', { reports: reportDataArray }),
+  getReportStatus: (reportId: string) => api.get(`/extensions/reports/${reportId}/status`),
+  
+  // Extension Health & Monitoring
+  getExtensionHealth: (extensionId: string) => api.get(`/extensions/${extensionId}/health`),
+  pingExtension: (extensionId: string) => api.post(`/extensions/${extensionId}/ping`),
+  getExtensionLogs: (extensionId: string, params?: any) => api.get(`/extensions/${extensionId}/logs`, { params }),
+  
+  // Extension Export & Backup
+  exportExtensionData: (extensionId: string, type: string) => api.get(`/extensions/${extensionId}/export/${type}`),
+  backupExtensionSettings: (extensionId: string) => api.post(`/extensions/${extensionId}/backup`),
+  restoreExtensionSettings: (extensionId: string, backupData: any) => api.post(`/extensions/${extensionId}/restore`, backupData),
+  
+  // Bulk Operations
+  bulkExtensionOperation: (operationData: any) => api.post('/extensions/bulk', operationData),
+  getOperationStatus: (operationId: string) => api.get(`/extensions/operations/${operationId}/status`),
+};
+
+// Dashboard API endpoints
+export const dashboardApi = {
+  // Main dashboard stats
+  getStats: (dateRange?: { start: string; end: string }) => 
+    api.get('/dashboard/stats', { params: dateRange }),
+  
+  // Recent activity feed
+  getRecentActivity: (params?: { limit?: number; type?: string; status?: string }) =>
+    api.get('/dashboard/activity', { params }),
+  
+  // Analytics data for charts
+  getAnalytics: (params?: { 
+    dateRange?: { start: string; end: string }; 
+    granularity?: 'day' | 'week' | 'month' 
+  }) =>
+    api.get('/dashboard/analytics', { params }),
+  
+  // Platform distribution data
+  getPlatformDistribution: (dateRange?: { start: string; end: string }) =>
+    api.get('/dashboard/platform-distribution', { params: dateRange }),
+  
+  // Usage metrics
+  getUsageMetrics: () => api.get('/dashboard/usage'),
+  
+  // Monthly trends data
+  getMonthlyTrends: (params?: { months?: number }) =>
+    api.get('/dashboard/trends', { params }),
+  
+  // Success rate analytics
+  getSuccessRateAnalytics: (dateRange?: { start: string; end: string }) =>
+    api.get('/dashboard/success-rates', { params: dateRange }),
+  
+  // Export dashboard data
+  exportDashboardData: (params: { 
+    format: 'csv' | 'xlsx' | 'pdf'; 
+    dateRange?: { start: string; end: string };
+    sections?: string[];
+  }) =>
+    api.get('/dashboard/export', { params }),
+  
+  // Dashboard preferences
+  getDashboardPreferences: () => api.get('/dashboard/preferences'),
+  updateDashboardPreferences: (preferences: any) => 
+    api.put('/dashboard/preferences', preferences),
+  
+  // Real-time updates
+  getLastUpdatedTimestamp: () => api.get('/dashboard/last-updated'),
+  
+  // Quick actions data
+  getQuickActionsData: () => api.get('/dashboard/quick-actions'),
+};
+
 export default api;

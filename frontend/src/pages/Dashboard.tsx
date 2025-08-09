@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from 'primereact/card';
 import { Panel } from 'primereact/panel';
 import { DataTable } from 'primereact/datatable';
@@ -13,6 +13,8 @@ import { Chart } from 'primereact/chart';
 import { Divider } from 'primereact/divider';
 import { Badge } from 'primereact/badge';
 import { Tooltip } from 'primereact/tooltip';
+import { Toast } from 'primereact/toast';
+import { Message } from 'primereact/message';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -27,6 +29,17 @@ import {
 } from 'chart.js';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { dashboardApi } from '../services/api';
+import { 
+  DashboardStats, 
+  UsageMetrics, 
+  RecentActivity, 
+  PlatformData, 
+  AnalyticsData,
+  DashboardPreferences,
+  QuickActionsData,
+  ApiResponse 
+} from '../types/api';
 
 // Register Chart.js components
 ChartJS.register(
@@ -41,194 +54,306 @@ ChartJS.register(
   Legend
 );
 
-// Types for dashboard data
-interface DashboardStats {
-  totalProfiles: number;
-  activeScans: number;
-  infringementsFound: number;
-  takedownsSent: number;
-  profilesChange: number;
-  scansChange: number;
-  infringementsChange: number;
-  takedownsChange: number;
+// Loading states for different sections
+interface LoadingStates {
+  stats: boolean;
+  usage: boolean;
+  activity: boolean;
+  analytics: boolean;
+  platformData: boolean;
+  preferences: boolean;
 }
 
-interface UsageMetrics {
-  scansUsed: number;
-  scansLimit: number;
-  successRate: number;
-  monthlySuccessRate: number;
-}
-
-interface RecentActivity {
-  id: string;
-  type: 'infringement' | 'takedown' | 'scan' | 'profile';
-  title: string;
-  description: string;
-  platform: string;
-  status: 'pending' | 'success' | 'failed' | 'in-progress';
-  timestamp: Date;
-  url?: string;
-}
-
-interface PlatformData {
-  platform: string;
-  infringements: number;
-  takedowns: number;
-  successRate: number;
+// Error states
+interface ErrorStates {
+  stats: string | null;
+  usage: string | null;
+  activity: string | null;
+  analytics: string | null;
+  platformData: string | null;
+  preferences: string | null;
 }
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const toast = useRef<Toast>(null);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [dateRange, setDateRange] = useState<Date[]>([
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
     new Date()
   ]);
-
-  // Mock data - in real app, this would come from API
-  const [stats, setStats] = useState<DashboardStats>({
-    totalProfiles: 12,
-    activeScans: 8,
-    infringementsFound: 47,
-    takedownsSent: 23,
-    profilesChange: 20,
-    scansChange: -5,
-    infringementsChange: 15,
-    takedownsChange: 8
+  
+  // Loading states
+  const [loading, setLoading] = useState<LoadingStates>({
+    stats: true,
+    usage: true,
+    activity: true,
+    analytics: true,
+    platformData: true,
+    preferences: true
   });
-
-  const [usageMetrics, setUsageMetrics] = useState<UsageMetrics>({
-    scansUsed: 150,
-    scansLimit: 500,
-    successRate: 85,
-    monthlySuccessRate: 78
+  
+  // Error states
+  const [errors, setErrors] = useState<ErrorStates>({
+    stats: null,
+    usage: null,
+    activity: null,
+    analytics: null,
+    platformData: null,
+    preferences: null
   });
+  
+  // Last updated timestamps
+  const [lastUpdated, setLastUpdated] = useState<Record<string, string>>({});
+  
+  // Data states
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [platformData, setPlatformData] = useState<PlatformData[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [preferences, setPreferences] = useState<DashboardPreferences | null>(null);
+  const [quickActionsData, setQuickActionsData] = useState<QuickActionsData | null>(null);
 
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([
-    {
-      id: '1',
-      type: 'infringement',
-      title: 'New infringement detected',
-      description: 'Unauthorized content found on Instagram',
-      platform: 'Instagram',
-      status: 'pending',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      url: 'https://instagram.com/example'
-    },
-    {
-      id: '2',
-      type: 'takedown',
-      title: 'Takedown request successful',
-      description: 'Content removed from TikTok',
-      platform: 'TikTok',
-      status: 'success',
-      timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000)
-    },
-    {
-      id: '3',
-      type: 'scan',
-      title: 'Automated scan completed',
-      description: 'Profile "Model ABC" scan finished',
-      platform: 'Multiple',
-      status: 'success',
-      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000)
-    },
-    {
-      id: '4',
-      type: 'infringement',
-      title: 'Infringement under review',
-      description: 'Manual review required for OnlyFans content',
-      platform: 'OnlyFans',
-      status: 'in-progress',
-      timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000)
-    },
-    {
-      id: '5',
-      type: 'takedown',
-      title: 'Takedown request failed',
-      description: 'Platform rejected DMCA request',
-      platform: 'Twitter',
-      status: 'failed',
-      timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000)
-    }
-  ]);
-
-  const [platformData, setPlatformData] = useState<PlatformData[]>([
-    { platform: 'Instagram', infringements: 18, takedowns: 15, successRate: 83 },
-    { platform: 'TikTok', infringements: 12, takedowns: 10, successRate: 83 },
-    { platform: 'OnlyFans', infringements: 8, takedowns: 6, successRate: 75 },
-    { platform: 'Twitter', infringements: 5, takedowns: 3, successRate: 60 },
-    { platform: 'YouTube', infringements: 4, takedowns: 4, successRate: 100 }
-  ]);
-
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
+  // Utility functions for error handling
+  const showError = useCallback((section: string, error: any) => {
+    const message = error?.response?.data?.detail || error?.message || 'An unexpected error occurred';
+    setErrors(prev => ({ ...prev, [section]: message }));
+    
+    toast.current?.show({
+      severity: 'error',
+      summary: `${section.charAt(0).toUpperCase() + section.slice(1)} Error`,
+      detail: message,
+      life: 5000
+    });
+  }, []);
+  
+  const clearError = useCallback((section: string) => {
+    setErrors(prev => ({ ...prev, [section]: null }));
+  }, []);
+  
+  const updateLastUpdated = useCallback((section: string) => {
+    setLastUpdated(prev => ({ ...prev, [section]: new Date().toISOString() }));
   }, []);
 
-  // Chart data
-  const monthlyTrendsData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Infringements Found',
-        data: [23, 19, 31, 42, 38, 47],
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'Takedowns Sent',
-        data: [12, 15, 18, 25, 20, 23],
-        borderColor: '#10B981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        tension: 0.4,
-        fill: true
-      }
-    ]
+  // API functions
+  const fetchDashboardStats = useCallback(async () => {
+    setLoading(prev => ({ ...prev, stats: true }));
+    clearError('stats');
+    
+    try {
+      const dateParams = dateRange.length === 2 ? {
+        start: dateRange[0].toISOString(),
+        end: dateRange[1].toISOString()
+      } : undefined;
+      
+      const response = await dashboardApi.getStats(dateParams);
+      setStats(response.data);
+      updateLastUpdated('stats');
+    } catch (error) {
+      showError('stats', error);
+    } finally {
+      setLoading(prev => ({ ...prev, stats: false }));
+    }
+  }, [dateRange, showError, clearError, updateLastUpdated]);
+  
+  const fetchUsageMetrics = useCallback(async () => {
+    setLoading(prev => ({ ...prev, usage: true }));
+    clearError('usage');
+    
+    try {
+      const response = await dashboardApi.getUsageMetrics();
+      setUsageMetrics(response.data);
+      updateLastUpdated('usage');
+    } catch (error) {
+      showError('usage', error);
+    } finally {
+      setLoading(prev => ({ ...prev, usage: false }));
+    }
+  }, [showError, clearError, updateLastUpdated]);
+  
+  const fetchRecentActivity = useCallback(async () => {
+    setLoading(prev => ({ ...prev, activity: true }));
+    clearError('activity');
+    
+    try {
+      const response = await dashboardApi.getRecentActivity({ limit: 10 });
+      setRecentActivity(response.data);
+      updateLastUpdated('activity');
+    } catch (error) {
+      showError('activity', error);
+    } finally {
+      setLoading(prev => ({ ...prev, activity: false }));
+    }
+  }, [showError, clearError, updateLastUpdated]);
+  
+  const fetchAnalyticsData = useCallback(async () => {
+    setLoading(prev => ({ ...prev, analytics: true }));
+    clearError('analytics');
+    
+    try {
+      const dateParams = dateRange.length === 2 ? {
+        dateRange: {
+          start: dateRange[0].toISOString(),
+          end: dateRange[1].toISOString()
+        },
+        granularity: 'month' as const
+      } : undefined;
+      
+      const response = await dashboardApi.getAnalytics(dateParams);
+      setAnalyticsData(response.data);
+      updateLastUpdated('analytics');
+    } catch (error) {
+      showError('analytics', error);
+    } finally {
+      setLoading(prev => ({ ...prev, analytics: false }));
+    }
+  }, [dateRange, showError, clearError, updateLastUpdated]);
+  
+  const fetchPlatformData = useCallback(async () => {
+    setLoading(prev => ({ ...prev, platformData: true }));
+    clearError('platformData');
+    
+    try {
+      const dateParams = dateRange.length === 2 ? {
+        start: dateRange[0].toISOString(),
+        end: dateRange[1].toISOString()
+      } : undefined;
+      
+      const response = await dashboardApi.getPlatformDistribution(dateParams);
+      setPlatformData(response.data);
+      updateLastUpdated('platformData');
+    } catch (error) {
+      showError('platformData', error);
+    } finally {
+      setLoading(prev => ({ ...prev, platformData: false }));
+    }
+  }, [dateRange, showError, clearError, updateLastUpdated]);
+  
+  const fetchPreferences = useCallback(async () => {
+    setLoading(prev => ({ ...prev, preferences: true }));
+    clearError('preferences');
+    
+    try {
+      const response = await dashboardApi.getDashboardPreferences();
+      setPreferences(response.data);
+      updateLastUpdated('preferences');
+    } catch (error) {
+      showError('preferences', error);
+    } finally {
+      setLoading(prev => ({ ...prev, preferences: false }));
+    }
+  }, [showError, clearError, updateLastUpdated]);
+  
+  const fetchQuickActionsData = useCallback(async () => {
+    try {
+      const response = await dashboardApi.getQuickActionsData();
+      setQuickActionsData(response.data);
+    } catch (error) {
+      // Quick actions data is non-critical, so we don't show errors
+      console.warn('Failed to load quick actions data:', error);
+    }
+  }, []);
+  
+  // Refresh all data
+  const refreshAllData = useCallback(async () => {
+    await Promise.allSettled([
+      fetchDashboardStats(),
+      fetchUsageMetrics(),
+      fetchRecentActivity(),
+      fetchAnalyticsData(),
+      fetchPlatformData(),
+      fetchQuickActionsData()
+    ]);
+  }, [fetchDashboardStats, fetchUsageMetrics, fetchRecentActivity, fetchAnalyticsData, fetchPlatformData, fetchQuickActionsData]);
+  
+  // Initial data load
+  useEffect(() => {
+    fetchPreferences();
+    refreshAllData();
+  }, [fetchPreferences, refreshAllData]);
+  
+  // Refresh data when date range changes
+  useEffect(() => {
+    if (dateRange.length === 2) {
+      fetchDashboardStats();
+      fetchAnalyticsData();
+      fetchPlatformData();
+    }
+  }, [dateRange, fetchDashboardStats, fetchAnalyticsData, fetchPlatformData]);
+  
+  // Set up auto-refresh interval based on preferences
+  useEffect(() => {
+    if (preferences?.realTimeUpdates && preferences?.refreshInterval) {
+      refreshIntervalRef.current = setInterval(() => {
+        refreshAllData();
+      }, preferences.refreshInterval * 1000);
+      
+      return () => {
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+        }
+      };
+    }
+  }, [preferences, refreshAllData]);
+
+  // Chart data - using real analytics data with fallbacks
+  const monthlyTrendsData = analyticsData?.monthlyTrends || {
+    labels: [],
+    datasets: []
   };
 
-  const platformDistributionData = {
-    labels: platformData.map(p => p.platform),
-    datasets: [
-      {
-        data: platformData.map(p => p.infringements),
-        backgroundColor: [
-          '#E91E63',
-          '#9C27B0',
-          '#673AB7',
-          '#3F51B5',
-          '#2196F3'
-        ],
-        hoverBackgroundColor: [
-          '#F06292',
-          '#BA68C8',
-          '#9575CD',
-          '#7986CB',
-          '#64B5F6'
-        ]
-      }
-    ]
+  const platformDistributionData = analyticsData?.platformDistribution || {
+    labels: [],
+    datasets: []
   };
 
-  const successRateData = {
-    labels: platformData.map(p => p.platform),
-    datasets: [
-      {
-        label: 'Success Rate (%)',
-        data: platformData.map(p => p.successRate),
-        backgroundColor: 'rgba(16, 185, 129, 0.8)',
-        borderColor: '#10B981',
-        borderWidth: 1
-      }
-    ]
+  const successRateData = analyticsData?.successRateByPlatform || {
+    labels: [],
+    datasets: []
   };
+  
+  // Export dashboard data
+  const handleExportData = useCallback(async (format: 'csv' | 'xlsx' | 'pdf') => {
+    try {
+      const params = {
+        format,
+        dateRange: dateRange.length === 2 ? {
+          start: dateRange[0].toISOString(),
+          end: dateRange[1].toISOString()
+        } : undefined,
+        sections: ['stats', 'usage', 'activity', 'analytics', 'platformData']
+      };
+      
+      const response = await dashboardApi.exportDashboardData(params);
+      
+      // Handle file download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `dashboard-report.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Export Successful',
+        detail: `Dashboard data exported as ${format.toUpperCase()}`,
+        life: 3000
+      });
+    } catch (error) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Export Failed',
+        detail: 'Unable to export dashboard data. Please try again.',
+        life: 5000
+      });
+    }
+  }, [dateRange]);
 
   const chartOptions = {
     responsive: true,
@@ -276,19 +401,24 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const formatTimestamp = (timestamp: Date) => {
+  const formatTimestamp = (timestamp: string | Date) => {
+    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
     const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - timestamp.getTime()) / (1000 * 60 * 60));
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
     
     if (diffInHours < 1) {
-      const diffInMinutes = Math.floor((now.getTime() - timestamp.getTime()) / (1000 * 60));
+      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
       return `${diffInMinutes}m ago`;
     } else if (diffInHours < 24) {
       return `${diffInHours}h ago`;
     } else {
-      return timestamp.toLocaleDateString();
+      return date.toLocaleDateString();
     }
   };
+  
+  // Check if data is loading
+  const isDataLoading = Object.values(loading).some(Boolean);
+  const hasErrors = Object.values(errors).some(Boolean);
 
   // Column templates for DataTable
   const activityTypeTemplate = (rowData: RecentActivity) => (
@@ -310,9 +440,18 @@ const Dashboard: React.FC = () => {
     <Badge value={rowData.platform} size="normal" />
   );
 
-  const timestampTemplate = (rowData: RecentActivity) => (
-    <span className="text-color-secondary">{formatTimestamp(rowData.timestamp)}</span>
-  );
+  const timestampTemplate = (rowData: RecentActivity) => {
+    const lastUpdatedTime = lastUpdated.activity ? formatTimestamp(lastUpdated.activity) : null;
+    
+    return (
+      <div className="flex flex-column gap-1">
+        <span className="text-color-secondary text-sm">{formatTimestamp(rowData.timestamp)}</span>
+        {lastUpdatedTime && (
+          <span className="text-xs text-500">Updated {lastUpdatedTime}</span>
+        )}
+      </div>
+    );
+  };
 
   const actionsTemplate = (rowData: RecentActivity) => (
     <div className="flex gap-1">
@@ -335,42 +474,41 @@ const Dashboard: React.FC = () => {
     </div>
   );
 
-  if (loading) {
+  // Render error message component
+  const renderErrorMessage = (section: string, onRetry: () => void) => {
+    const error = errors[section as keyof ErrorStates];
+    if (!error) return null;
+    
     return (
-      <div className="grid">
-        <div className="col-12">
-          <div className="flex justify-content-between align-items-center mb-4">
-            <Skeleton width="200px" height="2rem" />
-            <Skeleton width="150px" height="2rem" />
+      <Message
+        severity="error"
+        text={error}
+        className="mb-3"
+        content={
+          <div className="flex justify-content-between align-items-center w-full">
+            <span>{error}</span>
+            <Button
+              label="Retry"
+              icon="pi pi-refresh"
+              size="small"
+              text
+              onClick={onRetry}
+            />
           </div>
-        </div>
-        
-        {/* Stats Cards Skeleton */}
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="col-12 md:col-6 lg:col-3">
-            <Card>
-              <Skeleton width="100%" height="80px" />
-            </Card>
-          </div>
-        ))}
-        
-        {/* Charts Skeleton */}
-        <div className="col-12 lg:col-8">
-          <Card>
-            <Skeleton width="100%" height="300px" />
-          </Card>
-        </div>
-        <div className="col-12 lg:col-4">
-          <Card>
-            <Skeleton width="100%" height="300px" />
-          </Card>
-        </div>
-      </div>
+        }
+      />
     );
-  }
+  };
+  
+  // Render loading skeleton for specific sections
+  const renderSectionSkeleton = (height: string = '80px') => (
+    <Skeleton width="100%" height={height} className="border-round" />
+  );
 
   return (
-    <div className="grid">
+    <>
+      <Toast ref={toast} />
+      <div className="grid">
       {/* Header */}
       <div className="col-12">
         <div className="flex flex-column md:flex-row md:justify-content-between md:align-items-center mb-4 gap-3">
@@ -388,12 +526,28 @@ const Dashboard: React.FC = () => {
               placeholder="Select date range"
               className="w-full md:w-auto"
             />
-            <Button 
-              label="Export Report" 
-              icon="pi pi-download" 
-              outlined 
-              size="small"
-            />
+            <div className="flex gap-2">
+              <Button 
+                label="Refresh" 
+                icon="pi pi-refresh" 
+                size="small"
+                outlined
+                loading={isDataLoading}
+                onClick={refreshAllData}
+                tooltip="Refresh all data"
+              />
+              <Button 
+                label="Export" 
+                icon="pi pi-download" 
+                outlined 
+                size="small"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleExportData('xlsx');
+                }}
+                tooltip="Export dashboard data"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -401,136 +555,166 @@ const Dashboard: React.FC = () => {
       {/* Overview Statistics */}
       <div className="col-12 md:col-6 lg:col-3">
         <Card className="h-full">
-          <div className="flex justify-content-between align-items-start">
-            <div>
-              <div className="text-500 font-medium text-sm">Total Profiles</div>
-              <div className="text-900 font-bold text-xl mt-1">{stats.totalProfiles}</div>
-              <div className="flex align-items-center gap-1 mt-2">
-                <i className={`pi ${stats.profilesChange >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                <span className={`text-sm font-medium ${stats.profilesChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {Math.abs(stats.profilesChange)}%
-                </span>
-                <span className="text-500 text-sm">this month</span>
+          {renderErrorMessage('stats', fetchDashboardStats)}
+          {loading.stats ? renderSectionSkeleton() : (
+            <div className="flex justify-content-between align-items-start">
+              <div>
+                <div className="text-500 font-medium text-sm">Total Profiles</div>
+                <div className="text-900 font-bold text-xl mt-1">{stats?.totalProfiles || 0}</div>
+                <div className="flex align-items-center gap-1 mt-2">
+                  <i className={`pi ${(stats?.profilesChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
+                  <span className={`text-sm font-medium ${(stats?.profilesChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {Math.abs(stats?.profilesChange || 0)}%
+                  </span>
+                  <span className="text-500 text-sm">this month</span>
+                </div>
+              </div>
+              <div className="bg-blue-100 text-blue-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
+                <i className="pi pi-user text-xl" />
               </div>
             </div>
-            <div className="bg-blue-100 text-blue-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-              <i className="pi pi-user text-xl" />
-            </div>
-          </div>
+          )}
         </Card>
       </div>
 
       <div className="col-12 md:col-6 lg:col-3">
         <Card className="h-full">
-          <div className="flex justify-content-between align-items-start">
-            <div>
-              <div className="text-500 font-medium text-sm">Active Scans</div>
-              <div className="text-900 font-bold text-xl mt-1">{stats.activeScans}</div>
-              <div className="flex align-items-center gap-1 mt-2">
-                <i className={`pi ${stats.scansChange >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                <span className={`text-sm font-medium ${stats.scansChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {Math.abs(stats.scansChange)}%
-                </span>
-                <span className="text-500 text-sm">this month</span>
+          {renderErrorMessage('stats', fetchDashboardStats)}
+          {loading.stats ? renderSectionSkeleton() : (
+            <div className="flex justify-content-between align-items-start">
+              <div>
+                <div className="text-500 font-medium text-sm">Active Scans</div>
+                <div className="text-900 font-bold text-xl mt-1">{stats?.activeScans || 0}</div>
+                <div className="flex align-items-center gap-1 mt-2">
+                  <i className={`pi ${(stats?.scansChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
+                  <span className={`text-sm font-medium ${(stats?.scansChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {Math.abs(stats?.scansChange || 0)}%
+                  </span>
+                  <span className="text-500 text-sm">this month</span>
+                </div>
+              </div>
+              <div className="bg-purple-100 text-purple-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
+                <i className="pi pi-search text-xl" />
               </div>
             </div>
-            <div className="bg-purple-100 text-purple-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-              <i className="pi pi-search text-xl" />
-            </div>
-          </div>
+          )}
         </Card>
       </div>
 
       <div className="col-12 md:col-6 lg:col-3">
         <Card className="h-full">
-          <div className="flex justify-content-between align-items-start">
-            <div>
-              <div className="text-500 font-medium text-sm">Infringements Found</div>
-              <div className="text-900 font-bold text-xl mt-1">{stats.infringementsFound}</div>
-              <div className="flex align-items-center gap-1 mt-2">
-                <i className={`pi ${stats.infringementsChange >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                <span className={`text-sm font-medium ${stats.infringementsChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {Math.abs(stats.infringementsChange)}%
-                </span>
-                <span className="text-500 text-sm">this month</span>
+          {renderErrorMessage('stats', fetchDashboardStats)}
+          {loading.stats ? renderSectionSkeleton() : (
+            <div className="flex justify-content-between align-items-start">
+              <div>
+                <div className="text-500 font-medium text-sm">Infringements Found</div>
+                <div className="text-900 font-bold text-xl mt-1">{stats?.infringementsFound || 0}</div>
+                <div className="flex align-items-center gap-1 mt-2">
+                  <i className={`pi ${(stats?.infringementsChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
+                  <span className={`text-sm font-medium ${(stats?.infringementsChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {Math.abs(stats?.infringementsChange || 0)}%
+                  </span>
+                  <span className="text-500 text-sm">this month</span>
+                </div>
+              </div>
+              <div className="bg-orange-100 text-orange-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
+                <i className="pi pi-exclamation-triangle text-xl" />
               </div>
             </div>
-            <div className="bg-orange-100 text-orange-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-              <i className="pi pi-exclamation-triangle text-xl" />
-            </div>
-          </div>
+          )}
         </Card>
       </div>
 
       <div className="col-12 md:col-6 lg:col-3">
         <Card className="h-full">
-          <div className="flex justify-content-between align-items-start">
-            <div>
-              <div className="text-500 font-medium text-sm">Takedowns Sent</div>
-              <div className="text-900 font-bold text-xl mt-1">{stats.takedownsSent}</div>
-              <div className="flex align-items-center gap-1 mt-2">
-                <i className={`pi ${stats.takedownsChange >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                <span className={`text-sm font-medium ${stats.takedownsChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {Math.abs(stats.takedownsChange)}%
-                </span>
-                <span className="text-500 text-sm">this month</span>
+          {renderErrorMessage('stats', fetchDashboardStats)}
+          {loading.stats ? renderSectionSkeleton() : (
+            <div className="flex justify-content-between align-items-start">
+              <div>
+                <div className="text-500 font-medium text-sm">Takedowns Sent</div>
+                <div className="text-900 font-bold text-xl mt-1">{stats?.takedownsSent || 0}</div>
+                <div className="flex align-items-center gap-1 mt-2">
+                  <i className={`pi ${(stats?.takedownsChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
+                  <span className={`text-sm font-medium ${(stats?.takedownsChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {Math.abs(stats?.takedownsChange || 0)}%
+                  </span>
+                  <span className="text-500 text-sm">this month</span>
+                </div>
+              </div>
+              <div className="bg-green-100 text-green-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
+                <i className="pi pi-file text-xl" />
               </div>
             </div>
-            <div className="bg-green-100 text-green-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-              <i className="pi pi-file text-xl" />
-            </div>
-          </div>
+          )}
         </Card>
       </div>
 
       {/* Usage Metrics */}
       <div className="col-12 md:col-8">
         <Card title="Usage Metrics" className="h-full">
-          <div className="grid">
-            <div className="col-12 md:col-6">
-              <div className="mb-3">
-                <div className="flex justify-content-between align-items-center mb-2">
-                  <span className="text-900 font-medium">Monthly Scans</span>
-                  <span className="text-600">{usageMetrics.scansUsed} / {usageMetrics.scansLimit}</span>
+          {renderErrorMessage('usage', fetchUsageMetrics)}
+          {loading.usage ? renderSectionSkeleton('200px') : (
+            <>
+              <div className="grid">
+                <div className="col-12 md:col-6">
+                  <div className="mb-3">
+                    <div className="flex justify-content-between align-items-center mb-2">
+                      <span className="text-900 font-medium">Monthly Scans</span>
+                      <span className="text-600">
+                        {usageMetrics?.scansUsed || 0} / {usageMetrics?.scansLimit || 0}
+                      </span>
+                    </div>
+                    <ProgressBar 
+                      value={usageMetrics ? (usageMetrics.scansUsed / usageMetrics.scansLimit) * 100 : 0} 
+                      showValue={false}
+                      style={{ height: '8px' }}
+                    />
+                  </div>
                 </div>
-                <ProgressBar 
-                  value={(usageMetrics.scansUsed / usageMetrics.scansLimit) * 100} 
-                  showValue={false}
-                  style={{ height: '8px' }}
-                />
-              </div>
-            </div>
-            <div className="col-12 md:col-6">
-              <div className="mb-3">
-                <div className="flex justify-content-between align-items-center mb-2">
-                  <span className="text-900 font-medium">Success Rate</span>
-                  <span className="text-600">{usageMetrics.successRate}%</span>
+                <div className="col-12 md:col-6">
+                  <div className="mb-3">
+                    <div className="flex justify-content-between align-items-center mb-2">
+                      <span className="text-900 font-medium">Success Rate</span>
+                      <span className="text-600">{usageMetrics?.successRate || 0}%</span>
+                    </div>
+                    <ProgressBar 
+                      value={usageMetrics?.successRate || 0} 
+                      showValue={false}
+                      style={{ height: '8px' }}
+                      color="#10B981"
+                    />
+                  </div>
                 </div>
-                <ProgressBar 
-                  value={usageMetrics.successRate} 
-                  showValue={false}
-                  style={{ height: '8px' }}
-                  color="#10B981"
-                />
               </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3 mt-4">
-            <div className="flex align-items-center gap-2 p-3 bg-blue-50 border-round">
-              <i className="pi pi-calendar text-blue-600" />
-              <div>
-                <div className="text-blue-900 font-medium text-sm">This Month</div>
-                <div className="text-blue-600 text-lg font-bold">{usageMetrics.scansUsed}</div>
+              <div className="flex flex-wrap gap-3 mt-4">
+                <div className="flex align-items-center gap-2 p-3 bg-blue-50 border-round">
+                  <i className="pi pi-calendar text-blue-600" />
+                  <div>
+                    <div className="text-blue-900 font-medium text-sm">This Month</div>
+                    <div className="text-blue-600 text-lg font-bold">{usageMetrics?.scansUsed || 0}</div>
+                  </div>
+                </div>
+                <div className="flex align-items-center gap-2 p-3 bg-green-50 border-round">
+                  <i className="pi pi-check-circle text-green-600" />
+                  <div>
+                    <div className="text-green-900 font-medium text-sm">Success Rate</div>
+                    <div className="text-green-600 text-lg font-bold">{usageMetrics?.monthlySuccessRate || 0}%</div>
+                  </div>
+                </div>
+                {usageMetrics?.resetDate && (
+                  <div className="flex align-items-center gap-2 p-3 bg-gray-50 border-round">
+                    <i className="pi pi-refresh text-gray-600" />
+                    <div>
+                      <div className="text-gray-900 font-medium text-sm">Resets</div>
+                      <div className="text-gray-600 text-sm">
+                        {new Date(usageMetrics.resetDate).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="flex align-items-center gap-2 p-3 bg-green-50 border-round">
-              <i className="pi pi-check-circle text-green-600" />
-              <div>
-                <div className="text-green-900 font-medium text-sm">Success Rate</div>
-                <div className="text-green-600 text-lg font-bold">{usageMetrics.monthlySuccessRate}%</div>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </Card>
       </div>
 
@@ -575,97 +759,190 @@ const Dashboard: React.FC = () => {
 
       {/* Monthly Trends Chart */}
       <div className="col-12 lg:col-8">
-        <Card title="Monthly Trends" className="h-full">
-          <div style={{ height: '300px' }}>
-            <Chart 
-              type="line" 
-              data={monthlyTrendsData} 
-              options={chartOptions} 
-              height="300px"
-            />
+        <Card className="h-full">
+          <div className="flex justify-content-between align-items-center mb-3">
+            <span className="text-900 font-bold text-lg">Monthly Trends</span>
+            {lastUpdated.analytics && (
+              <span className="text-sm text-500">
+                Updated {formatTimestamp(lastUpdated.analytics)}
+              </span>
+            )}
           </div>
+          {renderErrorMessage('analytics', fetchAnalyticsData)}
+          {loading.analytics ? renderSectionSkeleton('300px') : (
+            <div style={{ height: '300px' }}>
+              {monthlyTrendsData.labels.length > 0 ? (
+                <Chart 
+                  type="line" 
+                  data={monthlyTrendsData} 
+                  options={chartOptions} 
+                  height="300px"
+                />
+              ) : (
+                <div className="flex align-items-center justify-content-center h-full">
+                  <div className="text-center">
+                    <i className="pi pi-chart-line text-6xl text-300 mb-3" />
+                    <p className="text-500">No trend data available for the selected period</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 
       {/* Platform Distribution */}
       <div className="col-12 lg:col-4">
-        <Card title="Platform Distribution" className="h-full">
-          <div style={{ height: '300px' }}>
-            <Chart 
-              type="doughnut" 
-              data={platformDistributionData} 
-              options={doughnutOptions}
-              height="300px"
-            />
+        <Card className="h-full">
+          <div className="flex justify-content-between align-items-center mb-3">
+            <span className="text-900 font-bold text-lg">Platform Distribution</span>
+            {lastUpdated.platformData && (
+              <span className="text-sm text-500">
+                Updated {formatTimestamp(lastUpdated.platformData)}
+              </span>
+            )}
           </div>
+          {renderErrorMessage('platformData', fetchPlatformData)}
+          {loading.platformData ? renderSectionSkeleton('300px') : (
+            <div style={{ height: '300px' }}>
+              {platformDistributionData.labels.length > 0 ? (
+                <Chart 
+                  type="doughnut" 
+                  data={platformDistributionData} 
+                  options={doughnutOptions}
+                  height="300px"
+                />
+              ) : (
+                <div className="flex align-items-center justify-content-center h-full">
+                  <div className="text-center">
+                    <i className="pi pi-chart-pie text-6xl text-300 mb-3" />
+                    <p className="text-500">No platform data available</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 
       {/* Success Rate by Platform */}
       <div className="col-12 lg:col-6">
-        <Card title="Success Rate by Platform" className="h-full">
-          <div style={{ height: '250px' }}>
-            <Chart 
-              type="bar" 
-              data={successRateData} 
-              options={chartOptions}
-              height="250px"
-            />
+        <Card className="h-full">
+          <div className="flex justify-content-between align-items-center mb-3">
+            <span className="text-900 font-bold text-lg">Success Rate by Platform</span>
+            {lastUpdated.analytics && (
+              <span className="text-sm text-500">
+                Updated {formatTimestamp(lastUpdated.analytics)}
+              </span>
+            )}
           </div>
+          {renderErrorMessage('analytics', fetchAnalyticsData)}
+          {loading.analytics ? renderSectionSkeleton('250px') : (
+            <div style={{ height: '250px' }}>
+              {successRateData.labels.length > 0 ? (
+                <Chart 
+                  type="bar" 
+                  data={successRateData} 
+                  options={chartOptions}
+                  height="250px"
+                />
+              ) : (
+                <div className="flex align-items-center justify-content-center h-full">
+                  <div className="text-center">
+                    <i className="pi pi-chart-bar text-6xl text-300 mb-3" />
+                    <p className="text-500">No success rate data available</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 
       {/* Platform Performance Table */}
       <div className="col-12 lg:col-6">
-        <Card title="Platform Performance" className="h-full">
-          <DataTable 
-            value={platformData} 
-            size="small"
-            showGridlines
-          >
-            <Column field="platform" header="Platform" />
-            <Column 
-              field="infringements" 
-              header="Infringements" 
-              body={(rowData) => (
-                <Badge value={rowData.infringements} severity="warning" />
-              )}
-            />
-            <Column 
-              field="takedowns" 
-              header="Takedowns" 
-              body={(rowData) => (
-                <Badge value={rowData.takedowns} severity="success" />
-              )}
-            />
-            <Column 
-              field="successRate" 
-              header="Success Rate" 
-              body={(rowData) => (
-                <div className="flex align-items-center gap-2">
-                  <ProgressBar 
-                    value={rowData.successRate} 
-                    showValue={false} 
-                    style={{ width: '60px', height: '6px' }}
-                  />
-                  <span className="text-sm">{rowData.successRate}%</span>
-                </div>
-              )}
-            />
-          </DataTable>
+        <Card className="h-full">
+          <div className="flex justify-content-between align-items-center mb-3">
+            <span className="text-900 font-bold text-lg">Platform Performance</span>
+            {lastUpdated.platformData && (
+              <span className="text-sm text-500">
+                Updated {formatTimestamp(lastUpdated.platformData)}
+              </span>
+            )}
+          </div>
+          {renderErrorMessage('platformData', fetchPlatformData)}
+          {loading.platformData ? renderSectionSkeleton('250px') : (
+            <DataTable 
+              value={platformData} 
+              size="small"
+              showGridlines
+              emptyMessage="No platform data available"
+            >
+              <Column field="platform" header="Platform" />
+              <Column 
+                field="infringements" 
+                header="Infringements" 
+                body={(rowData) => (
+                  <Badge value={rowData.infringements} severity="warning" />
+                )}
+              />
+              <Column 
+                field="takedowns" 
+                header="Takedowns" 
+                body={(rowData) => (
+                  <Badge value={rowData.takedowns} severity="success" />
+                )}
+              />
+              <Column 
+                field="successRate" 
+                header="Success Rate" 
+                body={(rowData) => (
+                  <div className="flex align-items-center gap-2">
+                    <ProgressBar 
+                      value={rowData.successRate} 
+                      showValue={false} 
+                      style={{ width: '60px', height: '6px' }}
+                    />
+                    <span className="text-sm">{rowData.successRate}%</span>
+                    {rowData.trend && (
+                      <i className={`pi ${
+                        rowData.trend === 'up' ? 'pi-arrow-up text-green-500' :
+                        rowData.trend === 'down' ? 'pi-arrow-down text-red-500' :
+                        'pi-minus text-gray-500'
+                      } text-sm`} />
+                    )}
+                  </div>
+                )}
+              />
+            </DataTable>
+          )}
         </Card>
       </div>
 
       {/* Recent Activity */}
       <div className="col-12">
         <Panel 
-          header="Recent Activity" 
           toggleable 
           className="mt-4"
           headerTemplate={(options) => (
             <div className="flex justify-content-between align-items-center w-full">
-              <span className="font-bold text-lg">{options.titleElement}</span>
+              <div className="flex align-items-center gap-3">
+                <span className="font-bold text-lg">Recent Activity</span>
+                {lastUpdated.activity && (
+                  <span className="text-sm text-500">
+                    Updated {formatTimestamp(lastUpdated.activity)}
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
+                <Button 
+                  icon="pi pi-refresh" 
+                  size="small"
+                  text
+                  loading={loading.activity}
+                  onClick={fetchRecentActivity}
+                  tooltip="Refresh activity"
+                />
                 <Button 
                   label="View All" 
                   link 
@@ -677,51 +954,56 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         >
-          <DataTable 
-            value={recentActivity} 
-            paginator 
-            rows={10}
-            size="small"
-            showGridlines
-            emptyMessage="No recent activity found"
-          >
-            <Column 
-              field="type" 
-              header="Activity" 
-              body={activityTypeTemplate}
-              style={{ width: '25%' }}
-            />
-            <Column 
-              field="description" 
-              header="Description" 
-              style={{ width: '30%' }}
-            />
-            <Column 
-              field="platform" 
-              header="Platform" 
-              body={platformTemplate}
-              style={{ width: '15%' }}
-            />
-            <Column 
-              field="status" 
-              header="Status" 
-              body={statusTemplate}
-              style={{ width: '15%' }}
-            />
-            <Column 
-              field="timestamp" 
-              header="Time" 
-              body={timestampTemplate}
-              style={{ width: '10%' }}
-            />
-            <Column 
-              body={actionsTemplate}
-              style={{ width: '5%' }}
-            />
-          </DataTable>
+          {renderErrorMessage('activity', fetchRecentActivity)}
+          {loading.activity ? renderSectionSkeleton('300px') : (
+            <DataTable 
+              value={recentActivity} 
+              paginator 
+              rows={10}
+              size="small"
+              showGridlines
+              emptyMessage="No recent activity found"
+              loading={loading.activity}
+            >
+              <Column 
+                field="type" 
+                header="Activity" 
+                body={activityTypeTemplate}
+                style={{ width: '25%' }}
+              />
+              <Column 
+                field="description" 
+                header="Description" 
+                style={{ width: '30%' }}
+              />
+              <Column 
+                field="platform" 
+                header="Platform" 
+                body={platformTemplate}
+                style={{ width: '15%' }}
+              />
+              <Column 
+                field="status" 
+                header="Status" 
+                body={statusTemplate}
+                style={{ width: '15%' }}
+              />
+              <Column 
+                field="timestamp" 
+                header="Time" 
+                body={timestampTemplate}
+                style={{ width: '10%' }}
+              />
+              <Column 
+                body={actionsTemplate}
+                style={{ width: '5%' }}
+              />
+            </DataTable>
+          )}
         </Panel>
       </div>
     </div>
+    </>
   );
 };
 

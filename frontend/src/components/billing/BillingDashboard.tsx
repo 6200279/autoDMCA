@@ -3,7 +3,6 @@ import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { ProgressBar } from 'primereact/progressbar';
 import { Message } from 'primereact/message';
-import { Tag } from 'primereact/tag';
 import { format } from 'date-fns';
 
 import { billingApi } from '../../services/api';
@@ -47,30 +46,6 @@ const BillingDashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return 'success';
-      case 'trialing':
-        return 'info';
-      case 'past_due':
-        return 'warning';
-      case 'canceled':
-        return 'danger';
-      default:
-        return null;
-    }
-  };
-
-  const getUsageColor = (percentage: number) => {
-    if (percentage >= 90) return 'danger';
-    if (percentage >= 75) return 'warning';
-    return 'info';
-  };
-
-  const calculateUsagePercentage = (current: number, limit: number) => {
-    return limit > 0 ? Math.min(100, (current / limit) * 100) : 0;
-  };
 
   if (loading) {
     return (
@@ -198,7 +173,7 @@ const BillingDashboard: React.FC = () => {
 
         {/* Recent Invoices */}
         <InvoiceHistory
-          invoices={recentInvoices}
+          invoices={recentInvoices || []}
           showAll={false}
           onRefresh={fetchDashboardData}
         />

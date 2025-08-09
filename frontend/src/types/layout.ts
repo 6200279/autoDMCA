@@ -207,17 +207,4 @@ export interface LayoutAnalytics {
   trackNotificationClick?: (notificationId: number, action: string) => void;
 }
 
-export default {
-  NavigationItem,
-  BreadcrumbItem,
-  NotificationItem,
-  LayoutProps,
-  ThemeConfig,
-  UserMenuConfig,
-  NotificationConfig,
-  SidebarConfig,
-  LayoutState,
-  LayoutContextValue,
-  RouteConfig,
-  LayoutAnalytics
-};
+// All types are already exported as named exports above

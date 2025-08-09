@@ -105,7 +105,7 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setBillingAddress(prev => ({
+    setBillingAddress((prev: any) => ({
       ...prev,
       [field]: value
     }));
@@ -134,8 +134,6 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
         <Message 
           severity="error" 
           text={error}
-          closable 
-          onClose={() => setError(null)}
         />
       )}
 
@@ -143,8 +141,6 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
         <Message 
           severity="success" 
           text={success}
-          closable 
-          onClose={() => setSuccess(null)}
         />
       )}
 

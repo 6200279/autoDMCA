@@ -5,23 +5,23 @@ import { Column } from 'primereact/column';
 import { Button } from 'primereact/button';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
-import { InputInputTextarea } from 'primereact/inputtextarea';
+import { InputTextarea } from 'primereact/inputtextarea';
 import { Tag } from 'primereact/tag';
 import { Timeline } from 'primereact/timeline';
 import { Toolbar } from 'primereact/toolbar';
 import { Toast } from 'primereact/toast';
 import { Skeleton } from 'primereact/skeleton';
 import { Badge } from 'primereact/badge';
-import { Chip } from 'primereact/chip';
-import { Panel } from 'primereact/panel';
+// import { Chip } from 'primereact/chip';
+// import { Panel } from 'primereact/panel';
 import { TabView, TabPanel } from 'primereact/tabview';
 import { ProgressBar } from 'primereact/progressbar';
 import { Calendar } from 'primereact/calendar';
 import { Dropdown } from 'primereact/dropdown';
 import { Chart } from 'primereact/chart';
 import { Divider } from 'primereact/divider';
-import { Image } from 'primereact/image';
-import { OverlayPanel } from 'primereact/overlayPanel';
+// import { Image } from 'primereact/image';
+import { OverlayPanel } from 'primereact/overlaypanel';
 import { Steps } from 'primereact/steps';
 import { FilterMatchMode } from 'primereact/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -123,16 +123,16 @@ const TakedownRequests: React.FC = () => {
     'Instagram', 'TikTok', 'OnlyFans', 'Twitter', 'YouTube', 'Reddit', 'Telegram', 'Facebook'
   ];
 
-  const statusOptions = [
-    { label: 'Draft', value: 'draft' },
-    { label: 'Submitted', value: 'submitted' },
-    { label: 'Under Review', value: 'under_review' },
-    { label: 'Accepted', value: 'accepted' },
-    { label: 'Rejected', value: 'rejected' },
-    { label: 'Completed', value: 'completed' },
-    { label: 'Counter Notice', value: 'counter_noticed' },
-    { label: 'Escalated', value: 'escalated' }
-  ];
+  // const statusOptions = [
+  //   { label: 'Draft', value: 'draft' },
+  //   { label: 'Submitted', value: 'submitted' },
+  //   { label: 'Under Review', value: 'under_review' },
+  //   { label: 'Accepted', value: 'accepted' },
+  //   { label: 'Rejected', value: 'rejected' },
+  //   { label: 'Completed', value: 'completed' },
+  //   { label: 'Counter Notice', value: 'counter_noticed' },
+  //   { label: 'Escalated', value: 'escalated' }
+  // ];
 
   const priorityOptions = [
     { label: 'Low', value: 'low' },
@@ -837,7 +837,6 @@ const TakedownRequests: React.FC = () => {
               readOnlyInput 
               showIcon
               placeholder="Filter by date range"
-              size="small"
             />
           </div>
         </div>
@@ -890,7 +889,8 @@ const TakedownRequests: React.FC = () => {
               <DataTable
                 value={takedownRequests}
                 selection={selectedRequests}
-                onSelectionChange={(e) => setSelectedRequests(e.value)}
+                onSelectionChange={(e) => setSelectedRequests(e.value as TakedownRequest[])}
+                selectionMode="multiple"
                 paginator
                 rows={10}
                 rowsPerPageOptions={[5, 10, 25, 50]}
@@ -1150,7 +1150,7 @@ const TakedownRequests: React.FC = () => {
               <InputTextarea
                 id="legalBasis"
                 value={newRequest.legalBasis}
-                onChange={(e) => setNewRequest({ ...newRequest, legalBasis: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewRequest({ ...newRequest, legalBasis: e.target.value })}
                 rows={3}
                 placeholder="Legal basis for the takedown request"
               />
@@ -1163,7 +1163,7 @@ const TakedownRequests: React.FC = () => {
               <InputTextarea
                 id="description"
                 value={newRequest.description}
-                onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewRequest({ ...newRequest, description: e.target.value })}
                 rows={4}
                 placeholder="Detailed description of the infringement"
               />

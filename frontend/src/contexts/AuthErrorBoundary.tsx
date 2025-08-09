@@ -47,7 +47,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
     this.setState({
       hasError: true,
       error,
-      errorInfo: errorInfo.componentStack
+      errorInfo: errorInfo.componentStack || null
     });
   }
 

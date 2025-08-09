@@ -231,7 +231,7 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({
       <DataTable 
         value={displayInvoices}
         expandedRows={expandedInvoice ? {[expandedInvoice]: true} : undefined}
-        onRowToggle={(e) => setExpandedInvoice(Object.keys(e.data).length > 0 ? Object.keys(e.data)[0] : null)}
+        onRowToggle={(e) => setExpandedInvoice(Object.keys(e.data).length > 0 ? Number(Object.keys(e.data)[0]) : null)}
         rowExpansionTemplate={rowExpansionTemplate}
         responsiveLayout="scroll"
         className="p-datatable-sm"
@@ -249,7 +249,7 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({
         <Column header="Status" body={statusTemplate} />
         <Column header="Amount" body={amountTemplate} />
         <Column header="Actions" body={actionsTemplate} style={{ width: '120px' }} />
-        <Column expander={expandTemplate} style={{ width: '40px' }} />
+        <Column expander body={expandTemplate} style={{ width: '40px' }} />
       </DataTable>
 
       {/* Summary */}

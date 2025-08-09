@@ -5,7 +5,7 @@ import { Tag } from 'primereact/tag';
 import { Message } from 'primereact/message';
 import { Dialog } from 'primereact/dialog';
 import { InputTextarea } from 'primereact/inputtextarea';
-import { ProgressSpinner } from 'primereact/progressspinner';
+// import { ProgressSpinner } from 'primereact/progressspinner';
 import { format } from 'date-fns';
 
 import { billingApi } from '../../services/api';

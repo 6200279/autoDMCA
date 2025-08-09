@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { LayoutContextValue, LayoutState, NotificationItem } from '../types/layout';
+import { LayoutContextValue, NotificationItem } from '../types/layout';
 
 interface LayoutProviderProps {
   children: ReactNode;
@@ -48,7 +48,7 @@ export const LayoutProvider: React.FC<LayoutProviderProps> = ({ children }) => {
     }
   ]);
   const [isMobile, setIsMobile] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
 
   // Apply theme by updating CSS link and document class
   const applyTheme = (theme: 'light' | 'dark') => {

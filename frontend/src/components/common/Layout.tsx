@@ -51,6 +51,16 @@ const navigationItems: NavigationItem[] = [
         label: 'Submissions',
         icon: 'pi pi-upload',
         path: '/protection/submissions'
+      },
+      {
+        label: 'DMCA Templates',
+        icon: 'pi pi-book',
+        path: '/protection/templates'
+      },
+      {
+        label: 'Search Engine Delisting',
+        icon: 'pi pi-search-minus',
+        path: '/protection/search-delisting'
       }
     ]
   },
@@ -96,6 +106,14 @@ const routeBreadcrumbMap: Record<string, BreadcrumbItem[]> = {
     { label: 'Content Protection', url: '/protection' },
     { label: 'Submissions', icon: 'pi pi-upload' }
   ],
+  '/protection/templates': [
+    { label: 'Content Protection', url: '/protection' },
+    { label: 'DMCA Templates', icon: 'pi pi-book' }
+  ],
+  '/protection/search-delisting': [
+    { label: 'Content Protection', url: '/protection' },
+    { label: 'Search Engine Delisting', icon: 'pi pi-search-minus' }
+  ],
   '/reports': [{ label: 'Analytics & Reports', icon: 'pi pi-chart-bar' }],
   '/billing': [{ label: 'Billing & Account', icon: 'pi pi-credit-card' }],
   '/settings': [{ label: 'Settings', icon: 'pi pi-cog' }],
@@ -114,8 +132,8 @@ export const Layout: React.FC<LayoutProps> = ({
   const toast = useRef<Toast>(null);
   
   // Layout state from context
-  const { activeRoute, setActiveRoute } = useLayout();
-  const { currentTheme, toggleTheme, isDarkTheme } = useLayoutTheme();
+  const { setActiveRoute } = useLayout();
+  const { toggleTheme, isDarkTheme } = useLayoutTheme();
   const { sidebarVisible, setSidebarVisible, toggleSidebar } = useLayoutSidebar();
   const { 
     unreadNotifications, 
