@@ -34,6 +34,7 @@ import { ColorPicker } from 'primereact/colorpicker';
 import { Divider } from 'primereact/divider';
 import { Menu } from 'primereact/menu';
 import { useAuth } from '../contexts/AuthContext';
+import { profileApi } from '../services/api';
 
 // TypeScript interfaces
 interface Profile {
@@ -524,13 +525,28 @@ const Profiles: React.FC = () => {
 
   // Initialize data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setProfiles(mockProfiles);
-      setLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
+    fetchProfiles();
   }, []);
+
+  const fetchProfiles = async () => {
+    try {
+      setLoading(true);
+      const response = await profileApi.getProfiles();
+      setProfiles(response.data);
+    } catch (error) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to load profiles',
+        life: 3000
+      });
+      console.error('Error fetching profiles:', error);
+      // Fallback to mock data if API fails
+      setProfiles(mockProfiles);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Enhanced helper functions
   const getStatusSeverity = (status: string) => {
@@ -751,46 +767,47 @@ const Profiles: React.FC = () => {
     }
   };
 
-  const saveProfile = () => {
-    const newProfile: Profile = {
-      id: editingProfile?.id || Date.now().toString(),
-      ...profileForm,
-      image: imagePreview || '/api/placeholder/150/150',
-      status: editingProfile?.status || 'active',
-      totalScans: editingProfile?.totalScans || 0,
-      infringementsFound: editingProfile?.infringementsFound || 0,
-      lastScan: editingProfile?.lastScan || new Date(),
-      createdAt: editingProfile?.createdAt || new Date(),
-      successRate: editingProfile?.successRate || 0,
-      teamAccess: editingProfile?.teamAccess || [],
-      analytics: editingProfile?.analytics || {
-        totalContentProtected: 0,
-        averageResponseTime: 0,
-        topInfringingPlatforms: [],
-        monthlyTrends: [],
-        protectionScore: 0
+  const saveProfile = async () => {
+    try {
+      setLoading(true);
+      const profileData = {
+        ...profileForm,
+        image: imagePreview || '/api/placeholder/150/150',
+      };
+
+      let response;
+      if (editingProfile) {
+        response = await profileApi.updateProfile(parseInt(editingProfile.id), profileData);
+        setProfiles(profiles.map(p => p.id === editingProfile.id ? response.data : p));
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Success',
+          detail: 'Profile updated successfully',
+          life: 3000
+        });
+      } else {
+        response = await profileApi.createProfile(profileData);
+        setProfiles([...profiles, response.data]);
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Success', 
+          detail: 'Profile created successfully',
+          life: 3000
+        });
       }
-    };
 
-    if (editingProfile) {
-      setProfiles(profiles.map(p => p.id === editingProfile.id ? newProfile : p));
+      hideDialog();
+    } catch (error) {
       toast.current?.show({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Profile updated successfully',
+        severity: 'error',
+        summary: 'Error',
+        detail: editingProfile ? 'Failed to update profile' : 'Failed to create profile',
         life: 3000
       });
-    } else {
-      setProfiles([...profiles, newProfile]);
-      toast.current?.show({
-        severity: 'success',
-        summary: 'Success',
-        detail: 'Profile created successfully',
-        life: 3000
-      });
+      console.error('Error saving profile:', error);
+    } finally {
+      setLoading(false);
     }
-
-    hideDialog();
   };
 
   const bulkUpdateProfiles = (updates: Partial<Profile>) => {
@@ -832,17 +849,36 @@ const Profiles: React.FC = () => {
     setDeleteProfilesDialog(true);
   };
 
-  const deleteSelectedProfiles = () => {
-    const remainingProfiles = profiles.filter(p => !selectedProfiles.includes(p));
-    setProfiles(remainingProfiles);
-    setSelectedProfiles([]);
-    setDeleteProfilesDialog(false);
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Profiles deleted successfully',
-      life: 3000
-    });
+  const deleteSelectedProfiles = async () => {
+    try {
+      setLoading(true);
+      // Delete profiles one by one from backend
+      for (const profile of selectedProfiles) {
+        await profileApi.deleteProfile(parseInt(profile.id));
+      }
+      
+      const remainingProfiles = profiles.filter(p => !selectedProfiles.includes(p));
+      setProfiles(remainingProfiles);
+      setSelectedProfiles([]);
+      setDeleteProfilesDialog(false);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Profiles deleted successfully',
+        life: 3000
+      });
+    } catch (error) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to delete profiles',
+        life: 3000
+      });
+      console.error('Error deleting profiles:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleProfileStatus = (profile: Profile) => {
@@ -888,14 +924,37 @@ const Profiles: React.FC = () => {
     }, 5000);
   };
 
-  const onImageUpload = (event: any) => {
+  const onImageUpload = async (event: any) => {
     const file = event.files[0];
     if (file) {
+      // Show preview immediately
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target?.result as string);
       };
       reader.readAsDataURL(file);
+      
+      // If editing existing profile, upload immediately
+      if (editingProfile) {
+        try {
+          const response = await profileApi.uploadProfileImage(parseInt(editingProfile.id), file);
+          toast.current?.show({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Profile image updated successfully',
+            life: 3000
+          });
+        } catch (error) {
+          toast.current?.show({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Failed to upload image',
+            life: 3000
+          });
+          console.error('Error uploading image:', error);
+        }
+      }
+      
       setProfileForm({ ...profileForm, image: file });
     }
   };
@@ -1220,17 +1279,13 @@ const Profiles: React.FC = () => {
         text
         tooltip="Refresh"
         onClick={() => {
-          setLoading(true);
-          setTimeout(() => {
-            setProfiles([...mockProfiles]);
-            setLoading(false);
-            toast.current?.show({
-              severity: 'success',
-              summary: 'Success',
-              detail: 'Profiles refreshed',
-              life: 2000
-            });
-          }, 500);
+          fetchProfiles();
+          toast.current?.show({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Profiles refreshed',
+            life: 2000
+          });
         }}
       />
     </div>

@@ -1,0 +1,545 @@
+version: '3.8'
+
+# Secure Docker Compose configuration for Content Protection Platform
+# Based on security best practices and container hardening
+
+services:
+  # Backend API with security hardening
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/security/Dockerfile.secure
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: content-protection-api:secure
+    container_name: content-protection-api-secure
+    restart: unless-stopped
+    
+    # Security: Run as non-root user
+    user: "1000:1000"
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems for writable areas
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+      - /app/logs:rw,noexec,nosuid,size=500m
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+          pids: 100
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:unconfined  # Adjust based on your needs
+    
+    # Security: Capabilities (drop all, add only necessary)
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://app_user:${POSTGRES_APP_PASSWORD}@postgres-secure:5432/contentprotection?sslmode=require
+      - DATABASE_QUERY_LOGGING=false
+      
+      # Redis
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis-secure:6379
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - AI_MODEL_ENCRYPTION_KEY=${AI_MODEL_ENCRYPTION_KEY}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
+      - WATERMARK_MASTER_KEY=${WATERMARK_MASTER_KEY}
+      - OWASP_ENCRYPTION_KEY=${OWASP_ENCRYPTION_KEY}
+      
+      # Application
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - FORCE_HTTPS=true
+      
+      # External APIs (encrypted)
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_CUSTOM_SEARCH_ID=${GOOGLE_CUSTOM_SEARCH_ID}
+      - BING_API_KEY=${BING_API_KEY}
+      
+      # Email
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME}
+      
+      # Billing
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      
+      # Monitoring
+      - SENTRY_DSN=${SENTRY_DSN}
+    
+    # Security: Expose only necessary port
+    expose:
+      - "8000"
+    
+    # Security: Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    depends_on:
+      postgres-secure:
+        condition: service_healthy
+      redis-secure:
+        condition: service_healthy
+    
+    # Security: Volume mounts with proper permissions
+    volumes:
+      - ./logs/backend:/app/logs:rw
+      - ./uploads:/app/uploads:rw
+      - ./ssl/backend:/app/ssl:ro
+    
+    networks:
+      - content-protection-secure
+
+  # Frontend with security hardening
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.secure
+    image: content-protection-frontend:secure
+    container_name: content-protection-frontend-secure
+    restart: unless-stopped
+    
+    # Security: Run as non-root user
+    user: "101:101"  # nginx user
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+      - /var/cache/nginx:rw,noexec,nosuid,size=100m
+      - /var/run:rw,noexec,nosuid,size=50m
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+          pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    
+    environment:
+      - REACT_APP_API_BASE_URL=https://${DOMAIN_NAME}/api/v1
+      - REACT_APP_WEBSOCKET_URL=wss://${DOMAIN_NAME}/ws
+      - REACT_APP_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
+      - NODE_ENV=production
+    
+    expose:
+      - "80"
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    depends_on:
+      - backend
+    
+    volumes:
+      - ./logs/frontend:/var/log/nginx:rw
+    
+    networks:
+      - content-protection-secure
+
+  # PostgreSQL with security hardening
+  postgres-secure:
+    image: postgres:15-alpine
+    container_name: content-protection-postgres-secure
+    restart: unless-stopped
+    
+    # Security: Run as postgres user (non-root)
+    user: "postgres"
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+          pids: 100
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    
+    environment:
+      - POSTGRES_DB=contentprotection
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 --auth-local=scram-sha-256
+      - PGUSER=postgres
+    
+    expose:
+      - "5432"
+    
+    # Security: Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    
+    # Security: Volume mounts
+    volumes:
+      - postgres_data_secure:/var/lib/postgresql/data:rw
+      - ./database/security/postgresql.conf.secure:/etc/postgresql/postgresql.conf:ro
+      - ./database/security/pg_hba.conf.secure:/etc/postgresql/pg_hba.conf:ro
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./ssl/postgres:/var/lib/postgresql/ssl:ro
+      - ./logs/postgres:/var/log/postgresql:rw
+    
+    # Security: Custom command with secure config
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c log_statement=ddl
+      -c log_min_duration_statement=1000
+      -c shared_preload_libraries=pg_stat_statements
+    
+    networks:
+      - content-protection-secure
+
+  # Redis with security hardening
+  redis-secure:
+    image: redis:7-alpine
+    container_name: content-protection-redis-secure
+    restart: unless-stopped
+    
+    # Security: Run as redis user (non-root)
+    user: "redis"
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+          pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+    
+    expose:
+      - "6379"
+    
+    # Security: Health check
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a ${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    # Security: Volume mounts
+    volumes:
+      - redis_data_secure:/data:rw
+      - ./redis/security/redis.conf.secure:/etc/redis/redis.conf:ro
+      - ./redis/security/users.acl:/etc/redis/users.acl:ro
+      - ./ssl/redis:/etc/redis/ssl:ro
+      - ./logs/redis:/var/log/redis:rw
+    
+    # Security: Custom command with secure config
+    command: redis-server /etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+    
+    networks:
+      - content-protection-secure
+
+  # Nginx reverse proxy with security hardening
+  nginx-secure:
+    image: nginx:alpine
+    container_name: content-protection-nginx-secure
+    restart: unless-stopped
+    
+    # Security: Run as nginx user (non-root)
+    user: "101:101"
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+      - /var/cache/nginx:rw,noexec,nosuid,size=100m
+      - /var/run:rw,noexec,nosuid,size=50m
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+          pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    # Security: Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    depends_on:
+      - backend
+      - frontend
+    
+    # Security: Volume mounts
+    volumes:
+      - ./nginx/security/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/security/proxy_params:/etc/nginx/proxy_params:ro
+      - ./ssl/nginx:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx:rw
+    
+    networks:
+      - content-protection-secure
+
+  # Celery worker with security hardening
+  celery-worker-secure:
+    build:
+      context: ./backend
+      dockerfile: ../docker/security/Dockerfile.secure
+    image: content-protection-api:secure
+    container_name: content-protection-worker-secure
+    restart: unless-stopped
+    
+    # Security: Run as non-root user
+    user: "1000:1000"
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+      - /app/logs:rw,noexec,nosuid,size=200m
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+          pids: 100
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Capabilities
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+    
+    environment:
+      - DATABASE_URL=postgresql://app_user:${POSTGRES_APP_PASSWORD}@postgres-secure:5432/contentprotection?sslmode=require
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis-secure:6379
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENVIRONMENT=production
+    
+    command: celery -A app.celery worker --loglevel=info --concurrency=4 --max-tasks-per-child=1000
+    
+    depends_on:
+      postgres-secure:
+        condition: service_healthy
+      redis-secure:
+        condition: service_healthy
+    
+    volumes:
+      - ./uploads:/app/uploads:rw
+      - ./logs/celery:/app/logs:rw
+    
+    networks:
+      - content-protection-secure
+
+  # Security monitoring with Prometheus
+  prometheus-secure:
+    image: prom/prometheus:latest
+    container_name: content-protection-prometheus-secure
+    restart: unless-stopped
+    
+    # Security: Run as nobody user
+    user: "65534:65534"
+    
+    # Security: Read-only root filesystem
+    read_only: true
+    
+    # Security: Temporary filesystems
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    
+    # Security: Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+          pids: 50
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    # Security: Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Security: Capabilities
+    cap_drop:
+      - ALL
+    
+    expose:
+      - "9090"
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data_secure:/prometheus:rw
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.external-url=http://localhost:9090'
+    
+    networks:
+      - content-protection-secure
+
+# Security: Custom network with encryption
+networks:
+  content-protection-secure:
+    driver: bridge
+    driver_opts:
+      encrypted: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+    
+# Security: Named volumes with proper drivers
+volumes:
+  postgres_data_secure:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/postgres-secure
+  
+  redis_data_secure:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis-secure
+  
+  prometheus_data_secure:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/prometheus-secure
+
+# Security: Secrets management (Docker Swarm)
+secrets:
+  postgres_password:
+    external: true
+  redis_password:
+    external: true
+  app_secret_key:
+    external: true

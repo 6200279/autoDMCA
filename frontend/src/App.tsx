@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { lazy, Suspense, useEffect } from 'react';
 
 // PrimeReact CSS (theme will be loaded dynamically)
 import 'primereact/resources/primereact.min.css';
@@ -8,32 +9,44 @@ import 'primeflex/primeflex.css';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { LayoutProvider } from './contexts/LayoutContext';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 import { useAuth } from './contexts/AuthContext';
 
-// Pages
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Profiles from './pages/Profiles';
-import Infringements from './pages/Infringements';
-import TakedownRequests from './pages/TakedownRequests';
-import Submissions from './pages/Submissions';
-import Reports from './pages/Reports';
-import SocialMediaProtection from './pages/SocialMediaProtection';
-import AIContentMatching from './pages/AIContentMatching';
-import Settings from './pages/Settings';
-import Billing from './pages/Billing';
-import AdminPanel from './pages/AdminPanel';
-import DMCATemplates from './pages/DMCATemplates';
-import SearchEngineDelisting from './pages/SearchEngineDelisting';
-import ContentWatermarking from './pages/ContentWatermarking';
-import BrowserExtension from './pages/BrowserExtension';
-import NotFound from './pages/NotFound';
-
-// Components
+// Components (imported immediately as they're critical)
 import Layout from './components/common/Layout';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
+
+// Loading component for route transitions
+import LoadingSpinner from './components/common/LoadingSpinner';
+
+// Performance monitoring
+import { reportBundleSize, monitorMemoryUsage } from './utils/performance';
+
+// Route preloading
+import { routePreloader } from './utils/preloader';
+
+// Critical pages (loaded immediately)
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import NotFound from './pages/NotFound';
+
+// Lazy-loaded pages (split into chunks)
+const Profiles = lazy(() => import('./pages/Profiles'));
+const Infringements = lazy(() => import('./pages/Infringements'));
+const TakedownRequests = lazy(() => import('./pages/TakedownRequests'));
+const Submissions = lazy(() => import('./pages/Submissions'));
+const Reports = lazy(() => import('./pages/Reports'));
+const SocialMediaProtection = lazy(() => import('./pages/SocialMediaProtection'));
+const AIContentMatching = lazy(() => import('./pages/AIContentMatching'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Billing = lazy(() => import('./pages/Billing'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const DMCATemplates = lazy(() => import('./pages/DMCATemplates'));
+const SearchEngineDelisting = lazy(() => import('./pages/SearchEngineDelisting'));
+const ContentWatermarking = lazy(() => import('./pages/ContentWatermarking'));
+const BrowserExtension = lazy(() => import('./pages/BrowserExtension'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +63,13 @@ const configurePrimeReact = () => {
 };
 
 configurePrimeReact();
+
+// Higher-order component to wrap lazy-loaded components with Suspense
+const LazyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Suspense fallback={<LoadingSpinner message="Loading page..." size="medium" />}>
+    {children}
+  </Suspense>
+);
 
 function AppContent() {
   const { user } = useAuth();
@@ -83,7 +103,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Profiles />
+                <LazyRoute>
+                  <Profiles />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -93,7 +115,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Infringements />
+                <LazyRoute>
+                  <Infringements />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -103,7 +127,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <TakedownRequests />
+                <LazyRoute>
+                  <TakedownRequests />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -113,7 +139,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Submissions />
+                <LazyRoute>
+                  <Submissions />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -123,7 +151,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <SocialMediaProtection />
+                <LazyRoute>
+                  <SocialMediaProtection />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -133,7 +163,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <AIContentMatching />
+                <LazyRoute>
+                  <AIContentMatching />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -143,7 +175,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <DMCATemplates />
+                <LazyRoute>
+                  <DMCATemplates />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -153,7 +187,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <SearchEngineDelisting />
+                <LazyRoute>
+                  <SearchEngineDelisting />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -163,7 +199,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <BrowserExtension />
+                <LazyRoute>
+                  <BrowserExtension />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -173,7 +211,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <ContentWatermarking />
+                <LazyRoute>
+                  <ContentWatermarking />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -183,7 +223,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Settings />
+                <LazyRoute>
+                  <Settings />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -193,7 +235,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Billing />
+                <LazyRoute>
+                  <Billing />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -203,7 +247,9 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Reports />
+                <LazyRoute>
+                  <Reports />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -213,7 +259,9 @@ function AppContent() {
           element={
             <ProtectedRoute roles={['admin']}>
               <Layout>
-                <AdminPanel />
+                <LazyRoute>
+                  <AdminPanel />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 
@@ -244,13 +292,37 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    // Initialize performance monitoring
+    setTimeout(() => {
+      reportBundleSize();
+      monitorMemoryUsage();
+    }, 2000); // Give time for bundles to load
+
+    // Preload critical routes
+    routePreloader.preloadCriticalRoutes();
+
+    // Monitor memory usage every 30 seconds in development
+    if (process.env.NODE_ENV === 'development') {
+      const memoryInterval = setInterval(monitorMemoryUsage, 30000);
+      return () => clearInterval(memoryInterval);
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <LayoutProvider>
-            <AppContent />
-          </LayoutProvider>
+          <WebSocketProvider
+            autoConnect={true}
+            reconnectOnError={true}
+            maxReconnectAttempts={10}
+            debug={process.env.NODE_ENV === 'development'}
+          >
+            <LayoutProvider>
+              <AppContent />
+            </LayoutProvider>
+          </WebSocketProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

@@ -130,219 +130,22 @@ const SocialMediaProtection: React.FC = () => {
   });
 
   // Mock data - in production, this would come from API
-  const [platforms, setPlatforms] = useState<SocialMediaPlatform[]>([
-    {
-      id: 'instagram',
-      name: 'Instagram',
-      icon: 'pi pi-instagram',
-      color: '#E4405F',
-      isConnected: true,
-      lastScan: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      totalProfiles: 12500,
-      impersonations: 8,
-      scanStatus: 'completed',
-      apiStatus: 'connected',
-      features: ['Profile Matching', 'Image Recognition', 'Story Monitoring']
-    },
-    {
-      id: 'facebook',
-      name: 'Facebook',
-      icon: 'pi pi-facebook',
-      color: '#1877F2',
-      isConnected: true,
-      lastScan: new Date(Date.now() - 1 * 60 * 60 * 1000),
-      totalProfiles: 8200,
-      impersonations: 5,
-      scanStatus: 'scanning',
-      apiStatus: 'connected',
-      features: ['Profile Matching', 'Page Monitoring', 'Group Scanning']
-    },
-    {
-      id: 'twitter',
-      name: 'Twitter/X',
-      icon: 'pi pi-twitter',
-      color: '#1DA1F2',
-      isConnected: false,
-      lastScan: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      totalProfiles: 15300,
-      impersonations: 12,
-      scanStatus: 'error',
-      apiStatus: 'limited',
-      features: ['Tweet Monitoring', 'Handle Matching', 'Bio Analysis']
-    },
-    {
-      id: 'tiktok',
-      name: 'TikTok',
-      icon: 'pi pi-video',
-      color: '#FF0050',
-      isConnected: true,
-      lastScan: new Date(Date.now() - 30 * 60 * 1000),
-      totalProfiles: 9800,
-      impersonations: 6,
-      scanStatus: 'completed',
-      apiStatus: 'connected',
-      features: ['Video Content Matching', 'Username Monitoring']
-    },
-    {
-      id: 'onlyfans',
-      name: 'OnlyFans',
-      icon: 'pi pi-heart',
-      color: '#00AFF0',
-      isConnected: true,
-      lastScan: new Date(Date.now() - 45 * 60 * 1000),
-      totalProfiles: 4200,
-      impersonations: 15,
-      scanStatus: 'completed',
-      apiStatus: 'connected',
-      features: ['Profile Monitoring', 'Content Scanning', 'Revenue Protection']
-    },
-    {
-      id: 'telegram',
-      name: 'Telegram',
-      icon: 'pi pi-send',
-      color: '#0088CC',
-      isConnected: false,
-      lastScan: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      totalProfiles: 2100,
-      impersonations: 3,
-      scanStatus: 'idle',
-      apiStatus: 'disconnected',
-      features: ['Channel Monitoring', 'Bot Detection']
-    },
-    {
-      id: 'discord',
-      name: 'Discord',
-      icon: 'pi pi-comments',
-      color: '#5865F2',
-      isConnected: true,
-      lastScan: new Date(Date.now() - 6 * 60 * 60 * 1000),
-      totalProfiles: 1800,
-      impersonations: 2,
-      scanStatus: 'completed',
-      apiStatus: 'connected',
-      features: ['Server Monitoring', 'Username Tracking']
-    },
-    {
-      id: 'linkedin',
-      name: 'LinkedIn',
-      icon: 'pi pi-linkedin',
-      color: '#0077B5',
-      isConnected: true,
-      lastScan: new Date(Date.now() - 12 * 60 * 60 * 1000),
-      totalProfiles: 3500,
-      impersonations: 1,
-      scanStatus: 'completed',
-      apiStatus: 'connected',
-      features: ['Professional Profile Matching', 'Company Page Monitoring']
-    }
-  ]);
-
-  const [incidents, setIncidents] = useState<ImpersonationIncident[]>([
-    {
-      id: '1',
-      platformId: 'instagram',
-      platform: 'Instagram',
-      profileUrl: 'https://instagram.com/fake_profile_1',
-      profileName: '@fake_model_abc',
-      detectedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      severity: 'high',
-      status: 'detected',
-      confidenceScore: 92,
-      evidenceUrls: ['evidence1.jpg', 'evidence2.jpg'],
-      reportedBy: 'ai',
-      similarityScore: 89,
-      estimatedFollowers: 15200,
-      riskLevel: 8,
-      notes: 'High similarity in profile images and bio content'
-    },
-    {
-      id: '2',
-      platformId: 'onlyfans',
-      platform: 'OnlyFans',
-      profileUrl: 'https://onlyfans.com/fake_profile_2',
-      profileName: 'Fake Content Creator',
-      detectedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
-      severity: 'critical',
-      status: 'reported',
-      confidenceScore: 96,
-      evidenceUrls: ['evidence3.jpg'],
-      reportedBy: 'ai',
-      similarityScore: 94,
-      estimatedFollowers: 8500,
-      riskLevel: 9,
-      notes: 'Using original content for revenue generation'
-    },
-    {
-      id: '3',
-      platformId: 'twitter',
-      platform: 'Twitter/X',
-      profileUrl: 'https://x.com/fake_handle',
-      profileName: '@impersonator123',
-      detectedAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
-      severity: 'medium',
-      status: 'under_review',
-      confidenceScore: 78,
-      evidenceUrls: ['evidence4.jpg', 'evidence5.jpg'],
-      reportedBy: 'user',
-      similarityScore: 75,
-      estimatedFollowers: 2300,
-      riskLevel: 6,
-      notes: 'Similar username pattern and bio content'
-    }
-  ]);
-
-  const [caseProgression, setCaseProgression] = useState<CaseProgression[]>([
-    {
-      id: '1',
-      incidentId: '1',
-      status: 'Detected',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      action: 'AI Detection',
-      actor: 'AutoDMCA AI',
-      notes: 'Profile detected through image similarity analysis'
-    },
-    {
-      id: '2',
-      incidentId: '1',
-      status: 'Analyzed',
-      timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000),
-      action: 'Risk Assessment',
-      actor: 'AutoDMCA AI',
-      notes: 'High risk profile identified'
-    },
-    {
-      id: '3',
-      incidentId: '2',
-      status: 'Reported',
-      timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-      action: 'Platform Report Submitted',
-      actor: 'AutoDMCA System',
-      notes: 'Automated report sent to OnlyFans'
-    }
-  ]);
-
-  const [automationRules, setAutomationRules] = useState<AutomationRule[]>([
-    {
-      id: '1',
-      name: 'High Similarity Auto-Report',
-      platform: 'all',
-      trigger: 'similarity_threshold',
-      threshold: 85,
-      action: 'report',
-      isActive: true,
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    },
-    {
-      id: '2',
-      name: 'OnlyFans Revenue Protection',
-      platform: 'onlyfans',
-      trigger: 'image_match',
-      threshold: 90,
-      action: 'escalate',
-      isActive: true,
-      createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
-    }
-  ]);
+  const [platforms, setPlatforms] = useState<SocialMediaPlatform[]>([]);
+  const [incidents, setIncidents] = useState<ImpersonationIncident[]>([]);
+  const [caseProgression, setCaseProgression] = useState<CaseProgression[]>([]);
+  const [automationRules, setAutomationRules] = useState<AutomationRule[]>([]);
+  
+  // Additional state needed for full functionality
+  const [showAutomationDialog, setShowAutomationDialog] = useState(false);
+  const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
+  const [newAutomationRule, setNewAutomationRule] = useState({
+    name: '',
+    platform: '',
+    trigger: '',
+    action: '',
+    threshold: 75,
+    description: ''
+  });
 
   // Simulate loading
   useEffect(() => {
@@ -391,6 +194,37 @@ const SocialMediaProtection: React.FC = () => {
     } else {
       return timestamp.toLocaleDateString();
     }
+  };
+
+  // Missing handler functions
+  const handleToggleAutomationRule = (id: string, isActive: boolean) => {
+    setAutomationRules(prev => prev.map(rule => 
+      rule.id === id ? { ...rule, isActive } : rule
+    ));
+  };
+
+  const handleCreateAutomationRule = () => {
+    const newRule: AutomationRule = {
+      id: Date.now().toString(),
+      name: newAutomationRule.name,
+      platform: newAutomationRule.platform,
+      trigger: newAutomationRule.trigger as 'similarity_threshold' | 'keyword_match' | 'image_match',
+      threshold: newAutomationRule.threshold,
+      action: newAutomationRule.action as 'report' | 'escalate' | 'notify',
+      isActive: true,
+      createdAt: new Date()
+    };
+    
+    setAutomationRules(prev => [...prev, newRule]);
+    setShowAutomationDialog(false);
+    setNewAutomationRule({
+      name: '',
+      platform: '',
+      trigger: '',
+      action: '',
+      threshold: 75,
+      description: ''
+    });
   };
 
   // Event handlers
@@ -489,16 +323,16 @@ const SocialMediaProtection: React.FC = () => {
   // Column templates for DataTable
   const platformTemplate = (rowData: ImpersonationIncident) => (
     <div className="flex align-items-center gap-2">
-      <i className={getPlatformIcon(rowData.platformId)} style={{ color: platforms.find(p => p.id === rowData.platformId)?.color }} />
+      <i className={getPlatformIcon(rowData.platform_id)} style={{ color: platforms.find(p => p.id === rowData.platform_id)?.color }} />
       <span>{rowData.platform}</span>
     </div>
   );
 
   const profileTemplate = (rowData: ImpersonationIncident) => (
     <div className="flex flex-column gap-1">
-      <span className="font-medium">{rowData.profileName}</span>
-      <a href={rowData.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary">
-        {rowData.profileUrl}
+      <span className="font-medium">{rowData.profile_name}</span>
+      <a href={rowData.profile_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary">
+        {rowData.profile_url}
       </a>
     </div>
   );
@@ -520,23 +354,23 @@ const SocialMediaProtection: React.FC = () => {
   const confidenceTemplate = (rowData: ImpersonationIncident) => (
     <div className="flex align-items-center gap-2">
       <ProgressBar 
-        value={rowData.confidenceScore} 
+        value={rowData.confidence_score} 
         showValue={false} 
         style={{ width: '60px', height: '6px' }}
       />
-      <span className="text-sm font-medium">{rowData.confidenceScore}%</span>
+      <span className="text-sm font-medium">{rowData.confidence_score}%</span>
     </div>
   );
 
   const riskTemplate = (rowData: ImpersonationIncident) => (
     <div className="flex align-items-center gap-2">
       <ProgressBar 
-        value={rowData.riskLevel * 10} 
+        value={rowData.risk_level * 10} 
         showValue={false} 
         style={{ width: '60px', height: '6px' }}
-        color={rowData.riskLevel >= 8 ? '#EF4444' : rowData.riskLevel >= 6 ? '#F59E0B' : '#10B981'}
+        color={rowData.risk_level >= 8 ? '#EF4444' : rowData.risk_level >= 6 ? '#F59E0B' : '#10B981'}
       />
-      <span className="text-sm font-medium">{rowData.riskLevel}/10</span>
+      <span className="text-sm font-medium">{rowData.risk_level}/10</span>
     </div>
   );
 
@@ -573,7 +407,7 @@ const SocialMediaProtection: React.FC = () => {
         size="small" 
         text 
         tooltip="Open Profile"
-        onClick={() => window.open(rowData.profileUrl, '_blank')}
+        onClick={() => window.open(rowData.profile_url, '_blank')}
       />
     </div>
   );
@@ -634,7 +468,7 @@ const SocialMediaProtection: React.FC = () => {
               <div className="grid">
                 <div className="col-6">
                   <div className="text-center p-2 bg-blue-50 border-round">
-                    <div className="text-2xl font-bold text-blue-600">{platform.totalProfiles.toLocaleString()}</div>
+                    <div className="text-2xl font-bold text-blue-600">{platform.total_profiles?.toLocaleString() || 0}</div>
                     <div className="text-xs text-blue-900">Total Profiles</div>
                   </div>
                 </div>
@@ -764,16 +598,16 @@ const SocialMediaProtection: React.FC = () => {
               style={{ minWidth: '100px' }}
             />
             <Column 
-              field="estimatedFollowers" 
+              field="estimated_followers" 
               header="Followers" 
-              body={(rowData) => rowData.estimatedFollowers.toLocaleString()}
+              body={(rowData) => rowData.estimated_followers?.toLocaleString() || 0}
               sortable
               style={{ minWidth: '100px' }}
             />
             <Column 
-              field="detectedAt" 
+              field="detected_at" 
               header="Detected" 
-              body={(rowData) => formatTimestamp(rowData.detectedAt)}
+              body={(rowData) => formatTimestamp(rowData.detected_at)}
               sortable
               style={{ minWidth: '100px' }}
             />
@@ -910,12 +744,12 @@ const SocialMediaProtection: React.FC = () => {
               sortable 
             />
             <Column 
-              field="isActive" 
+              field="is_active" 
               header="Status" 
               body={(rowData) => (
                 <Tag 
-                  value={rowData.isActive ? 'ACTIVE' : 'INACTIVE'} 
-                  severity={rowData.isActive ? 'success' : 'danger'}
+                  value={rowData.is_active ? 'ACTIVE' : 'INACTIVE'} 
+                  severity={rowData.is_active ? 'success' : 'danger'}
                 />
               )}
               sortable 
@@ -932,10 +766,11 @@ const SocialMediaProtection: React.FC = () => {
                   <Button icon="pi pi-pencil" size="small" text tooltip="Edit" />
                   <Button icon="pi pi-trash" size="small" text tooltip="Delete" />
                   <Button 
-                    icon={rowData.isActive ? "pi pi-pause" : "pi pi-play"} 
+                    icon={rowData.is_active ? "pi pi-pause" : "pi pi-play"} 
                     size="small" 
                     text 
-                    tooltip={rowData.isActive ? "Disable" : "Enable"}
+                    tooltip={rowData.is_active ? "Disable" : "Enable"}
+                    onClick={() => handleToggleAutomationRule(rowData.id, !rowData.is_active)}
                   />
                 </div>
               )}
@@ -1166,7 +1001,7 @@ const SocialMediaProtection: React.FC = () => {
                 <div className="field">
                   <label className="font-medium text-600">Platform</label>
                   <div className="flex align-items-center gap-2 mt-1">
-                    <i className={getPlatformIcon(selectedIncident.platformId)} />
+                    <i className={getPlatformIcon(selectedIncident.platform_id)} />
                     <span>{selectedIncident.platform}</span>
                   </div>
                 </div>
@@ -1174,21 +1009,21 @@ const SocialMediaProtection: React.FC = () => {
                 <div className="field">
                   <label className="font-medium text-600">Profile URL</label>
                   <div className="mt-1">
-                    <a href={selectedIncident.profileUrl} target="_blank" rel="noopener noreferrer" className="text-primary">
-                      {selectedIncident.profileUrl}
+                    <a href={selectedIncident.profile_url} target="_blank" rel="noopener noreferrer" className="text-primary">
+                      {selectedIncident.profile_url}
                     </a>
                   </div>
                 </div>
 
                 <div className="field">
                   <label className="font-medium text-600">Profile Name</label>
-                  <div className="mt-1">{selectedIncident.profileName}</div>
+                  <div className="mt-1">{selectedIncident.profile_name}</div>
                 </div>
 
                 <div className="field">
                   <label className="font-medium text-600">Detection Method</label>
                   <div className="mt-1">
-                    <Tag value={selectedIncident.reportedBy.toUpperCase()} />
+                    <Tag value={selectedIncident.reported_by.toUpperCase()} />
                   </div>
                 </div>
               </div>
@@ -1200,11 +1035,11 @@ const SocialMediaProtection: React.FC = () => {
                   <label className="font-medium text-600">Confidence Score</label>
                   <div className="flex align-items-center gap-2 mt-1">
                     <ProgressBar 
-                      value={selectedIncident.confidenceScore} 
+                      value={selectedIncident.confidence_score} 
                       style={{ width: '100px', height: '8px' }}
                       showValue={false}
                     />
-                    <span>{selectedIncident.confidenceScore}%</span>
+                    <span>{selectedIncident.confidence_score}%</span>
                   </div>
                 </div>
 
@@ -1212,23 +1047,23 @@ const SocialMediaProtection: React.FC = () => {
                   <label className="font-medium text-600">Risk Level</label>
                   <div className="flex align-items-center gap-2 mt-1">
                     <ProgressBar 
-                      value={selectedIncident.riskLevel * 10} 
+                      value={selectedIncident.risk_level * 10} 
                       style={{ width: '100px', height: '8px' }}
                       showValue={false}
-                      color={selectedIncident.riskLevel >= 8 ? '#EF4444' : selectedIncident.riskLevel >= 6 ? '#F59E0B' : '#10B981'}
+                      color={selectedIncident.risk_level >= 8 ? '#EF4444' : selectedIncident.risk_level >= 6 ? '#F59E0B' : '#10B981'}
                     />
-                    <span>{selectedIncident.riskLevel}/10</span>
+                    <span>{selectedIncident.risk_level}/10</span>
                   </div>
                 </div>
 
                 <div className="field">
                   <label className="font-medium text-600">Estimated Followers</label>
-                  <div className="mt-1">{selectedIncident.estimatedFollowers.toLocaleString()}</div>
+                  <div className="mt-1">{selectedIncident.estimated_followers?.toLocaleString() || 0}</div>
                 </div>
 
                 <div className="field">
                   <label className="font-medium text-600">Detected At</label>
-                  <div className="mt-1">{selectedIncident.detectedAt.toLocaleString()}</div>
+                  <div className="mt-1">{new Date(selectedIncident.detected_at).toLocaleString()}</div>
                 </div>
               </div>
             </div>
@@ -1266,6 +1101,154 @@ const SocialMediaProtection: React.FC = () => {
             </div>
           </div>
         )}
+      </Dialog>
+
+      {/* Automation Rule Dialog */}
+      <Dialog
+        visible={showAutomationDialog}
+        header={editingRule ? 'Edit Automation Rule' : 'Create Automation Rule'}
+        modal
+        style={{ width: '700px' }}
+        onHide={() => {
+          setShowAutomationDialog(false);
+          setEditingRule(null);
+        }}
+        footer={
+          <div className="flex gap-2">
+            <Button 
+              label="Cancel" 
+              text 
+              onClick={() => {
+                setShowAutomationDialog(false);
+                setEditingRule(null);
+              }} 
+            />
+            <Button 
+              label={editingRule ? 'Update Rule' : 'Create Rule'} 
+              onClick={handleCreateAutomationRule}
+              disabled={!newAutomationRule.name || !newAutomationRule.platform}
+            />
+          </div>
+        }
+      >
+        <div className="flex flex-column gap-4 pt-3">
+          <div className="grid">
+            <div className="col-12 md:col-6">
+              <div className="field">
+                <label htmlFor="ruleName" className="block mb-2 font-medium">Rule Name *</label>
+                <InputText
+                  id="ruleName"
+                  value={newAutomationRule.name}
+                  onChange={(e) => setNewAutomationRule(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter rule name"
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            <div className="col-12 md:col-6">
+              <div className="field">
+                <label htmlFor="rulePlatform" className="block mb-2 font-medium">Platform *</label>
+                <Dropdown
+                  id="rulePlatform"
+                  value={newAutomationRule.platform}
+                  onChange={(e) => setNewAutomationRule(prev => ({ ...prev, platform: e.value }))}
+                  options={[
+                    { label: 'All Platforms', value: 'all' },
+                    ...platforms.map(p => ({ label: p.name, value: p.id }))
+                  ]}
+                  placeholder="Select platform"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="ruleDescription" className="block mb-2 font-medium">Description</label>
+            <InputTextarea
+              id="ruleDescription"
+              value={newAutomationRule.description}
+              onChange={(e) => setNewAutomationRule(prev => ({ ...prev, description: e.target.value }))}
+              rows={3}
+              placeholder="Describe what this rule does..."
+              className="w-full"
+            />
+          </div>
+
+          <div className="grid">
+            <div className="col-12 md:col-6">
+              <div className="field">
+                <label htmlFor="ruleTrigger" className="block mb-2 font-medium">Trigger *</label>
+                <Dropdown
+                  id="ruleTrigger"
+                  value={newAutomationRule.trigger}
+                  onChange={(e) => setNewAutomationRule(prev => ({ ...prev, trigger: e.value }))}
+                  options={[
+                    { label: 'Similarity Threshold', value: 'similarity_threshold' },
+                    { label: 'Keyword Match', value: 'keyword_match' },
+                    { label: 'Image Match', value: 'image_match' },
+                    { label: 'Video Match', value: 'video_match' },
+                    { label: 'Profile Match', value: 'profile_match' }
+                  ]}
+                  placeholder="Select trigger"
+                  className="w-full"
+                />
+              </div>
+            </div>
+            
+            <div className="col-12 md:col-6">
+              <div className="field">
+                <label htmlFor="ruleAction" className="block mb-2 font-medium">Action *</label>
+                <Dropdown
+                  id="ruleAction"
+                  value={newAutomationRule.action}
+                  onChange={(e) => setNewAutomationRule(prev => ({ ...prev, action: e.value }))}
+                  options={[
+                    { label: 'Notify Only', value: 'notify' },
+                    { label: 'Report to Platform', value: 'report' },
+                    { label: 'Escalate Case', value: 'escalate' },
+                    { label: 'Auto Takedown', value: 'auto_takedown' }
+                  ]}
+                  placeholder="Select action"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="field">
+            <label htmlFor="ruleThreshold" className="block mb-2 font-medium">Threshold: {newAutomationRule.threshold}%</label>
+            <div className="flex align-items-center gap-3">
+              <span className="text-sm">0%</span>
+              <input
+                type="range"
+                id="ruleThreshold"
+                min="0"
+                max="100"
+                value={newAutomationRule.threshold}
+                onChange={(e) => setNewAutomationRule(prev => ({ ...prev, threshold: parseInt(e.target.value) }))}
+                className="flex-1"
+                style={{ accentColor: 'var(--primary-color)' }}
+              />
+              <span className="text-sm">100%</span>
+            </div>
+            <small className="text-600 block mt-1">
+              {newAutomationRule.trigger === 'similarity_threshold' && 'Minimum similarity score to trigger this rule'}
+              {newAutomationRule.trigger === 'keyword_match' && 'Minimum keyword match confidence to trigger'}
+              {newAutomationRule.trigger === 'image_match' && 'Minimum image similarity to trigger this rule'}
+              {newAutomationRule.trigger === 'video_match' && 'Minimum video content match to trigger'}
+              {newAutomationRule.trigger === 'profile_match' && 'Minimum profile similarity to trigger'}
+            </small>
+          </div>
+
+          {newAutomationRule.action !== 'notify' && (
+            <Message 
+              severity="warn" 
+              text={`This rule will automatically ${newAutomationRule.action.toLowerCase().replace('_', ' ')} incidents that match the criteria. Make sure the threshold is appropriate to avoid false positives.`}
+            />
+          )}
+        </div>
       </Dialog>
     </div>
   );

@@ -1,7 +1,8 @@
 import asyncio
+import logging
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -9,6 +10,8 @@ from alembic import context
 
 from app.core.config import settings
 from app.db.base import Base
+
+logger = logging.getLogger('alembic.env')
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -58,29 +61,81 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
-
+    """Execute migrations with enhanced configuration."""
+    
+    # Configure migration context with performance optimizations
+    context.configure(
+        connection=connection, 
+        target_metadata=target_metadata,
+        compare_type=True,  # Compare column types
+        compare_server_default=True,  # Compare server defaults
+        render_as_batch=True,  # Use batch operations for better compatibility
+        transaction_per_migration=True,  # Each migration in its own transaction
+        # Custom naming convention for constraints
+        render_item=lambda type_, obj, autogen_context: (
+            f"uq_{obj.table.name}_{obj.columns.keys()[0]}" 
+            if type_ == "unique_constraint" 
+            else None
+        ) if hasattr(obj, 'table') and hasattr(obj, 'columns') else None
+    )
+    
     with context.begin_transaction():
         context.run_migrations()
 
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-    configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = get_url()
-    connectable = async_engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-
-    await connectable.dispose()
+    """Run migrations in async mode with enhanced error handling and performance optimizations."""
+    
+    try:
+        configuration = config.get_section(config.config_ini_section)
+        configuration["sqlalchemy.url"] = str(get_url())
+        
+        # Enhanced engine configuration for migrations
+        engine_config = {
+            "pool_timeout": 60,  # Longer timeout for migrations
+            "pool_pre_ping": True,  # Validate connections
+            "connect_args": {
+                "command_timeout": 300,  # 5 minute timeout for long migrations
+                "server_settings": {
+                    "application_name": "alembic_migration",
+                    "jit": "off",  # Disable JIT during migrations
+                }
+            }
+        }
+        
+        # Add engine config to configuration
+        for key, value in engine_config.items():
+            if key == "connect_args":
+                # Handle connect_args specially as it's a nested dict
+                configuration[f"sqlalchemy.{key}"] = str(value)
+            else:
+                configuration[f"sqlalchemy.{key}"] = str(value)
+        
+        connectable = async_engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,  # Use NullPool to avoid connection issues during migrations
+        )
+        
+        logger.info("Starting database migration...")
+        
+        async with connectable.connect() as connection:
+            # Set migration-specific settings
+            await connection.execute(text("SET statement_timeout = '300s'"))
+            await connection.execute(text("SET lock_timeout = '60s'"))
+            
+            await connection.run_sync(do_run_migrations)
+            
+        logger.info("Database migration completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise
+    finally:
+        try:
+            await connectable.dispose()
+        except Exception as e:
+            logger.warning(f"Error disposing engine: {e}")
 
 
 def run_migrations_online() -> None:

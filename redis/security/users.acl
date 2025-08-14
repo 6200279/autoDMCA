@@ -1,0 +1,48 @@
+# Redis ACL Users Configuration for Content Protection Platform
+# Defines user permissions and access controls
+
+# Default user (disable for security)
+user default off
+
+# Application user with limited permissions
+user app_user on >your_app_user_password_here
+user app_user ~cached:* ~session:* ~rate_limit:* ~security_events:* ~blacklisted_token:*
+user app_user +@read +@write +@string +@hash +@list +@set +@sorted_set +@stream
+user app_user +ping +info +client +memory
+user app_user -@dangerous -flushall -flushdb -shutdown -config -debug -eval -script
+
+# Monitoring user (read-only access)
+user monitoring on >your_monitoring_password_here
+user monitoring ~*
+user monitoring +@read +ping +info +client +memory +latency +slowlog
+user monitoring -@write -@dangerous
+
+# Admin user (full access for maintenance)
+user admin on >your_admin_password_here
+user admin ~*
+user admin +@all
+user admin -flushall -flushdb  # Still restrict dangerous operations
+
+# Backup user (for automated backups)
+user backup on >your_backup_password_here
+user backup ~*
+user backup +@read +ping +info +bgsave +lastsave
+user backup -@write -@dangerous
+
+# Rate limiter service user (specific access)
+user ratelimiter on >your_ratelimiter_password_here
+user ratelimiter ~rate_limit:* ~api_key:*
+user ratelimiter +@read +@write +@string +incr +decr +expire +ttl +exists +del
+user ratelimiter -@dangerous
+
+# Session management user
+user sessions on >your_sessions_password_here
+user sessions ~session:* ~user_sessions:*
+user sessions +@read +@write +@string +@hash +expire +ttl +exists +del
+user sessions -@dangerous
+
+# Security events user (for logging)
+user security on >your_security_password_here
+user security ~security_events:* ~security_incident:* ~blocked_ips:*
+user security +@read +@write +@string +@list +@set +lpush +rpush +lrange +sadd +sismember
+user security -@dangerous

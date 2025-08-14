@@ -8,6 +8,13 @@ import pyotp
 from email_validator import validate_email, EmailNotValidError
 
 from app.core.config import settings
+from app.core.security_config import (
+    jwt_manager, 
+    api_key_manager, 
+    security_monitor, 
+    InputValidator,
+    SecurityLevel
+)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -17,46 +24,35 @@ ALGORITHM = "HS256"
 def create_access_token(
     subject: Union[str, Any], 
     expires_delta: timedelta = None,
-    token_type: str = "access"
+    token_type: str = "access",
+    additional_claims: Optional[dict] = None,
+    security_level: SecurityLevel = SecurityLevel.MEDIUM
 ) -> str:
-    """Create JWT access token."""
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-    
-    to_encode = {
-        "exp": expire, 
-        "sub": str(subject),
-        "type": token_type,
-        "iat": datetime.utcnow()
-    }
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    """Create enhanced JWT access token with additional security features."""
+    return jwt_manager.create_access_token(
+        subject=subject,
+        expires_delta=expires_delta,
+        additional_claims=additional_claims,
+        security_level=security_level
+    )
 
 
-def create_refresh_token(subject: Union[str, Any]) -> str:
+def create_refresh_token(subject: Union[str, Any], additional_claims: Optional[dict] = None) -> str:
     """Create JWT refresh token."""
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode = {
-        "exp": expire,
-        "sub": str(subject),
-        "type": "refresh",
-        "iat": datetime.utcnow()
-    }
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt_manager.create_refresh_token(
+        subject=subject,
+        additional_claims=additional_claims
+    )
 
 
 def verify_token(token: str) -> Optional[dict]:
-    """Verify JWT token and return payload."""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
-        return None
+    """Verify JWT token with blacklist checking."""
+    return jwt_manager.verify_token(token)
+
+
+def blacklist_token(token: str) -> bool:
+    """Blacklist a JWT token."""
+    return jwt_manager.blacklist_token(token)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -145,3 +141,69 @@ def verify_email_token(token: str) -> Optional[str]:
         return payload.get("email")
     except JWTError:
         return None
+
+
+# Enhanced security functions using the new security system
+
+def validate_and_sanitize_input(
+    value: str,
+    max_length: int = 1000,
+    allow_html: bool = False,
+    check_patterns: bool = True
+) -> tuple[bool, str]:
+    """Validate and sanitize user input."""
+    return InputValidator.validate_string(
+        value=value,
+        max_length=max_length,
+        allow_html=allow_html,
+        check_patterns=check_patterns
+    )
+
+
+def generate_api_key(
+    name: str,
+    user_id: str,
+    permissions: list,
+    expires_in_days: Optional[int] = None,
+    rate_limit: int = 1000
+) -> dict:
+    """Generate a new API key."""
+    return api_key_manager.generate_api_key(
+        name=name,
+        user_id=user_id,
+        permissions=permissions,
+        expires_in_days=expires_in_days,
+        rate_limit=rate_limit
+    )
+
+
+def validate_api_key(api_key: str, secret: str) -> Optional[dict]:
+    """Validate an API key and secret."""
+    return api_key_manager.validate_api_key(api_key, secret)
+
+
+def revoke_api_key(api_key: str) -> bool:
+    """Revoke an API key."""
+    return api_key_manager.revoke_api_key(api_key)
+
+
+def log_security_event(
+    event_type: str,
+    severity: str,
+    details: dict,
+    user_id: Optional[str] = None,
+    ip_address: Optional[str] = None
+):
+    """Log a security event."""
+    security_monitor.log_security_event(
+        event_type=event_type,
+        severity=severity,
+        details=details,
+        user_id=user_id,
+        ip_address=ip_address
+    )
+
+
+def detect_security_anomalies(user_id: str, ip_address: str) -> list:
+    """Detect security anomalies for a user."""
+    return security_monitor.detect_anomalies(user_id, ip_address)

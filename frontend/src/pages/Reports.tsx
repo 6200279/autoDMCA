@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card } from 'primereact/card';
 import { TabView, TabPanel } from 'primereact/tabview';
 import { DataTable } from 'primereact/datatable';
@@ -21,6 +21,7 @@ import { InputText } from 'primereact/inputtext';
 import { Skeleton } from 'primereact/skeleton';
 import { Toolbar } from 'primereact/toolbar';
 import { SplitButton } from 'primereact/splitbutton';
+import { Message } from 'primereact/message';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -35,6 +36,23 @@ import {
   Filler
 } from 'chart.js';
 import { useAuth } from '../contexts/AuthContext';
+import { reportsApi } from '../services/api';
+import { 
+  ReportFilters, 
+  OverviewMetrics, 
+  PlatformMetrics, 
+  ContentTypeMetrics, 
+  GeographicDataPoint,
+  PlatformCompliance,
+  ROIMetrics,
+  ResponseTimeData,
+  ReportTemplate as ApiReportTemplate,
+  TimeSeriesDataPoint,
+  RealTimeMetrics,
+  TrendAnalysis,
+  PerformanceMetrics,
+  DataQualityReport
+} from '../types/api';
 import './Reports.css';
 
 // Register Chart.js components
@@ -51,8 +69,8 @@ ChartJS.register(
   Filler
 );
 
-// Types and Interfaces
-interface ReportFilters {
+// Local component interfaces
+interface LocalReportFilters {
   dateRange: Date[];
   platforms: string[];
   contentTypes: string[];
@@ -60,92 +78,71 @@ interface ReportFilters {
   timeGranularity: string;
 }
 
-interface AnalyticsData {
-  totalInfringements: number;
-  totalTakedowns: number;
-  successRate: number;
-  avgResponseTime: number;
+interface LocalAnalyticsData {
+  overview?: OverviewMetrics;
   platformBreakdown: PlatformMetrics[];
-  timeSeriesData: TimeSeriesDataPoint[];
+  contentAnalytics: ContentTypeMetrics[];
   geographicData: GeographicDataPoint[];
-  contentTypeBreakdown: ContentTypeMetrics[];
-  roiMetrics: ROIMetrics;
-  responseTimeData: ResponseTimeData[];
-  complianceRating: PlatformCompliance[];
+  complianceMetrics: PlatformCompliance[];
+  roiAnalysis?: ROIMetrics;
+  responseTimeAnalysis: ResponseTimeData[];
+  trendAnalysis?: TrendAnalysis[];
+  performanceMetrics?: PerformanceMetrics;
+  dataQuality?: DataQualityReport;
 }
 
-interface PlatformMetrics {
-  platform: string;
-  infringements: number;
-  takedowns: number;
-  successRate: number;
-  avgResponseTime: number;
-  cost: number;
-  roi: number;
-  complianceRating: number;
+interface LoadingState {
+  overview: boolean;
+  platforms: boolean;
+  content: boolean;
+  compliance: boolean;
+  roi: boolean;
+  trends: boolean;
+  charts: boolean;
 }
 
-interface TimeSeriesDataPoint {
-  date: string;
-  infringements: number;
-  takedowns: number;
-  successRate: number;
-  visibilityReduction: number;
+interface ErrorState {
+  overview?: string;
+  platforms?: string;
+  content?: string;
+  compliance?: string;
+  roi?: string;
+  trends?: string;
+  charts?: string;
+  general?: string;
 }
 
-interface GeographicDataPoint {
-  country: string;
-  infringements: number;
-  takedowns: number;
-  successRate: number;
-}
-
-interface ContentTypeMetrics {
-  type: string;
-  count: number;
-  percentage: number;
-  successRate: number;
-}
-
-interface ROIMetrics {
-  totalInvestment: number;
-  contentValueProtected: number;
-  estimatedLossPrevented: number;
-  roi: number;
-  costPerTakedown: number;
-}
-
-interface ResponseTimeData {
-  platform: string;
-  avgHours: number;
-  category: 'fast' | 'medium' | 'slow';
-}
-
-interface PlatformCompliance {
-  platform: string;
-  complianceScore: number;
-  responseRate: number;
-  avgResponseTime: number;
-}
-
-interface ReportTemplate {
+interface ReportGenerationProgress {
   id: string;
-  name: string;
-  description: string;
-  sections: string[];
-  filters: Partial<ReportFilters>;
+  status: 'pending' | 'generating' | 'completed' | 'failed';
+  progress: number;
+  message: string;
 }
 
 const Reports: React.FC = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const toast = useRef<Toast>(null);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [realTimeMode, setRealTimeMode] = useState(false);
+  const [realTimeSubscriptionId, setRealTimeSubscriptionId] = useState<string | null>(null);
+  
+  // Loading and Error States
+  const [loading, setLoading] = useState<LoadingState>({
+    overview: true,
+    platforms: true,
+    content: true,
+    compliance: true,
+    roi: true,
+    trends: true,
+    charts: true
+  });
+  const [errors, setErrors] = useState<ErrorState>({});
+  const [reportProgress, setReportProgress] = useState<ReportGenerationProgress | null>(null);
   
   // Filters and Settings
-  const [filters, setFilters] = useState<ReportFilters>({
+  const [filters, setFilters] = useState<LocalReportFilters>({
     dateRange: [
       new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
       new Date()
@@ -156,63 +153,18 @@ const Reports: React.FC = () => {
     timeGranularity: 'daily'
   });
 
-  // Mock data - In real app, this would come from API
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
-    totalInfringements: 1247,
-    totalTakedowns: 1089,
-    successRate: 87.3,
-    avgResponseTime: 18.5,
-    platformBreakdown: [
-      { platform: 'Instagram', infringements: 487, takedowns: 423, successRate: 86.9, avgResponseTime: 12.3, cost: 2115, roi: 340, complianceRating: 8.7 },
-      { platform: 'TikTok', infringements: 342, takedowns: 301, successRate: 88.0, avgResponseTime: 15.2, cost: 1505, roi: 410, complianceRating: 9.1 },
-      { platform: 'OnlyFans', infringements: 198, takedowns: 178, successRate: 89.9, avgResponseTime: 8.7, cost: 890, roi: 520, complianceRating: 9.5 },
-      { platform: 'Twitter', infringements: 134, takedowns: 107, successRate: 79.9, avgResponseTime: 28.4, cost: 535, roi: 210, complianceRating: 6.8 },
-      { platform: 'YouTube', infringements: 86, takedowns: 80, successRate: 93.0, avgResponseTime: 22.1, cost: 400, roi: 380, complianceRating: 8.9 }
-    ],
-    timeSeriesData: [
-      { date: '2024-01-01', infringements: 89, takedowns: 76, successRate: 85.4, visibilityReduction: 78 },
-      { date: '2024-01-02', infringements: 94, takedowns: 82, successRate: 87.2, visibilityReduction: 82 },
-      { date: '2024-01-03', infringements: 76, takedowns: 68, successRate: 89.5, visibilityReduction: 85 },
-      { date: '2024-01-04', infringements: 112, takedowns: 95, successRate: 84.8, visibilityReduction: 75 },
-      { date: '2024-01-05', infringements: 103, takedowns: 91, successRate: 88.3, visibilityReduction: 80 },
-      { date: '2024-01-06', infringements: 87, takedowns: 79, successRate: 90.8, visibilityReduction: 88 },
-      { date: '2024-01-07', infringements: 98, takedowns: 85, successRate: 86.7, visibilityReduction: 77 }
-    ],
-    geographicData: [
-      { country: 'United States', infringements: 523, takedowns: 456, successRate: 87.2 },
-      { country: 'United Kingdom', infringements: 198, takedowns: 176, successRate: 88.9 },
-      { country: 'Canada', infringements: 134, takedowns: 119, successRate: 88.8 },
-      { country: 'Australia', infringements: 98, takedowns: 87, successRate: 88.8 },
-      { country: 'Germany', infringements: 87, takedowns: 74, successRate: 85.1 }
-    ],
-    contentTypeBreakdown: [
-      { type: 'Images', count: 678, percentage: 54.4, successRate: 89.2 },
-      { type: 'Videos', count: 423, percentage: 33.9, successRate: 85.1 },
-      { type: 'Audio', count: 98, percentage: 7.9, successRate: 91.8 },
-      { type: 'Text', count: 48, percentage: 3.8, successRate: 79.2 }
-    ],
-    roiMetrics: {
-      totalInvestment: 5445,
-      contentValueProtected: 42300,
-      estimatedLossPrevented: 18600,
-      roi: 341.6,
-      costPerTakedown: 5.0
-    },
-    responseTimeData: [
-      { platform: 'OnlyFans', avgHours: 8.7, category: 'fast' },
-      { platform: 'Instagram', avgHours: 12.3, category: 'fast' },
-      { platform: 'TikTok', avgHours: 15.2, category: 'medium' },
-      { platform: 'YouTube', avgHours: 22.1, category: 'medium' },
-      { platform: 'Twitter', avgHours: 28.4, category: 'slow' }
-    ],
-    complianceRating: [
-      { platform: 'OnlyFans', complianceScore: 9.5, responseRate: 96.8, avgResponseTime: 8.7 },
-      { platform: 'TikTok', complianceScore: 9.1, responseRate: 91.2, avgResponseTime: 15.2 },
-      { platform: 'YouTube', complianceScore: 8.9, responseRate: 89.4, avgResponseTime: 22.1 },
-      { platform: 'Instagram', complianceScore: 8.7, responseRate: 88.1, avgResponseTime: 12.3 },
-      { platform: 'Twitter', complianceScore: 6.8, responseRate: 73.2, avgResponseTime: 28.4 }
-    ]
+  // Analytics data from API
+  const [analyticsData, setAnalyticsData] = useState<LocalAnalyticsData>({
+    platformBreakdown: [],
+    contentAnalytics: [],
+    geographicData: [],
+    complianceMetrics: [],
+    responseTimeAnalysis: []
   });
+  
+  const [reportTemplates, setReportTemplates] = useState<ApiReportTemplate[]>([]);
+  const [realTimeData, setRealTimeData] = useState<RealTimeMetrics | null>(null);
+  const [lastDataUpdate, setLastDataUpdate] = useState<string>('');
 
   // Platform and filter options
   const platformOptions = [
@@ -253,49 +205,311 @@ const Reports: React.FC = () => {
     { label: 'Export as Excel', icon: 'pi pi-file', command: () => handleExport('excel') }
   ];
 
-  const reportTemplates: ReportTemplate[] = [
-    {
-      id: 'monthly-executive',
-      name: 'Monthly Executive Summary',
-      description: 'High-level monthly performance overview for executives',
-      sections: ['overview', 'roi', 'trends'],
-      filters: { timeGranularity: 'monthly' }
-    },
-    {
-      id: 'platform-deep-dive',
-      name: 'Platform Deep Dive',
-      description: 'Detailed analysis of platform performance and compliance',
-      sections: ['platforms', 'compliance', 'response-times'],
-      filters: { reportType: 'platform' }
-    },
-    {
-      id: 'roi-analysis',
-      name: 'ROI & Cost Analysis',
-      description: 'Financial performance and return on investment metrics',
-      sections: ['roi', 'costs', 'value-protected'],
-      filters: { reportType: 'roi' }
-    }
-  ];
-
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
+  // Data loading functions
+  const convertFiltersToApiFormat = useCallback((localFilters: LocalReportFilters) => {
+    const [startDate, endDate] = localFilters.dateRange;
+    return {
+      dateRange: {
+        start: startDate.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0]
+      },
+      platforms: localFilters.platforms,
+      contentTypes: localFilters.contentTypes,
+      timeGranularity: localFilters.timeGranularity as 'hourly' | 'daily' | 'weekly' | 'monthly'
+    };
   }, []);
+
+  // Load overview metrics
+  const loadOverviewData = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, overview: true }));
+      setErrors(prev => ({ ...prev, overview: undefined }));
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.getOverviewMetrics(apiFilters);
+      
+      setAnalyticsData(prev => ({
+        ...prev,
+        overview: response.data
+      }));
+      
+      setLastDataUpdate(new Date().toISOString());
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, overview: error.message || 'Failed to load overview data' }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Data Load Error',
+        detail: 'Failed to load overview metrics',
+        life: 5000
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, overview: false }));
+    }
+  }, [filters, convertFiltersToApiFormat]);
+
+  // Load platform analytics
+  const loadPlatformData = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, platforms: true }));
+      setErrors(prev => ({ ...prev, platforms: undefined }));
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.getPlatformAnalytics({
+        ...apiFilters,
+        includeCompliance: true
+      });
+      
+      setAnalyticsData(prev => ({
+        ...prev,
+        platformBreakdown: response.data.platforms || [],
+        complianceMetrics: response.data.compliance || []
+      }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, platforms: error.message || 'Failed to load platform data' }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Data Load Error',
+        detail: 'Failed to load platform analytics',
+        life: 5000
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, platforms: false }));
+    }
+  }, [filters, convertFiltersToApiFormat]);
+
+  // Load content analytics
+  const loadContentData = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, content: true }));
+      setErrors(prev => ({ ...prev, content: undefined }));
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.getContentAnalytics({
+        ...apiFilters,
+        includeGeo: true
+      });
+      
+      setAnalyticsData(prev => ({
+        ...prev,
+        contentAnalytics: response.data.contentTypes || [],
+        geographicData: response.data.geographic || []
+      }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, content: error.message || 'Failed to load content data' }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Data Load Error',
+        detail: 'Failed to load content analytics',
+        life: 5000
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, content: false }));
+    }
+  }, [filters, convertFiltersToApiFormat]);
+
+  // Load ROI analysis
+  const loadROIData = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, roi: true }));
+      setErrors(prev => ({ ...prev, roi: undefined }));
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.getROIAnalysis({
+        ...apiFilters,
+        includeProjections: true
+      });
+      
+      setAnalyticsData(prev => ({
+        ...prev,
+        roiAnalysis: response.data
+      }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, roi: error.message || 'Failed to load ROI data' }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Data Load Error',
+        detail: 'Failed to load ROI analysis',
+        life: 5000
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, roi: false }));
+    }
+  }, [filters, convertFiltersToApiFormat]);
+
+  // Load compliance metrics
+  const loadComplianceData = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, compliance: true }));
+      setErrors(prev => ({ ...prev, compliance: undefined }));
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.getComplianceMetrics({
+        ...apiFilters,
+        includeResponseTimes: true
+      });
+      
+      setAnalyticsData(prev => ({
+        ...prev,
+        complianceMetrics: response.data.compliance || [],
+        responseTimeAnalysis: response.data.responseTimes || []
+      }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, compliance: error.message || 'Failed to load compliance data' }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Data Load Error',
+        detail: 'Failed to load compliance metrics',
+        life: 5000
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, compliance: false }));
+    }
+  }, [filters, convertFiltersToApiFormat]);
+
+  // Load trend analysis
+  const loadTrendData = useCallback(async () => {
+    try {
+      setLoading(prev => ({ ...prev, trends: true }));
+      setErrors(prev => ({ ...prev, trends: undefined }));
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.getTrendAnalysis({
+        ...apiFilters,
+        trendType: 'growth'
+      });
+      
+      setAnalyticsData(prev => ({
+        ...prev,
+        trendAnalysis: response.data
+      }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, trends: error.message || 'Failed to load trend data' }));
+    } finally {
+      setLoading(prev => ({ ...prev, trends: false }));
+    }
+  }, [filters, convertFiltersToApiFormat]);
+
+  // Load report templates
+  const loadReportTemplates = useCallback(async () => {
+    try {
+      const response = await reportsApi.getReportTemplates();
+      setReportTemplates(response.data);
+    } catch (error: any) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Templates Load Error',
+        detail: 'Failed to load report templates',
+        life: 3000
+      });
+    }
+  }, []);
+
+  // Load all data
+  const loadAllData = useCallback(async () => {
+    await Promise.all([
+      loadOverviewData(),
+      loadPlatformData(),
+      loadContentData(),
+      loadROIData(),
+      loadComplianceData(),
+      loadTrendData()
+    ]);
+    
+    // Set charts loading to false after all data is loaded
+    setLoading(prev => ({ ...prev, charts: false }));
+  }, [loadOverviewData, loadPlatformData, loadContentData, loadROIData, loadComplianceData, loadTrendData]);
+
+  // Initial data load
+  useEffect(() => {
+    loadAllData();
+    loadReportTemplates();
+  }, [loadAllData, loadReportTemplates]);
+
+  // Reload data when filters change
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      loadAllData();
+    }, 500); // Debounce filter changes
+    
+    return () => clearTimeout(debounceTimer);
+  }, [filters, loadAllData]);
+
+  // Real-time data functionality
+  const loadRealTimeData = useCallback(async () => {
+    try {
+      const response = await reportsApi.getRealTimeMetrics();
+      setRealTimeData(response.data);
+      setLastDataUpdate(new Date().toISOString());
+    } catch (error: any) {
+      console.error('Failed to load real-time data:', error);
+    }
+  }, []);
+
+  // Subscribe to real-time updates
+  const subscribeToRealTime = useCallback(async () => {
+    try {
+      const response = await reportsApi.subscribeToRealTimeUpdates({
+        metrics: ['infringements', 'takedowns', 'success_rate'],
+        platforms: filters.platforms,
+        updateFrequency: 'medium'
+      });
+      setRealTimeSubscriptionId(response.data.subscriptionId);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Real-time Updates',
+        detail: 'Successfully enabled real-time data updates',
+        life: 3000
+      });
+    } catch (error: any) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Real-time Error',
+        detail: 'Failed to enable real-time updates',
+        life: 3000
+      });
+    }
+  }, [filters.platforms]);
+
+  // Unsubscribe from real-time updates
+  const unsubscribeFromRealTime = useCallback(async () => {
+    if (!realTimeSubscriptionId) return;
+    
+    try {
+      await reportsApi.unsubscribeFromRealTimeUpdates(realTimeSubscriptionId);
+      setRealTimeSubscriptionId(null);
+      setRealTimeData(null);
+      
+      toast.current?.show({
+        severity: 'info',
+        summary: 'Real-time Updates',
+        detail: 'Real-time data updates disabled',
+        life: 3000
+      });
+    } catch (error: any) {
+      console.error('Failed to unsubscribe from real-time updates:', error);
+    }
+  }, [realTimeSubscriptionId]);
 
   // Auto-refresh for real-time mode
   useEffect(() => {
-    if (!realTimeMode) return;
+    if (!realTimeMode) {
+      unsubscribeFromRealTime();
+      return;
+    }
+    
+    subscribeToRealTime();
+    loadRealTimeData();
     
     const interval = setInterval(() => {
-      // Simulate real-time data updates
-      console.log('Refreshing real-time data...');
+      loadRealTimeData();
     }, 30000); // Refresh every 30 seconds
 
-    return () => clearInterval(interval);
-  }, [realTimeMode]);
+    return () => {
+      clearInterval(interval);
+      unsubscribeFromRealTime();
+    };
+  }, [realTimeMode, subscribeToRealTime, unsubscribeFromRealTime, loadRealTimeData]);
 
   // Chart data generators
   const trendsChartData = useMemo(() => ({
@@ -364,33 +578,33 @@ const Reports: React.FC = () => {
     }]
   }), [analyticsData.platformBreakdown]);
 
-  const responseTimeData = useMemo(() => ({
-    labels: analyticsData.responseTimeData.map(r => r.platform),
+  const responseTimeChartData = useMemo(() => ({
+    labels: analyticsData.responseTimeAnalysis.map(r => r.platform),
     datasets: [{
       label: 'Average Response Time (Hours)',
-      data: analyticsData.responseTimeData.map(r => r.avgHours),
-      backgroundColor: analyticsData.responseTimeData.map(r => 
+      data: analyticsData.responseTimeAnalysis.map(r => r.avgHours),
+      backgroundColor: analyticsData.responseTimeAnalysis.map(r => 
         r.category === 'fast' ? 'rgba(76, 175, 80, 0.8)' :
         r.category === 'medium' ? 'rgba(255, 193, 7, 0.8)' :
         'rgba(244, 67, 54, 0.8)'
       ),
-      borderColor: analyticsData.responseTimeData.map(r => 
+      borderColor: analyticsData.responseTimeAnalysis.map(r => 
         r.category === 'fast' ? '#4CAF50' :
         r.category === 'medium' ? '#FFC107' :
         '#F44336'
       ),
       borderWidth: 1
     }]
-  }), [analyticsData.responseTimeData]);
+  }), [analyticsData.responseTimeAnalysis]);
 
   const contentTypeData = useMemo(() => ({
-    labels: analyticsData.contentTypeBreakdown.map(c => c.type),
+    labels: analyticsData.contentAnalytics.map(c => c.type),
     datasets: [{
-      data: analyticsData.contentTypeBreakdown.map(c => c.percentage),
+      data: analyticsData.contentAnalytics.map(c => c.percentage),
       backgroundColor: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'],
       hoverBackgroundColor: ['#FF5252', '#26C6DA', '#42A5F5', '#66BB6A']
     }]
-  }), [analyticsData.contentTypeBreakdown]);
+  }), [analyticsData.contentAnalytics]);
 
   const geoDistributionData = useMemo(() => ({
     labels: analyticsData.geographicData.map(g => g.country),
@@ -478,40 +692,155 @@ const Reports: React.FC = () => {
   };
 
   // Event handlers
-  const handleFilterChange = (key: keyof ReportFilters, value: any) => {
+  const handleFilterChange = (key: keyof LocalReportFilters, value: any) => {
     setFilters(prev => ({
       ...prev,
       [key]: value
     }));
+    
+    // Show loading state immediately for better UX
+    setLoading({
+      overview: true,
+      platforms: true,
+      content: true,
+      compliance: true,
+      roi: true,
+      trends: true,
+      charts: true
+    });
   };
 
-  const handleExport = (format: 'pdf' | 'csv' | 'excel') => {
-    console.log(`Exporting report as ${format.toUpperCase()}`);
-    // Implement export logic here
-    setShowExportDialog(false);
+  const handleExport = async (format: 'pdf' | 'csv' | 'excel') => {
+    try {
+      setReportProgress({
+        id: `export-${Date.now()}`,
+        status: 'generating',
+        progress: 0,
+        message: 'Preparing export...'
+      });
+      
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.exportReport({
+        format,
+        reportType: filters.reportType as any,
+        dateRange: apiFilters.dateRange,
+        platforms: apiFilters.platforms,
+        sections: ['overview', 'platforms', 'content', 'compliance']
+      });
+      
+      setReportProgress({
+        id: response.data.reportId,
+        status: 'completed',
+        progress: 100,
+        message: 'Export completed successfully'
+      });
+      
+      // Download the file
+      if (response.data.downloadUrl) {
+        window.open(response.data.downloadUrl, '_blank');
+      }
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Export Successful',
+        detail: `Report exported as ${format.toUpperCase()}`,
+        life: 5000
+      });
+      
+      setShowExportDialog(false);
+    } catch (error: any) {
+      setReportProgress({
+        id: 'export-failed',
+        status: 'failed',
+        progress: 0,
+        message: error.message || 'Export failed'
+      });
+      
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Export Failed',
+        detail: error.message || 'Failed to export report',
+        life: 5000
+      });
+    }
   };
 
-  const handleTemplateApply = (template: ReportTemplate) => {
-    setFilters(prev => ({
-      ...prev,
-      ...template.filters
-    }));
+  const handleTemplateApply = (template: ApiReportTemplate) => {
+    // Convert API template filters to local format
+    const newFilters: LocalReportFilters = {
+      ...filters,
+      reportType: template.filters.reportType || filters.reportType,
+      timeGranularity: template.filters.timeGranularity || filters.timeGranularity,
+      platforms: template.filters.platforms || filters.platforms,
+      contentTypes: template.filters.contentTypes || filters.contentTypes
+    };
+    
+    if (template.filters.dateRange) {
+      newFilters.dateRange = [
+        new Date(template.filters.dateRange.start),
+        new Date(template.filters.dateRange.end)
+      ];
+    }
+    
+    setFilters(newFilters);
     setShowTemplateDialog(false);
+    
+    toast.current?.show({
+      severity: 'success',
+      summary: 'Template Applied',
+      detail: `Applied template: ${template.name}`,
+      life: 3000
+    });
   };
 
-  const handleScheduleReport = () => {
-    console.log('Scheduling report...');
-    // Implement scheduling logic
+  const handleScheduleReport = async () => {
+    try {
+      const apiFilters = convertFiltersToApiFormat(filters);
+      const response = await reportsApi.scheduleReport({
+        reportType: filters.reportType as any,
+        schedule: {
+          frequency: 'weekly',
+          dayOfWeek: 1, // Monday
+          time: '09:00'
+        },
+        recipients: [user?.email].filter(Boolean),
+        dateRange: 'last_week',
+        platforms: apiFilters.platforms,
+        sections: ['overview', 'platforms', 'compliance'],
+        format: 'pdf',
+        active: true
+      });
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Report Scheduled',
+        detail: 'Weekly report has been scheduled successfully',
+        life: 5000
+      });
+    } catch (error: any) {
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Scheduling Failed',
+        detail: error.message || 'Failed to schedule report',
+        life: 5000
+      });
+    }
   };
 
-  // Template functions
-  const renderKPICard = (title: string, value: string | number, subtitle?: string, icon?: string, color?: string) => (
+  // Template functions with error handling
+  const renderKPICard = (title: string, value: string | number, subtitle?: string, icon?: string, color?: string, isLoading?: boolean, error?: string) => (
     <Card className="h-full kpi-card">
       <div className="flex justify-content-between align-items-start">
-        <div>
+        <div className="flex-1">
           <div className="text-500 font-medium text-sm">{title}</div>
-          <div className="text-900 font-bold text-xl mt-1">{value}</div>
-          {subtitle && (
+          {isLoading ? (
+            <Skeleton width="4rem" height="1.5rem" className="mt-1" />
+          ) : error ? (
+            <div className="text-red-500 text-sm mt-1">{error}</div>
+          ) : (
+            <div className="text-900 font-bold text-xl mt-1">{value}</div>
+          )}
+          {subtitle && !isLoading && !error && (
             <div className="text-600 text-sm mt-1">{subtitle}</div>
           )}
         </div>
@@ -524,86 +853,114 @@ const Reports: React.FC = () => {
     </Card>
   );
 
-  const renderPlatformTable = () => (
-    <DataTable 
-      value={analyticsData.platformBreakdown}
-      size="small"
-      showGridlines
-      sortMode="multiple"
-      paginator
-      rows={10}
-    >
-      <Column field="platform" header="Platform" sortable />
-      <Column 
-        field="infringements" 
-        header="Infringements" 
-        sortable
-        body={(rowData) => (
-          <Badge value={rowData.infringements} severity="warning" />
-        )}
-      />
-      <Column 
-        field="takedowns" 
-        header="Takedowns" 
-        sortable
-        body={(rowData) => (
-          <Badge value={rowData.takedowns} severity="success" />
-        )}
-      />
-      <Column 
-        field="successRate" 
-        header="Success Rate" 
-        sortable
-        body={(rowData) => (
-          <div className="flex align-items-center gap-2">
-            <ProgressBar 
-              value={rowData.successRate} 
-              showValue={false} 
-              style={{ width: '60px', height: '6px' }}
+  const renderPlatformTable = () => {
+    if (loading.platforms) {
+      return (
+        <div className="grid">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="col-12">
+              <Skeleton width="100%" height="3rem" className="mb-2" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    if (errors.platforms) {
+      return (
+        <Message 
+          severity="error" 
+          text={errors.platforms} 
+          className="w-full"
+        />
+      );
+    }
+    
+    return (
+      <DataTable 
+        value={analyticsData.platformBreakdown}
+        size="small"
+        showGridlines
+        sortMode="multiple"
+        paginator
+        rows={10}
+        emptyMessage="No platform data available"
+      >
+        <Column field="platform" header="Platform" sortable />
+        <Column 
+          field="infringements" 
+          header="Infringements" 
+          sortable
+          body={(rowData) => (
+            <Badge value={rowData.infringements} severity="warning" />
+          )}
+        />
+        <Column 
+          field="takedowns" 
+          header="Takedowns" 
+          sortable
+          body={(rowData) => (
+            <Badge value={rowData.takedowns} severity="success" />
+          )}
+        />
+        <Column 
+          field="successRate" 
+          header="Success Rate" 
+          sortable
+          body={(rowData) => (
+            <div className="flex align-items-center gap-2">
+              <ProgressBar 
+                value={rowData.successRate} 
+                showValue={false} 
+                style={{ width: '60px', height: '6px' }}
+              />
+              <span className="text-sm font-medium">{rowData.successRate.toFixed(1)}%</span>
+            </div>
+          )}
+        />
+        <Column 
+          field="avgResponseTime" 
+          header="Avg Response Time" 
+          sortable
+          body={(rowData) => (
+            <span>{rowData.avgResponseTime.toFixed(1)}h</span>
+          )}
+        />
+        <Column 
+          field="roi" 
+          header="ROI" 
+          sortable
+          body={(rowData) => (
+            <Tag 
+              value={`${rowData.roi.toFixed(1)}%`} 
+              severity={rowData.roi > 300 ? 'success' : rowData.roi > 200 ? 'warning' : 'danger'}
             />
-            <span className="text-sm font-medium">{rowData.successRate}%</span>
-          </div>
-        )}
-      />
-      <Column 
-        field="avgResponseTime" 
-        header="Avg Response Time" 
-        sortable
-        body={(rowData) => (
-          <span>{rowData.avgResponseTime.toFixed(1)}h</span>
-        )}
-      />
-      <Column 
-        field="roi" 
-        header="ROI" 
-        sortable
-        body={(rowData) => (
-          <Tag 
-            value={`${rowData.roi}%`} 
-            severity={rowData.roi > 300 ? 'success' : rowData.roi > 200 ? 'warning' : 'danger'}
-          />
-        )}
-      />
-      <Column 
-        field="complianceRating" 
-        header="Compliance" 
-        sortable
-        body={(rowData) => (
-          <div className="flex align-items-center gap-2">
-            <ProgressBar 
-              value={rowData.complianceRating * 10} 
-              showValue={false} 
-              style={{ width: '60px', height: '6px' }}
-              color={rowData.complianceRating >= 8 ? '#10B981' : rowData.complianceRating >= 6 ? '#F59E0B' : '#EF4444'}
-            />
-            <span className="text-sm font-medium">{rowData.complianceRating}/10</span>
-          </div>
-        )}
-      />
-    </DataTable>
-  );
+          )}
+        />
+        <Column 
+          field="complianceRating" 
+          header="Compliance" 
+          sortable
+          body={(rowData) => (
+            <div className="flex align-items-center gap-2">
+              <ProgressBar 
+                value={rowData.complianceRating * 10} 
+                showValue={false} 
+                style={{ width: '60px', height: '6px' }}
+                color={rowData.complianceRating >= 8 ? '#10B981' : rowData.complianceRating >= 6 ? '#F59E0B' : '#EF4444'}
+              />
+              <span className="text-sm font-medium">{rowData.complianceRating.toFixed(1)}/10</span>
+            </div>
+          )}
+        />
+      </DataTable>
+    );
+  };
 
-  if (loading) {
+  // Show global loading state only if all sections are loading
+  const isGlobalLoading = Object.values(loading).every(Boolean);
+  
+  if (isGlobalLoading) {
     return (
       <div className="analytics-reports-page">
         <div className="grid">
@@ -625,7 +982,7 @@ const Reports: React.FC = () => {
 
   return (
     <div className="analytics-reports-page">
-      <Toast />
+      <Toast ref={toast} />
       
       {/* Header with filters and actions */}
       <div className="grid">
@@ -642,7 +999,15 @@ const Reports: React.FC = () => {
                 <InputSwitch 
                   checked={realTimeMode} 
                   onChange={(e) => setRealTimeMode(e.value)} 
+                  tooltip={realTimeMode ? 'Disable real-time updates' : 'Enable real-time updates'}
                 />
+                {realTimeData && (
+                  <Tag 
+                    value="Live" 
+                    severity="success" 
+                    className="animate-pulse" 
+                  />
+                )}
               </div>
               
               <Button 
@@ -731,77 +1096,101 @@ const Reports: React.FC = () => {
             <div className="col-12 md:col-6 lg:col-3">
               {renderKPICard(
                 'Total Infringements',
-                analyticsData.totalInfringements.toLocaleString(),
+                analyticsData.overview?.totalInfringements?.toLocaleString() || '0',
                 'Detected this period',
                 'pi pi-exclamation-triangle',
-                'bg-orange-100 text-orange-800'
+                'bg-orange-100 text-orange-800',
+                loading.overview,
+                errors.overview
               )}
             </div>
             
             <div className="col-12 md:col-6 lg:col-3">
               {renderKPICard(
                 'Successful Takedowns',
-                analyticsData.totalTakedowns.toLocaleString(),
+                analyticsData.overview?.totalTakedowns?.toLocaleString() || '0',
                 'Content removed',
                 'pi pi-check-circle',
-                'bg-green-100 text-green-800'
+                'bg-green-100 text-green-800',
+                loading.overview,
+                errors.overview
               )}
             </div>
             
             <div className="col-12 md:col-6 lg:col-3">
               {renderKPICard(
                 'Success Rate',
-                `${analyticsData.successRate}%`,
+                analyticsData.overview?.successRate ? `${analyticsData.overview.successRate.toFixed(1)}%` : '0%',
                 'Overall effectiveness',
                 'pi pi-chart-pie',
-                'bg-blue-100 text-blue-800'
+                'bg-blue-100 text-blue-800',
+                loading.overview,
+                errors.overview
               )}
             </div>
             
             <div className="col-12 md:col-6 lg:col-3">
               {renderKPICard(
                 'Avg Response Time',
-                `${analyticsData.avgResponseTime}h`,
+                analyticsData.overview?.avgResponseTime ? `${analyticsData.overview.avgResponseTime.toFixed(1)}h` : '0h',
                 'Platform response',
                 'pi pi-clock',
-                'bg-purple-100 text-purple-800'
+                'bg-purple-100 text-purple-800',
+                loading.overview,
+                errors.overview
               )}
             </div>
 
             {/* ROI Overview */}
             <div className="col-12 lg:col-8">
               <Card title="Return on Investment Analysis" className="h-full">
-                <div className="grid">
-                  <div className="col-12 md:col-6">
-                    <div className="text-center p-3 border-round bg-blue-50">
-                      <div className="text-blue-900 text-lg font-bold">${analyticsData.roiMetrics.totalInvestment.toLocaleString()}</div>
-                      <div className="text-blue-600 text-sm font-medium">Total Investment</div>
-                    </div>
+                {loading.roi ? (
+                  <div className="grid">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="col-12 md:col-6">
+                        <Skeleton width="100%" height="4rem" className="mb-2" />
+                      </div>
+                    ))}
                   </div>
-                  <div className="col-12 md:col-6">
-                    <div className="text-center p-3 border-round bg-green-50">
-                      <div className="text-green-900 text-lg font-bold">${analyticsData.roiMetrics.contentValueProtected.toLocaleString()}</div>
-                      <div className="text-green-600 text-sm font-medium">Content Value Protected</div>
+                ) : errors.roi ? (
+                  <Message severity="error" text={errors.roi} className="w-full" />
+                ) : analyticsData.roiAnalysis ? (
+                  <>
+                    <div className="grid">
+                      <div className="col-12 md:col-6">
+                        <div className="text-center p-3 border-round bg-blue-50">
+                          <div className="text-blue-900 text-lg font-bold">${analyticsData.roiAnalysis.totalInvestment.toLocaleString()}</div>
+                          <div className="text-blue-600 text-sm font-medium">Total Investment</div>
+                        </div>
+                      </div>
+                      <div className="col-12 md:col-6">
+                        <div className="text-center p-3 border-round bg-green-50">
+                          <div className="text-green-900 text-lg font-bold">${analyticsData.roiAnalysis.contentValueProtected.toLocaleString()}</div>
+                          <div className="text-green-600 text-sm font-medium">Content Value Protected</div>
+                        </div>
+                      </div>
+                      <div className="col-12 md:col-6">
+                        <div className="text-center p-3 border-round bg-orange-50">
+                          <div className="text-orange-900 text-lg font-bold">${analyticsData.roiAnalysis.estimatedLossPrevented.toLocaleString()}</div>
+                          <div className="text-orange-600 text-sm font-medium">Loss Prevented</div>
+                        </div>
+                      </div>
+                      <div className="col-12 md:col-6">
+                        <div className="text-center p-3 border-round bg-purple-50">
+                          <div className="text-purple-900 text-lg font-bold">{analyticsData.roiAnalysis.roi.toFixed(1)}%</div>
+                          <div className="text-purple-600 text-sm font-medium">ROI</div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="col-12 md:col-6">
-                    <div className="text-center p-3 border-round bg-orange-50">
-                      <div className="text-orange-900 text-lg font-bold">${analyticsData.roiMetrics.estimatedLossPrevented.toLocaleString()}</div>
-                      <div className="text-orange-600 text-sm font-medium">Loss Prevented</div>
+                    <Divider />
+                    <div className="flex justify-content-between align-items-center">
+                      <span className="font-medium">Cost per Takedown:</span>
+                      <Tag value={`$${analyticsData.roiAnalysis.costPerTakedown.toFixed(2)}`} severity="info" />
                     </div>
-                  </div>
-                  <div className="col-12 md:col-6">
-                    <div className="text-center p-3 border-round bg-purple-50">
-                      <div className="text-purple-900 text-lg font-bold">{analyticsData.roiMetrics.roi}%</div>
-                      <div className="text-purple-600 text-sm font-medium">ROI</div>
-                    </div>
-                  </div>
-                </div>
-                <Divider />
-                <div className="flex justify-content-between align-items-center">
-                  <span className="font-medium">Cost per Takedown:</span>
-                  <Tag value={`$${analyticsData.roiMetrics.costPerTakedown}`} severity="info" />
-                </div>
+                  </>
+                ) : (
+                  <Message severity="info" text="No ROI data available for the selected period" className="w-full" />
+                )}
               </Card>
             </div>
 
@@ -815,16 +1204,33 @@ const Reports: React.FC = () => {
                   </div>
                   <div className="flex justify-content-between align-items-center">
                     <span className="text-sm">Content Types</span>
-                    <Badge value={`${analyticsData.contentTypeBreakdown.length} types`} />
+                    <Badge value={`${analyticsData.contentAnalytics.length || 0} types`} />
                   </div>
                   <div className="flex justify-content-between align-items-center">
                     <span className="text-sm">Geographic Reach</span>
-                    <Badge value={`${analyticsData.geographicData.length} countries`} />
+                    <Badge value={`${analyticsData.geographicData.length || 0} countries`} />
                   </div>
                   <div className="flex justify-content-between align-items-center">
                     <span className="text-sm">Data Freshness</span>
-                    <Tag value={realTimeMode ? "Real-time" : "Last updated 5 min ago"} severity="success" />
+                    <Tag 
+                      value={realTimeMode && realTimeData ? "Live data" : lastDataUpdate ? `Updated ${new Date(lastDataUpdate).toLocaleTimeString()}` : "No data"} 
+                      severity={realTimeMode && realTimeData ? "success" : "info"} 
+                    />
                   </div>
+                  {reportProgress && (
+                    <div className="flex flex-column gap-2">
+                      <div className="flex justify-content-between align-items-center">
+                        <span className="text-sm">Report Generation</span>
+                        <Tag 
+                          value={reportProgress.status} 
+                          severity={reportProgress.status === 'completed' ? 'success' : reportProgress.status === 'failed' ? 'danger' : 'info'}
+                        />
+                      </div>
+                      {reportProgress.status === 'generating' && (
+                        <ProgressBar value={reportProgress.progress} showValue />
+                      )}
+                    </div>
+                  )}
                 </div>
               </Card>
             </div>
@@ -832,13 +1238,19 @@ const Reports: React.FC = () => {
             {/* Trends Chart */}
             <div className="col-12">
               <Card title="Performance Trends" className="h-full">
-                <div className="chart-container" style={{ height: '400px' }}>
-                  <Chart
-                    type="line"
-                    data={trendsChartData}
-                    options={multiAxisOptions}
-                  />
-                </div>
+                {loading.charts || loading.overview ? (
+                  <Skeleton width="100%" height="400px" />
+                ) : errors.overview ? (
+                  <Message severity="error" text={errors.overview} className="w-full" />
+                ) : (
+                  <div className="chart-container" style={{ height: '400px' }}>
+                    <Chart
+                      type="line"
+                      data={trendsChartData}
+                      options={multiAxisOptions}
+                    />
+                  </div>
+                )}
               </Card>
             </div>
           </div>
@@ -857,39 +1269,63 @@ const Reports: React.FC = () => {
             {/* Platform Distribution */}
             <div className="col-12 lg:col-6">
               <Card title="Infringement Distribution" className="h-full">
-                <div className="chart-container" style={{ height: '350px' }}>
-                  <Chart
-                    type="doughnut"
-                    data={platformDistributionData}
-                    options={doughnutOptions}
-                  />
-                </div>
+                {loading.platforms ? (
+                  <Skeleton width="100%" height="350px" />
+                ) : errors.platforms ? (
+                  <Message severity="error" text={errors.platforms} className="w-full" />
+                ) : analyticsData.platformBreakdown.length > 0 ? (
+                  <div className="chart-container" style={{ height: '350px' }}>
+                    <Chart
+                      type="doughnut"
+                      data={platformDistributionData}
+                      options={doughnutOptions}
+                    />
+                  </div>
+                ) : (
+                  <Message severity="info" text="No platform data available" className="w-full" />
+                )}
               </Card>
             </div>
 
             {/* Success Rate Comparison */}
             <div className="col-12 lg:col-6">
               <Card title="Success Rate by Platform" className="h-full">
-                <div className="chart-container" style={{ height: '350px' }}>
-                  <Chart
-                    type="bar"
-                    data={successRateComparisonData}
-                    options={standardChartOptions}
-                  />
-                </div>
+                {loading.platforms ? (
+                  <Skeleton width="100%" height="350px" />
+                ) : errors.platforms ? (
+                  <Message severity="error" text={errors.platforms} className="w-full" />
+                ) : analyticsData.platformBreakdown.length > 0 ? (
+                  <div className="chart-container" style={{ height: '350px' }}>
+                    <Chart
+                      type="bar"
+                      data={successRateComparisonData}
+                      options={standardChartOptions}
+                    />
+                  </div>
+                ) : (
+                  <Message severity="info" text="No platform data available" className="w-full" />
+                )}
               </Card>
             </div>
 
             {/* Response Time Analysis */}
             <div className="col-12 lg:col-6">
               <Card title="Response Time Analysis" className="h-full">
-                <div className="chart-container" style={{ height: '350px' }}>
-                  <Chart
-                    type="bar"
-                    data={responseTimeData}
-                    options={standardChartOptions}
-                  />
-                </div>
+                {loading.compliance ? (
+                  <Skeleton width="100%" height="350px" />
+                ) : errors.compliance ? (
+                  <Message severity="error" text={errors.compliance} className="w-full" />
+                ) : analyticsData.responseTimeAnalysis.length > 0 ? (
+                  <div className="chart-container" style={{ height: '350px' }}>
+                    <Chart
+                      type="bar"
+                      data={responseTimeChartData}
+                      options={standardChartOptions}
+                    />
+                  </div>
+                ) : (
+                  <Message severity="info" text="No response time data available" className="w-full" />
+                )}
               </Card>
             </div>
 
@@ -914,46 +1350,68 @@ const Reports: React.FC = () => {
             {/* Content Type Distribution */}
             <div className="col-12 lg:col-6">
               <Card title="Content Type Distribution" className="h-full">
-                <div className="chart-container" style={{ height: '350px' }}>
-                  <Chart
-                    type="pie"
-                    data={contentTypeData}
-                    options={doughnutOptions}
-                  />
-                </div>
+                {loading.content ? (
+                  <Skeleton width="100%" height="350px" />
+                ) : errors.content ? (
+                  <Message severity="error" text={errors.content} className="w-full" />
+                ) : analyticsData.contentAnalytics.length > 0 ? (
+                  <div className="chart-container" style={{ height: '350px' }}>
+                    <Chart
+                      type="pie"
+                      data={contentTypeData}
+                      options={doughnutOptions}
+                    />
+                  </div>
+                ) : (
+                  <Message severity="info" text="No content type data available" className="w-full" />
+                )}
               </Card>
             </div>
 
             {/* Content Type Performance */}
             <div className="col-12 lg:col-6">
               <Card title="Content Type Performance" className="h-full">
-                <DataTable value={analyticsData.contentTypeBreakdown} size="small">
-                  <Column field="type" header="Content Type" />
-                  <Column 
-                    field="count" 
-                    header="Count"
-                    body={(rowData) => <Badge value={rowData.count} />}
-                  />
-                  <Column 
-                    field="percentage" 
-                    header="Percentage"
-                    body={(rowData) => `${rowData.percentage}%`}
-                  />
-                  <Column 
-                    field="successRate" 
-                    header="Success Rate"
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-2">
-                        <ProgressBar 
-                          value={rowData.successRate} 
-                          showValue={false} 
-                          style={{ width: '60px', height: '6px' }}
-                        />
-                        <span className="text-sm">{rowData.successRate}%</span>
+                {loading.content ? (
+                  <div className="grid">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="col-12">
+                        <Skeleton width="100%" height="3rem" className="mb-2" />
                       </div>
-                    )}
-                  />
-                </DataTable>
+                    ))}
+                  </div>
+                ) : errors.content ? (
+                  <Message severity="error" text={errors.content} className="w-full" />
+                ) : analyticsData.contentAnalytics.length > 0 ? (
+                  <DataTable value={analyticsData.contentAnalytics} size="small" emptyMessage="No content data available">
+                    <Column field="type" header="Content Type" />
+                    <Column 
+                      field="count" 
+                      header="Count"
+                      body={(rowData) => <Badge value={rowData.count} />}
+                    />
+                    <Column 
+                      field="percentage" 
+                      header="Percentage"
+                      body={(rowData) => `${rowData.percentage.toFixed(1)}%`}
+                    />
+                    <Column 
+                      field="successRate" 
+                      header="Success Rate"
+                      body={(rowData) => (
+                        <div className="flex align-items-center gap-2">
+                          <ProgressBar 
+                            value={rowData.successRate} 
+                            showValue={false} 
+                            style={{ width: '60px', height: '6px' }}
+                          />
+                          <span className="text-sm">{rowData.successRate.toFixed(1)}%</span>
+                        </div>
+                      )}
+                    />
+                  </DataTable>
+                ) : (
+                  <Message severity="info" text="No content type data available" className="w-full" />
+                )}
               </Card>
             </div>
 
@@ -962,28 +1420,50 @@ const Reports: React.FC = () => {
               <Card title="Geographic Distribution of Infringements">
                 <div className="grid">
                   <div className="col-12 lg:col-8">
-                    <div className="chart-container" style={{ height: '400px' }}>
-                      <Chart
-                        type="bar"
-                        data={geoDistributionData}
-                        options={standardChartOptions}
-                      />
-                    </div>
+                    {loading.content ? (
+                      <Skeleton width="100%" height="400px" />
+                    ) : errors.content ? (
+                      <Message severity="error" text={errors.content} className="w-full" />
+                    ) : analyticsData.geographicData.length > 0 ? (
+                      <div className="chart-container" style={{ height: '400px' }}>
+                        <Chart
+                          type="bar"
+                          data={geoDistributionData}
+                          options={standardChartOptions}
+                        />
+                      </div>
+                    ) : (
+                      <Message severity="info" text="No geographic data available" className="w-full" />
+                    )}
                   </div>
                   <div className="col-12 lg:col-4">
-                    <DataTable value={analyticsData.geographicData} size="small">
-                      <Column field="country" header="Country" />
-                      <Column 
-                        field="infringements" 
-                        header="Infringements"
-                        body={(rowData) => <Badge value={rowData.infringements} severity="warning" />}
-                      />
-                      <Column 
-                        field="successRate" 
-                        header="Success Rate"
-                        body={(rowData) => `${rowData.successRate}%`}
-                      />
-                    </DataTable>
+                    {loading.content ? (
+                      <div className="grid">
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <div key={i} className="col-12">
+                            <Skeleton width="100%" height="2rem" className="mb-1" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : errors.content ? (
+                      <Message severity="error" text={errors.content} className="w-full" />
+                    ) : analyticsData.geographicData.length > 0 ? (
+                      <DataTable value={analyticsData.geographicData} size="small" emptyMessage="No geographic data available">
+                        <Column field="country" header="Country" />
+                        <Column 
+                          field="infringements" 
+                          header="Infringements"
+                          body={(rowData) => <Badge value={rowData.infringements} severity="warning" />}
+                        />
+                        <Column 
+                          field="successRate" 
+                          header="Success Rate"
+                          body={(rowData) => `${rowData.successRate.toFixed(1)}%`}
+                        />
+                      </DataTable>
+                    ) : (
+                      <Message severity="info" text="No geographic data available" className="w-full" />
+                    )}
                   </div>
                 </div>
               </Card>
@@ -997,86 +1477,112 @@ const Reports: React.FC = () => {
             {/* Compliance Ratings */}
             <div className="col-12 lg:col-8">
               <Card title="Platform Compliance Ratings" className="h-full">
-                <DataTable value={analyticsData.complianceRating} size="small" showGridlines>
-                  <Column field="platform" header="Platform" />
-                  <Column 
-                    field="complianceScore" 
-                    header="Compliance Score"
-                    sortable
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-2">
-                        <ProgressBar 
-                          value={rowData.complianceScore * 10} 
-                          showValue={false} 
-                          style={{ width: '80px', height: '8px' }}
-                          color={rowData.complianceScore >= 8 ? '#10B981' : rowData.complianceScore >= 6 ? '#F59E0B' : '#EF4444'}
-                        />
-                        <Tag 
-                          value={`${rowData.complianceScore}/10`}
-                          severity={rowData.complianceScore >= 8 ? 'success' : rowData.complianceScore >= 6 ? 'warning' : 'danger'}
-                        />
+                {loading.compliance ? (
+                  <div className="grid">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} className="col-12">
+                        <Skeleton width="100%" height="3rem" className="mb-2" />
                       </div>
-                    )}
-                  />
-                  <Column 
-                    field="responseRate" 
-                    header="Response Rate"
-                    sortable
-                    body={(rowData) => `${rowData.responseRate}%`}
-                  />
-                  <Column 
-                    field="avgResponseTime" 
-                    header="Avg Response Time"
-                    sortable
-                    body={(rowData) => `${rowData.avgResponseTime}h`}
-                  />
-                </DataTable>
+                    ))}
+                  </div>
+                ) : errors.compliance ? (
+                  <Message severity="error" text={errors.compliance} className="w-full" />
+                ) : analyticsData.complianceMetrics.length > 0 ? (
+                  <DataTable value={analyticsData.complianceMetrics} size="small" showGridlines emptyMessage="No compliance data available">
+                    <Column field="platform" header="Platform" />
+                    <Column 
+                      field="complianceScore" 
+                      header="Compliance Score"
+                      sortable
+                      body={(rowData) => (
+                        <div className="flex align-items-center gap-2">
+                          <ProgressBar 
+                            value={rowData.complianceScore * 10} 
+                            showValue={false} 
+                            style={{ width: '80px', height: '8px' }}
+                            color={rowData.complianceScore >= 8 ? '#10B981' : rowData.complianceScore >= 6 ? '#F59E0B' : '#EF4444'}
+                          />
+                          <Tag 
+                            value={`${rowData.complianceScore.toFixed(1)}/10`}
+                            severity={rowData.complianceScore >= 8 ? 'success' : rowData.complianceScore >= 6 ? 'warning' : 'danger'}
+                          />
+                        </div>
+                      )}
+                    />
+                    <Column 
+                      field="responseRate" 
+                      header="Response Rate"
+                      sortable
+                      body={(rowData) => `${rowData.responseRate.toFixed(1)}%`}
+                    />
+                    <Column 
+                      field="avgResponseTime" 
+                      header="Avg Response Time"
+                      sortable
+                      body={(rowData) => `${rowData.avgResponseTime.toFixed(1)}h`}
+                    />
+                  </DataTable>
+                ) : (
+                  <Message severity="info" text="No compliance data available" className="w-full" />
+                )}
               </Card>
             </div>
 
             {/* Response Time Categories */}
             <div className="col-12 lg:col-4">
               <Card title="Response Time Categories" className="h-full">
-                <div className="flex flex-column gap-3">
-                  <div className="p-3 border-round bg-green-50">
-                    <div className="flex justify-content-between align-items-center">
-                      <span className="font-medium text-green-900">Fast (&lt; 16h)</span>
-                      <Badge 
-                        value={analyticsData.responseTimeData.filter(r => r.category === 'fast').length} 
-                        severity="success"
-                      />
+                {loading.compliance ? (
+                  <div className="flex flex-column gap-3">
+                    {[1, 2, 3].map(i => (
+                      <Skeleton key={i} width="100%" height="4rem" />
+                    ))}
+                  </div>
+                ) : errors.compliance ? (
+                  <Message severity="error" text={errors.compliance} className="w-full" />
+                ) : analyticsData.responseTimeAnalysis.length > 0 ? (
+                  <div className="flex flex-column gap-3">
+                    <div className="p-3 border-round bg-green-50">
+                      <div className="flex justify-content-between align-items-center">
+                        <span className="font-medium text-green-900">Fast (&lt; 16h)</span>
+                        <Badge 
+                          value={analyticsData.responseTimeAnalysis.filter(r => r.category === 'fast').length} 
+                          severity="success"
+                        />
+                      </div>
+                      <div className="text-green-600 text-sm mt-1">
+                        {analyticsData.responseTimeAnalysis.filter(r => r.category === 'fast').map(r => r.platform).join(', ') || 'None'}
+                      </div>
                     </div>
-                    <div className="text-green-600 text-sm mt-1">
-                      {analyticsData.responseTimeData.filter(r => r.category === 'fast').map(r => r.platform).join(', ')}
+                    
+                    <div className="p-3 border-round bg-yellow-50">
+                      <div className="flex justify-content-between align-items-center">
+                        <span className="font-medium text-yellow-900">Medium (16-24h)</span>
+                        <Badge 
+                          value={analyticsData.responseTimeAnalysis.filter(r => r.category === 'medium').length} 
+                          severity="warning"
+                        />
+                      </div>
+                      <div className="text-yellow-600 text-sm mt-1">
+                        {analyticsData.responseTimeAnalysis.filter(r => r.category === 'medium').map(r => r.platform).join(', ') || 'None'}
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 border-round bg-red-50">
+                      <div className="flex justify-content-between align-items-center">
+                        <span className="font-medium text-red-900">Slow (&gt; 24h)</span>
+                        <Badge 
+                          value={analyticsData.responseTimeAnalysis.filter(r => r.category === 'slow').length} 
+                          severity="danger"
+                        />
+                      </div>
+                      <div className="text-red-600 text-sm mt-1">
+                        {analyticsData.responseTimeAnalysis.filter(r => r.category === 'slow').map(r => r.platform).join(', ') || 'None'}
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="p-3 border-round bg-yellow-50">
-                    <div className="flex justify-content-between align-items-center">
-                      <span className="font-medium text-yellow-900">Medium (16-24h)</span>
-                      <Badge 
-                        value={analyticsData.responseTimeData.filter(r => r.category === 'medium').length} 
-                        severity="warning"
-                      />
-                    </div>
-                    <div className="text-yellow-600 text-sm mt-1">
-                      {analyticsData.responseTimeData.filter(r => r.category === 'medium').map(r => r.platform).join(', ')}
-                    </div>
-                  </div>
-                  
-                  <div className="p-3 border-round bg-red-50">
-                    <div className="flex justify-content-between align-items-center">
-                      <span className="font-medium text-red-900">Slow (&gt; 24h)</span>
-                      <Badge 
-                        value={analyticsData.responseTimeData.filter(r => r.category === 'slow').length} 
-                        severity="danger"
-                      />
-                    </div>
-                    <div className="text-red-600 text-sm mt-1">
-                      {analyticsData.responseTimeData.filter(r => r.category === 'slow').map(r => r.platform).join(', ')}
-                    </div>
-                  </div>
-                </div>
+                ) : (
+                  <Message severity="info" text="No response time data available" className="w-full" />
+                )}
               </Card>
             </div>
           </div>
@@ -1085,24 +1591,110 @@ const Reports: React.FC = () => {
         {/* Advanced Analytics Tab */}
         <TabPanel header="Advanced Analytics" leftIcon="pi pi-cog">
           <div className="grid">
-            <div className="col-12">
-              <Card title="Predictive Analytics & Trends">
-                <div className="text-center p-4">
-                  <i className="pi pi-chart-line text-4xl text-400 mb-3"></i>
-                  <h3 className="text-700">Advanced Analytics Coming Soon</h3>
-                  <p className="text-600">
-                    This section will include predictive modeling, trend forecasting,
-                    machine learning insights, and advanced statistical analysis.
-                  </p>
-                  <div className="flex flex-wrap gap-2 justify-content-center mt-4">
-                    <Tag value="Predictive Modeling" />
-                    <Tag value="Trend Forecasting" />
-                    <Tag value="Risk Assessment" />
-                    <Tag value="Pattern Recognition" />
-                  </div>
+            {loading.trends ? (
+              <div className="col-12">
+                <Skeleton width="100%" height="20rem" />
+              </div>
+            ) : errors.trends ? (
+              <div className="col-12">
+                <Message severity="error" text={errors.trends} className="w-full" />
+              </div>
+            ) : analyticsData.trendAnalysis && analyticsData.trendAnalysis.length > 0 ? (
+              <>
+                <div className="col-12">
+                  <Card title="Trend Analysis">
+                    <div className="grid">
+                      {analyticsData.trendAnalysis.map((trend, index) => (
+                        <div key={index} className="col-12 md:col-6 lg:col-4">
+                          <div className="p-3 border-round bg-gray-50">
+                            <div className="flex justify-content-between align-items-start mb-2">
+                              <span className="font-medium">{trend.metric}</span>
+                              <Tag 
+                                value={trend.trend} 
+                                severity={trend.trend === 'increasing' ? 'success' : trend.trend === 'decreasing' ? 'danger' : 'info'}
+                              />
+                            </div>
+                            <div className="text-2xl font-bold mb-1">
+                              {trend.changePercentage > 0 ? '+' : ''}{trend.changePercentage.toFixed(1)}%
+                            </div>
+                            <div className="text-sm text-600">
+                              Confidence: {(trend.confidence * 100).toFixed(0)}%
+                            </div>
+                            {trend.projection && (
+                              <div className="mt-2 text-sm">
+                                <div>Next Week: {trend.projection.nextWeek}</div>
+                                <div>Next Month: {trend.projection.nextMonth}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
                 </div>
-              </Card>
-            </div>
+                {analyticsData.performanceMetrics && (
+                  <div className="col-12">
+                    <Card title="Performance Benchmarks">
+                      <div className="grid">
+                        <div className="col-12 md:col-6">
+                          <h5>Efficiency Metrics</h5>
+                          <div className="flex flex-column gap-2">
+                            <div className="flex justify-content-between">
+                              <span>Detection Accuracy:</span>
+                              <span className="font-medium">{(analyticsData.performanceMetrics.efficiency.detectionAccuracy * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-content-between">
+                              <span>False Positive Rate:</span>
+                              <span className="font-medium">{(analyticsData.performanceMetrics.efficiency.falsePositiveRate * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-content-between">
+                              <span>Processing Time:</span>
+                              <span className="font-medium">{analyticsData.performanceMetrics.efficiency.processingTime.toFixed(1)}s</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-12 md:col-6">
+                          <h5>Effectiveness Metrics</h5>
+                          <div className="flex flex-column gap-2">
+                            <div className="flex justify-content-between">
+                              <span>Removal Success Rate:</span>
+                              <span className="font-medium">{(analyticsData.performanceMetrics.effectiveness.removalSuccessRate * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="flex justify-content-between">
+                              <span>Avg Removal Time:</span>
+                              <span className="font-medium">{analyticsData.performanceMetrics.effectiveness.avgRemovalTime.toFixed(1)}h</span>
+                            </div>
+                            <div className="flex justify-content-between">
+                              <span>Protection Score:</span>
+                              <span className="font-medium">{analyticsData.performanceMetrics.effectiveness.contentProtectionScore.toFixed(1)}/10</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="col-12">
+                <Card title="Advanced Analytics">
+                  <div className="text-center p-4">
+                    <i className="pi pi-chart-line text-4xl text-400 mb-3"></i>
+                    <h3 className="text-700">Analyzing Your Data</h3>
+                    <p className="text-600">
+                      Advanced analytics will appear here once sufficient data is collected.
+                      This includes predictive modeling, trend forecasting, and performance benchmarks.
+                    </p>
+                    <div className="flex flex-wrap gap-2 justify-content-center mt-4">
+                      <Tag value="Predictive Modeling" />
+                      <Tag value="Trend Forecasting" />
+                      <Tag value="Risk Assessment" />
+                      <Tag value="Pattern Recognition" />
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
           </div>
         </TabPanel>
       </TabView>

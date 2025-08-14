@@ -4,21 +4,30 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# Database
-sqlalchemy==2.0.23
+# Database - AsyncPG as primary PostgreSQL driver for better Windows compatibility
+sqlalchemy[asyncio]==2.0.23
 alembic==1.13.0
-psycopg2-binary==2.9.9
 asyncpg==0.29.0
+# greenlet is required for SQLAlchemy async support
+greenlet==3.0.1
+# psycopg (v3) as fallback - more compatible than psycopg2-binary
+psycopg[binary,pool]==3.1.13
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 bcrypt==4.1.2
+cryptography==41.0.7
+pyotp==2.9.0
+email-validator==2.1.0
+user-agents==2.2.0
 
 # HTTP Client
 httpx==0.25.2
 requests==2.31.0
+aiohttp==3.9.1
+beautifulsoup4==4.12.2
 
 # Image Processing & AI
 opencv-python==4.8.1.78
@@ -26,10 +35,15 @@ pillow==10.1.0
 face-recognition==1.3.0
 numpy==1.25.2
 scikit-image==0.22.0
+torch==2.1.0
+torchvision==0.16.0
+imagehash==4.3.1
+dlib==19.24.2
 
 # Background Tasks
 celery==5.3.4
 redis==5.0.1
+apscheduler==3.10.4
 
 # Email
 emails==0.6.0
@@ -39,6 +53,11 @@ jinja2==3.1.2
 python-dotenv==1.0.0
 slugify==0.0.1
 python-dateutil==2.8.2
+python-whois==0.8.0
+dnspython==2.4.2
+# Database connection pooling and monitoring
+psycopg2cffi==2.9.0  # Alternative for psycopg2 that works better on Windows
+sqlalchemy-utils==0.41.1
 
 # Monitoring & Logging
 sentry-sdk[fastapi]==1.38.0
@@ -46,10 +65,38 @@ sentry-sdk[fastapi]==1.38.0
 # File Upload & Storage
 aiofiles==23.2.0
 
-# Testing
+# Testing & Quality Assurance
 pytest==7.4.3
 pytest-asyncio==0.21.1
+pytest-mock==3.12.0
+pytest-cov==4.1.0
+pytest-xdist==3.5.0
+pytest-benchmark==4.0.0
+pytest-html==4.1.1
+pytest-json-report==1.5.0
+factory-boy==3.3.0
+faker==20.1.0
+responses==0.24.1
 httpx==0.25.2
+testcontainers==3.7.1
+aioresponses==0.7.6
+asynctest==0.13.0
+
+# Load Testing
+locust==2.17.0
+
+# Security Testing
+safety==2.3.5
+bandit==1.7.5
+semgrep==1.45.0
+
+# Code Quality
+pylint==3.0.3
+flake8==6.1.0
+mypy==1.7.1
+black==23.11.0
+isort==5.12.0
+pre-commit==3.6.0
 
 # Payment Processing
 stripe==7.8.0

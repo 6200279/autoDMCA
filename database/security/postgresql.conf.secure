@@ -1,0 +1,208 @@
+# Secure PostgreSQL configuration for Content Protection Platform
+# Based on security best practices and CIS benchmarks
+
+# Security: Connection and Authentication
+listen_addresses = 'localhost'  # Only listen on localhost in containerized environment
+port = 5432
+max_connections = 100
+superuser_reserved_connections = 3
+
+# Security: SSL Configuration
+ssl = on
+ssl_cert_file = '/var/lib/postgresql/ssl/server.crt'
+ssl_key_file = '/var/lib/postgresql/ssl/server.key'
+ssl_ca_file = '/var/lib/postgresql/ssl/ca.crt'
+ssl_crl_file = ''
+ssl_protocols = 'TLSv1.2,TLSv1.3'
+ssl_ciphers = 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384'
+ssl_prefer_server_ciphers = on
+ssl_ecdh_curve = 'prime256v1'
+ssl_dh_params_file = '/var/lib/postgresql/ssl/dhparam.pem'
+
+# Security: Authentication
+password_encryption = scram-sha-256
+krb_server_keyfile = ''
+krb_caseins_users = off
+db_user_namespace = off
+
+# Security: Access Control
+row_security = on
+
+# Security: Logging Configuration for Audit
+log_destination = 'csvlog,stderr'
+logging_collector = on
+log_directory = '/var/log/postgresql'
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+log_file_mode = 0640
+log_truncate_on_rotation = on
+log_rotation_age = 1d
+log_rotation_size = 100MB
+
+# Security: What to log
+log_connections = on
+log_disconnections = on
+log_checkpoints = on
+log_lock_waits = on
+log_temp_files = 10000
+log_autovacuum_min_duration = 0
+log_error_verbosity = default
+log_hostname = off
+log_line_prefix = '%t [%p-%l] %q%u@%d '
+
+# Security: Log failed authentication attempts
+log_min_duration_statement = 1000  # Log slow queries (1 second)
+log_statement = 'ddl'  # Log all DDL statements
+log_min_messages = warning
+log_min_error_statement = error
+
+# Security: Statement-level logging
+log_statement_stats = off
+log_parser_stats = off
+log_planner_stats = off
+log_executor_stats = off
+
+# Memory settings (adjust based on available RAM)
+shared_buffers = 256MB
+temp_buffers = 8MB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+max_stack_depth = 2MB
+
+# Security: Write-Ahead Logging
+wal_level = replica
+fsync = on
+synchronous_commit = on
+wal_sync_method = fsync
+full_page_writes = on
+wal_compression = on
+wal_buffers = 16MB
+wal_writer_delay = 200ms
+commit_delay = 0
+commit_siblings = 5
+
+# Security: Replication (if using)
+max_wal_senders = 3
+wal_keep_segments = 32
+wal_sender_timeout = 60s
+
+# Security: Query Planner
+random_page_cost = 1.1
+cpu_tuple_cost = 0.01
+cpu_index_tuple_cost = 0.005
+cpu_operator_cost = 0.0025
+
+# Security: Background Writer
+bgwriter_delay = 200ms
+bgwriter_lru_maxpages = 100
+bgwriter_lru_multiplier = 2.0
+
+# Security: Asynchronous Behavior
+effective_io_concurrency = 1
+
+# Security: Lock Management
+deadlock_timeout = 1s
+max_locks_per_transaction = 64
+max_pred_locks_per_transaction = 64
+
+# Security: Error Handling
+exit_on_error = off
+restart_after_crash = on
+
+# Security: Locale and Formatting
+datestyle = 'iso, mdy'
+timezone = 'UTC'
+lc_messages = 'en_US.UTF-8'
+lc_monetary = 'en_US.UTF-8'
+lc_numeric = 'en_US.UTF-8'
+lc_time = 'en_US.UTF-8'
+default_text_search_config = 'pg_catalog.english'
+
+# Security: Shared Library Preloading
+shared_preload_libraries = 'pg_stat_statements'
+
+# Security: Additional Extensions
+pg_stat_statements.max = 10000
+pg_stat_statements.track = all
+pg_stat_statements.track_utility = on
+pg_stat_statements.save = on
+
+# Security: Connection Pooling
+tcp_keepalives_idle = 600
+tcp_keepalives_interval = 30
+tcp_keepalives_count = 3
+
+# Security: Statement Timeout
+statement_timeout = 300000  # 5 minutes
+lock_timeout = 30000  # 30 seconds
+idle_in_transaction_session_timeout = 300000  # 5 minutes
+
+# Security: Checkpoints
+checkpoint_timeout = 5min
+max_wal_size = 1GB
+min_wal_size = 80MB
+checkpoint_completion_target = 0.7
+checkpoint_warning = 30s
+
+# Security: Archiving (if using)
+archive_mode = off
+archive_command = ''
+archive_timeout = 0
+
+# Security: Standby Servers (if using)
+hot_standby = off
+max_standby_archive_delay = 30s
+max_standby_streaming_delay = 30s
+wal_receiver_status_interval = 10s
+hot_standby_feedback = off
+wal_receiver_timeout = 60s
+
+# Security: Query/Index Statistics Collector
+track_activities = on
+track_counts = on
+track_io_timing = on
+track_functions = all
+stats_temp_directory = 'pg_stat_tmp'
+
+# Security: Automatic Statistics
+autovacuum = on
+log_autovacuum_min_duration = 0
+autovacuum_max_workers = 3
+autovacuum_naptime = 1min
+autovacuum_vacuum_threshold = 50
+autovacuum_analyze_threshold = 50
+autovacuum_vacuum_scale_factor = 0.2
+autovacuum_analyze_scale_factor = 0.1
+autovacuum_freeze_max_age = 200000000
+autovacuum_multixact_freeze_max_age = 400000000
+autovacuum_vacuum_cost_delay = 20ms
+autovacuum_vacuum_cost_limit = -1
+
+# Security: Client Connection Defaults
+default_transaction_isolation = 'read committed'
+default_transaction_read_only = off
+default_transaction_deferrable = off
+session_replication_role = 'origin'
+
+# Security: Version/Platform Compatibility
+array_nulls = on
+backslash_quote = safe_encoding
+default_with_oids = off
+escape_string_warning = on
+lo_compat_privileges = off
+operator_precedence_warning = off
+quote_all_identifiers = off
+sql_inheritance = on
+standard_conforming_strings = on
+synchronize_seqscans = on
+
+# Security: Other Defaults
+bytea_output = 'hex'
+xmlbinary = 'base64'
+xmloption = 'content'
+
+# Security: Dynamic Loading
+local_preload_libraries = ''
+session_preload_libraries = ''
+
+# Security: Other Security Settings
+zero_damaged_pages = off

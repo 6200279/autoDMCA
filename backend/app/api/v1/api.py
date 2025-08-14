@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, profiles, infringements, takedowns, subscriptions, dashboard, social_media
+from app.api.v1.endpoints import auth, users, profiles, infringements, takedowns, subscriptions, dashboard, social_media, scanning
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
@@ -11,3 +11,4 @@ api_router.include_router(takedowns.router, prefix="/takedowns", tags=["takedown
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["subscriptions"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(social_media.router, prefix="/social-media", tags=["social-media-monitoring"])
+api_router.include_router(scanning.router, prefix="/scanning", tags=["content-scanning"])

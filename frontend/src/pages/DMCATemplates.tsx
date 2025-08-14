@@ -92,19 +92,23 @@ import {
   IDMCATemplate, 
   TemplateCategoryType, 
   TemplateComplianceStatus,
+  TemplateApprovalStatus,
   TemplatePreviewData,
   TemplateValidationResult,
   PlatformTemplateConfig,
   TemplateLibraryEntry
 } from '../types/dmca';
 
+import { dmcaTemplatesApi } from '../services/api';
 import { 
-  validateDMCATemplate, 
-  generateTemplatePreview,
-  validateTemplateVariables,
-  validateJurisdictionCompliance,
-  analyzeTemplateEffectiveness
-} from '../services/dmcaTemplateValidator';
+  DMCATemplateApiResponse,
+  TemplateValidationResponse,
+  TemplatePreviewResponse,
+  TemplateDashboardStatsResponse,
+  PaginatedResponse,
+  TemplateRealtimeUpdate
+} from '../types/api';
+import { useTemplateRealtime } from '../hooks/useTemplateRealtime';
 
 // Import component-specific styles
 import './DMCATemplates.css';
@@ -119,10 +123,303 @@ const DMCATemplates: React.FC = () => {
   const [previewDialogVisible, setPreviewDialogVisible] = useState<boolean>(false);
   const [complianceDialogVisible, setComplianceDialogVisible] = useState<boolean>(false);
   const [editMode, setEditMode] = useState<'create' | 'edit'>('create');
-  const [validationResult, setValidationResult] = useState<TemplateValidationResult | null>(null);
+  const [validationResult, setValidationResult] = useState<TemplateValidationResponse | null>(null);
   const [templatePreview, setTemplatePreview] = useState<string>('');
   const [filters, setFilters] = useState<DataTableFilterMeta>({});
   const [globalFilterValue, setGlobalFilterValue] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [operationLoading, setOperationLoading] = useState<Record<string, boolean>>({});
+  const [dashboardStats, setDashboardStats] = useState<TemplateDashboardStatsResponse | null>(null);
+  const [realtimeEnabled, setRealtimeEnabled] = useState<boolean>(true);
+  
+  // Real-time updates
+  const { isConnected, lastUpdate, connectionError, reconnect } = useTemplateRealtime({
+    categories: templateCategories,
+    updateTypes: ['validation', 'compliance', 'usage', 'approval'],
+    enabled: realtimeEnabled,
+    onUpdate: handleRealtimeUpdate
+  });
+
+  function handleRealtimeUpdate(update: TemplateRealtimeUpdate) {
+    console.log('Received real-time update:', update);
+    
+    // Update templates based on real-time data
+    if (update.update_type === 'validation' || update.update_type === 'compliance') {
+      setTemplates(prev => prev.map(template => {
+        if (template.id === update.template_id) {
+          return {
+            ...template,
+            complianceStatus: update.data.status as TemplateComplianceStatus || template.complianceStatus,
+            updatedAt: new Date()
+          };
+        }
+        return template;
+      }));
+      
+      // Show notification for critical updates
+      if (update.data.severity === 'critical') {
+        toastRef.current?.show({
+          severity: 'warn',
+          summary: 'Template Update',
+          detail: `${update.data.template_name}: ${update.data.message}`,
+          life: 5000
+        });
+      }
+    }
+    
+    if (update.update_type === 'usage') {
+      // Reload dashboard stats for usage updates
+      loadDashboardStats();
+    }
+    
+    if (update.update_type === 'approval') {
+      setTemplates(prev => prev.map(template => {
+        if (template.id === update.template_id) {
+          return {
+            ...template,
+            approvalStatus: update.data.status as TemplateApprovalStatus,
+            updatedAt: new Date()
+          };
+        }
+        return template;
+      }));
+      
+      toastRef.current?.show({
+        severity: update.data.status === 'approved' ? 'success' : 'info',
+        summary: 'Template Approval Update',
+        detail: `${update.data.template_name} has been ${update.data.status}`,
+        life: 4000
+      });
+    }
+  }
+
+  // Variable validation handler
+  const handleVariableValidation = async (template: IDMCATemplate) => {
+    try {
+      setOperationLoading(prev => ({ ...prev, [`variables-${template.id}`]: true }));
+      
+      // Extract variables from template content
+      const variables: Record<string, any> = {};
+      const variableMatches = template.content.match(/\{\{([^}]+)\}\}/g) || [];
+      variableMatches.forEach(match => {
+        const varName = match.slice(2, -2).trim();
+        variables[varName] = samplePreviewData[varName as keyof typeof samplePreviewData] || '';
+      });
+      
+      const response = await dmcaTemplatesApi.validateVariables(template.id, variables);
+      
+      toastRef.current?.show({
+        severity: 'success',
+        summary: 'Variable Validation',
+        detail: `All ${variableMatches.length} variables validated successfully`
+      });
+    } catch (error: any) {
+      console.error('Failed to validate variables:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Variable Validation Error',
+        detail: error.response?.data?.detail || 'Failed to validate template variables'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [`variables-${template.id}`]: false }));
+    }
+  };
+
+  // Jurisdiction validation handler
+  const handleJurisdictionValidation = async (template: IDMCATemplate) => {
+    if (!template.jurisdiction) return;
+    
+    try {
+      setOperationLoading(prev => ({ ...prev, [`jurisdiction-${template.id}`]: true }));
+      
+      const response = await dmcaTemplatesApi.validateJurisdictionCompliance(
+        template.id, 
+        template.jurisdiction
+      );
+      
+      const jurisdictionValidation = response.data;
+      
+      if (jurisdictionValidation.compliant) {
+        toastRef.current?.show({
+          severity: 'success',
+          summary: 'Jurisdiction Compliance',
+          detail: `Template complies with ${template.jurisdiction} legal requirements`
+        });
+      } else {
+        toastRef.current?.show({
+          severity: 'warn',
+          summary: 'Jurisdiction Issues Found',
+          detail: `Template needs updates for ${template.jurisdiction} compliance`
+        });
+        
+        // You could show detailed issues in a dialog
+        setValidationResult({
+          is_valid: false,
+          compliance_score: 60,
+          errors: jurisdictionValidation.specific_requirements
+            .filter(req => !req.met)
+            .map(req => ({
+              code: 'JURISDICTION_REQ',
+              message: req.description,
+              field: req.requirement,
+              severity: 'high' as const,
+              suggestion: req.reference
+            })),
+          warnings: [],
+          required_elements: [],
+          recommendations: jurisdictionValidation.additional_clauses || [],
+          jurisdiction_compliance: jurisdictionValidation
+        });
+        setComplianceDialogVisible(true);
+      }
+    } catch (error: any) {
+      console.error('Failed to validate jurisdiction:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Jurisdiction Validation Error',
+        detail: error.response?.data?.detail || 'Failed to validate jurisdiction compliance'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [`jurisdiction-${template.id}`]: false }));
+    }
+  };
+
+  // Template generation handler
+  const handleGenerateTemplate = async () => {
+    try {
+      setOperationLoading(prev => ({ ...prev, generate: true }));
+      
+      // Show generation options dialog first
+      const generationType = await showGenerationDialog();
+      if (!generationType) return;
+      
+      const response = await dmcaTemplatesApi.generateTemplate({
+        type: generationType.type,
+        platform: generationType.platform,
+        jurisdiction: generationType.jurisdiction,
+        baseTemplate: generationType.baseTemplate,
+        customFields: generationType.customFields
+      });
+      
+      const generatedTemplate = response.data as DMCATemplateApiResponse;
+      const transformedTemplate: IDMCATemplate = {
+        ...generatedTemplate,
+        createdAt: generatedTemplate.createdAt ? new Date(generatedTemplate.createdAt) : new Date(),
+        updatedAt: generatedTemplate.updatedAt ? new Date(generatedTemplate.updatedAt) : undefined
+      };
+      
+      // Add to templates list
+      setTemplates(prev => [...prev, transformedTemplate]);
+      
+      // Open for editing
+      setSelectedTemplate(transformedTemplate);
+      setEditMode('edit');
+      setDialogVisible(true);
+      
+      toastRef.current?.show({
+        severity: 'success',
+        summary: 'Template Generated',
+        detail: `New ${generationType.type} template generated successfully`
+      });
+      
+      loadDashboardStats();
+    } catch (error: any) {
+      console.error('Failed to generate template:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Generation Error',
+        detail: error.response?.data?.detail || 'Failed to generate template'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, generate: false }));
+    }
+  };
+
+  // Show generation options dialog (mock implementation)
+  const showGenerationDialog = (): Promise<any> => {
+    return new Promise((resolve) => {
+      // For now, return a default configuration
+      // In a real implementation, this would show a dialog with options
+      resolve({
+        type: 'standard' as const,
+        platform: undefined,
+        jurisdiction: 'US',
+        baseTemplate: undefined,
+        customFields: {}
+      });
+    });
+  };
+
+  // View template analytics
+  const handleViewAnalytics = async (template: IDMCATemplate) => {
+    try {
+      setOperationLoading(prev => ({ ...prev, [`analytics-${template.id}`]: true }));
+      
+      const response = await dmcaTemplatesApi.getTemplateUsage(template.id, {
+        date_range: {
+          start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          end: new Date().toISOString()
+        },
+        granularity: 'daily'
+      });
+      
+      const analytics = response.data;
+      
+      // Update local template with fresh usage stats
+      setTemplates(prev => prev.map(t => t.id === template.id ? {
+        ...t,
+        usageStats: {
+          totalUsage: analytics.usage_metrics.total_usage,
+          successRate: analytics.usage_metrics.success_rate,
+          platformBreakdown: analytics.platform_breakdown.reduce((acc, p) => {
+            acc[p.platform] = p.usage_count;
+            return acc;
+          }, {} as Record<string, number>),
+          lastUsed: analytics.trend_data.length > 0 ? 
+            new Date(analytics.trend_data[analytics.trend_data.length - 1].date) : 
+            undefined,
+          averageResponseTime: analytics.usage_metrics.avg_response_time_hours
+        }
+      } : t));
+      
+      toastRef.current?.show({
+        severity: 'info',
+        summary: 'Template Analytics',
+        detail: `${analytics.usage_metrics.total_usage} total uses, ${Math.round(analytics.usage_metrics.success_rate)}% success rate`
+      });
+      
+      // Log detailed analytics for debugging
+      console.log('Template analytics:', analytics);
+    } catch (error: any) {
+      console.error('Failed to load analytics:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Analytics Error',
+        detail: error.response?.data?.detail || 'Failed to load template analytics'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [`analytics-${template.id}`]: false }));
+    }
+  };
+
+  // Track template usage
+  const trackTemplateUsage = async (templateId: string, context: string, success?: boolean, responseTime?: number) => {
+    try {
+      await dmcaTemplatesApi.trackUsage(templateId, {
+        context,
+        success,
+        response_time: responseTime,
+        metadata: {
+          user_agent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+          session_id: Date.now().toString()
+        }
+      });
+    } catch (error) {
+      console.error('Failed to track usage:', error);
+      // Don't show error to user as this is background tracking
+    }
+  };
   
   // Refs
   const toastRef = useRef<Toast>(null);
@@ -183,75 +480,60 @@ const DMCATemplates: React.FC = () => {
     });
   }, []);
 
-  // Load sample templates on component mount
+  // Load templates and dashboard stats on component mount
   useEffect(() => {
-    loadSampleTemplates();
+    loadTemplates();
+    loadDashboardStats();
   }, []);
 
-  const loadSampleTemplates = () => {
-    const sampleTemplates: IDMCATemplate[] = [
-      {
-        id: '1',
-        title: 'Standard DMCA Takedown Notice',
-        content: `Dear {{platform}} Team,
+  // Reload templates when active tab changes
+  useEffect(() => {
+    if (templateCategories[activeTabIndex]) {
+      loadTemplates(templateCategories[activeTabIndex]);
+    }
+  }, [activeTabIndex]);
 
-I am writing to report copyright infringement of my original work that has been posted on your platform without my authorization.
+  const loadTemplates = async (category?: string) => {
+    try {
+      setLoading(true);
+      const params = {
+        category,
+        page: 1,
+        per_page: 100,
+        sort: 'updated_at',
+        order: 'desc' as const
+      };
+      
+      const response = await dmcaTemplatesApi.getTemplates(params);
+      const templatesData = response.data as PaginatedResponse<DMCATemplateApiResponse>;
+      
+      // Transform API response to match component expectations
+      const transformedTemplates: IDMCATemplate[] = templatesData.items.map(template => ({
+        ...template,
+        createdAt: template.createdAt ? new Date(template.createdAt) : new Date(),
+        updatedAt: template.updatedAt ? new Date(template.updatedAt) : undefined
+      }));
+      
+      setTemplates(transformedTemplates);
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to load templates'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-**Copyright Owner Information:**
-Name: {{creator_name}}
-Email: {{contact_email}}
-Phone: [Your Phone Number]
-
-**Identification of Copyrighted Work:**
-I am the copyright owner of {{work_description}}, which can be found at: {{copyright_url}}
-
-**Identification of Infringing Material:**
-The infringing material is located at: {{infringing_url}}
-This content was posted on {{date_of_infringement}} without my permission.
-
-**Good Faith Statement:**
-I have a good faith belief that use of the copyrighted material described above is not authorized by the copyright owner, its agent, or the law.
-
-**Accuracy Statement:**
-I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner or am authorized to act on behalf of the owner of an exclusive right that is allegedly infringed.
-
-**Electronic Signature:**
-{{signature}}
-
-Sincerely,
-{{creator_name}}`,
-        category: 'Standard DMCA Notices',
-        complianceStatus: 'COMPLIANT',
-        createdAt: new Date(),
-        platforms: ['General']
-      },
-      {
-        id: '2',
-        title: 'Instagram DMCA Notice',
-        content: `Instagram Copyright Team,
-
-I am reporting unauthorized use of my copyrighted content on Instagram.
-
-**Copyright Owner:** {{creator_name}}
-**Contact:** {{contact_email}}
-
-**Original Work:** {{work_description}}
-Available at: {{copyright_url}}
-
-**Infringing Instagram Post:** {{infringing_url}}
-
-I have a good faith belief that the use of my copyrighted material is not authorized. Under penalty of perjury, I swear that this information is accurate and I am the copyright owner.
-
-{{signature}}
-{{creator_name}}`,
-        category: 'Platform-Specific',
-        complianceStatus: 'COMPLIANT',
-        createdAt: new Date(),
-        platforms: ['Instagram']
-      }
-    ];
-    
-    setTemplates(sampleTemplates);
+  const loadDashboardStats = async () => {
+    try {
+      const response = await dmcaTemplatesApi.getDashboardStats();
+      setDashboardStats(response.data);
+    } catch (error) {
+      console.error('Failed to load dashboard stats:', error);
+    }
   };
 
   // Global filter handler
@@ -272,66 +554,125 @@ I have a good faith belief that the use of my copyrighted material is not author
     if (!selectedTemplate) return;
 
     try {
-      const validationResult = validateDMCATemplate(selectedTemplate);
-      const variableErrors = validateTemplateVariables(selectedTemplate);
-      const jurisdictionIssues = selectedTemplate.jurisdiction 
-        ? validateJurisdictionCompliance(selectedTemplate, selectedTemplate.jurisdiction)
-        : [];
-
-      const allErrors = [
-        ...validationResult.errors,
-        ...variableErrors,
-        ...jurisdictionIssues
-      ];
-
-      if (allErrors.length === 0) {
-        const updatedTemplates = editMode === 'create'
-          ? [...templates, { ...selectedTemplate, id: Date.now().toString(), createdAt: new Date() }]
-          : templates.map(t => t.id === selectedTemplate.id ? 
-              { ...selectedTemplate, updatedAt: new Date() } : t);
-        
-        setTemplates(updatedTemplates);
-        setDialogVisible(false);
-        
-        toastRef.current?.show({
-          severity: 'success', 
-          summary: 'Template Saved', 
-          detail: `DMCA Template ${editMode === 'create' ? 'created' : 'updated'} successfully`
-        });
-      } else {
-        setValidationResult({
-          ...validationResult,
-          errors: allErrors,
-          isValid: false
-        });
+      setOperationLoading(prev => ({ ...prev, submit: true }));
+      
+      // First validate the template content
+      const validationResponse = await dmcaTemplatesApi.validateTemplateContent(
+        selectedTemplate.content,
+        selectedTemplate.category,
+        selectedTemplate.jurisdiction
+      );
+      
+      const validation = validationResponse.data as TemplateValidationResponse;
+      
+      if (!validation.is_valid) {
+        setValidationResult(validation);
         setComplianceDialogVisible(true);
+        return;
       }
-    } catch (error) {
-      toastRef.current?.show({
-        severity: 'error', 
-        summary: 'Error', 
-        detail: 'Failed to process template'
+
+      // Prepare template data for API
+      const templateData = {
+        title: selectedTemplate.title,
+        content: selectedTemplate.content,
+        category: selectedTemplate.category,
+        platforms: selectedTemplate.platforms || [],
+        jurisdiction: selectedTemplate.jurisdiction,
+        variables: selectedTemplate.variables || [],
+        legalReferences: selectedTemplate.legalReferences || []
+      };
+
+      let savedTemplate: DMCATemplateApiResponse;
+      
+      if (editMode === 'create') {
+        const response = await dmcaTemplatesApi.createTemplate(templateData);
+        savedTemplate = response.data;
+      } else {
+        const response = await dmcaTemplatesApi.updateTemplate(selectedTemplate.id, templateData);
+        savedTemplate = response.data;
+      }
+      
+      // Update local state
+      const transformedTemplate: IDMCATemplate = {
+        ...savedTemplate,
+        createdAt: savedTemplate.createdAt ? new Date(savedTemplate.createdAt) : new Date(),
+        updatedAt: savedTemplate.updatedAt ? new Date(savedTemplate.updatedAt) : undefined
+      };
+      
+      setTemplates(prev => {
+        if (editMode === 'create') {
+          return [...prev, transformedTemplate];
+        } else {
+          return prev.map(t => t.id === savedTemplate.id ? transformedTemplate : t);
+        }
       });
+      
+      setDialogVisible(false);
+      setSelectedTemplate(null);
+      
+      toastRef.current?.show({
+        severity: 'success',
+        summary: 'Template Saved',
+        detail: `DMCA Template ${editMode === 'create' ? 'created' : 'updated'} successfully`
+      });
+      
+      // Reload dashboard stats
+      loadDashboardStats();
+      
+    } catch (error: any) {
+      console.error('Failed to save template:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: error.response?.data?.detail || 'Failed to save template'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, submit: false }));
     }
   };
 
   // Template Preview Handler
-  const handlePreviewTemplate = (template: IDMCATemplate) => {
-    const preview = generateTemplatePreview(template, samplePreviewData);
-    setTemplatePreview(preview);
-    setPreviewDialogVisible(true);
+  const handlePreviewTemplate = async (template: IDMCATemplate) => {
+    try {
+      setOperationLoading(prev => ({ ...prev, [`preview-${template.id}`]: true }));
+      
+      const response = await dmcaTemplatesApi.generatePreview(template.id, samplePreviewData);
+      const previewData = response.data as TemplatePreviewResponse;
+      
+      setTemplatePreview(previewData.preview_html || previewData.preview_text);
+      setPreviewDialogVisible(true);
+    } catch (error: any) {
+      console.error('Failed to generate preview:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Preview Error',
+        detail: error.response?.data?.detail || 'Failed to generate template preview'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [`preview-${template.id}`]: false }));
+    }
   };
 
   // Template Compliance Check
-  const handleComplianceCheck = (template: IDMCATemplate) => {
-    const result = validateDMCATemplate(template);
-    const effectiveness = analyzeTemplateEffectiveness(template);
-    
-    setValidationResult({
-      ...result,
-      warnings: [...result.warnings, ...effectiveness.improvements]
-    });
-    setComplianceDialogVisible(true);
+  const handleComplianceCheck = async (template: IDMCATemplate) => {
+    try {
+      setOperationLoading(prev => ({ ...prev, [`compliance-${template.id}`]: true }));
+      
+      const response = await dmcaTemplatesApi.validateTemplate(template.id);
+      const validation = response.data as TemplateValidationResponse;
+      
+      setValidationResult(validation);
+      setComplianceDialogVisible(true);
+    } catch (error: any) {
+      console.error('Failed to check compliance:', error);
+      toastRef.current?.show({
+        severity: 'error',
+        summary: 'Compliance Check Error',
+        detail: error.response?.data?.detail || 'Failed to check template compliance'
+      });
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [`compliance-${template.id}`]: false }));
+    }
   };
 
   // Bulk Operations Menu Items
@@ -447,7 +788,20 @@ I have a good faith belief that the use of my copyrighted material is not author
   // Template Usage Stats Renderer
   const usageStatsTemplate = (template: IDMCATemplate) => {
     const usage = template.usageStats;
-    if (!usage) return <span className="text-gray-500">No data</span>;
+    if (!usage) {
+      return (
+        <div className="flex align-items-center gap-2">
+          <span className="text-gray-500">No data</span>
+          <Button 
+            icon="pi pi-chart-line"
+            className="p-button-text p-button-sm"
+            tooltip="View Analytics"
+            onClick={() => handleViewAnalytics(template)}
+            loading={operationLoading[`analytics-${template.id}`]}
+          />
+        </div>
+      );
+    }
 
     return (
       <div className="flex align-items-center gap-2">
@@ -455,6 +809,13 @@ I have a good faith belief that the use of my copyrighted material is not author
         <span className="text-sm text-gray-600">
           {Math.round(usage.successRate)}% success
         </span>
+        <Button 
+          icon="pi pi-chart-line"
+          className="p-button-text p-button-sm"
+          tooltip="View Analytics"
+          onClick={() => handleViewAnalytics(template)}
+          loading={operationLoading[`analytics-${template.id}`]}
+        />
       </div>
     );
   };
@@ -466,7 +827,18 @@ I have a good faith belief that the use of my copyrighted material is not author
         icon="pi pi-eye" 
         className="p-button-rounded p-button-text p-button-sm"
         tooltip="Preview Template"
-        onClick={() => handlePreviewTemplate(template)}
+        loading={operationLoading[`preview-${template.id}`]}
+        onClick={async () => {
+          const startTime = Date.now();
+          try {
+            await handlePreviewTemplate(template);
+            const responseTime = Date.now() - startTime;
+            trackTemplateUsage(template.id, 'preview', true, responseTime);
+          } catch (error) {
+            const responseTime = Date.now() - startTime;
+            trackTemplateUsage(template.id, 'preview', false, responseTime);
+          }
+        }}
       />
       <Button 
         icon="pi pi-pencil" 
@@ -482,44 +854,95 @@ I have a good faith belief that the use of my copyrighted material is not author
         icon="pi pi-shield" 
         className="p-button-rounded p-button-text p-button-sm"
         tooltip="Check Compliance"
-        onClick={() => handleComplianceCheck(template)}
+        loading={operationLoading[`compliance-${template.id}`]}
+        onClick={async () => {
+          const startTime = Date.now();
+          try {
+            await handleComplianceCheck(template);
+            const responseTime = Date.now() - startTime;
+            trackTemplateUsage(template.id, 'compliance_check', true, responseTime);
+          } catch (error) {
+            const responseTime = Date.now() - startTime;
+            trackTemplateUsage(template.id, 'compliance_check', false, responseTime);
+          }
+        }}
       />
       <Button 
         icon="pi pi-copy" 
         className="p-button-rounded p-button-text p-button-sm"
         tooltip="Duplicate Template"
-        onClick={() => {
-          const duplicated = {
-            ...template,
-            id: Date.now().toString(),
-            title: `${template.title} (Copy)`,
-            complianceStatus: 'PENDING' as TemplateComplianceStatus,
-            createdAt: new Date()
-          };
-          setTemplates([...templates, duplicated]);
-          toastRef.current?.show({
-            severity: 'success',
-            summary: 'Template Duplicated',
-            detail: `"${template.title}" duplicated successfully`
-          });
+        loading={operationLoading[`duplicate-${template.id}`]}
+        onClick={async () => {
+          try {
+            setOperationLoading(prev => ({ ...prev, [`duplicate-${template.id}`]: true }));
+            
+            const response = await dmcaTemplatesApi.duplicateTemplate(template.id, {
+              title: `${template.title} (Copy)`
+            });
+            
+            const duplicated = response.data as DMCATemplateApiResponse;
+            const transformedTemplate: IDMCATemplate = {
+              ...duplicated,
+              createdAt: duplicated.createdAt ? new Date(duplicated.createdAt) : new Date(),
+              updatedAt: duplicated.updatedAt ? new Date(duplicated.updatedAt) : undefined
+            };
+            
+            setTemplates(prev => [...prev, transformedTemplate]);
+            
+            toastRef.current?.show({
+              severity: 'success',
+              summary: 'Template Duplicated',
+              detail: `"${template.title}" duplicated successfully`
+            });
+            
+            loadDashboardStats();
+          } catch (error: any) {
+            console.error('Failed to duplicate template:', error);
+            toastRef.current?.show({
+              severity: 'error',
+              summary: 'Duplication Error',
+              detail: error.response?.data?.detail || 'Failed to duplicate template'
+            });
+          } finally {
+            setOperationLoading(prev => ({ ...prev, [`duplicate-${template.id}`]: false }));
+          }
         }}
       />
       <Button 
         icon="pi pi-trash" 
         className="p-button-rounded p-button-text p-button-danger p-button-sm"
         tooltip="Delete Template"
+        loading={operationLoading[`delete-${template.id}`]}
         onClick={() => confirmDialog({
           message: `Are you sure you want to delete "${template.title}"?`,
           header: 'Delete Confirmation',
           icon: 'pi pi-info-circle',
           acceptClassName: 'p-button-danger',
-          accept: () => {
-            setTemplates(templates.filter(t => t.id !== template.id));
-            toastRef.current?.show({
-              severity: 'success',
-              summary: 'Template Deleted',
-              detail: `"${template.title}" deleted successfully`
-            });
+          accept: async () => {
+            try {
+              setOperationLoading(prev => ({ ...prev, [`delete-${template.id}`]: true }));
+              
+              await dmcaTemplatesApi.deleteTemplate(template.id);
+              
+              setTemplates(prev => prev.filter(t => t.id !== template.id));
+              
+              toastRef.current?.show({
+                severity: 'success',
+                summary: 'Template Deleted',
+                detail: `"${template.title}" deleted successfully`
+              });
+              
+              loadDashboardStats();
+            } catch (error: any) {
+              console.error('Failed to delete template:', error);
+              toastRef.current?.show({
+                severity: 'error',
+                summary: 'Delete Error',
+                detail: error.response?.data?.detail || 'Failed to delete template'
+              });
+            } finally {
+              setOperationLoading(prev => ({ ...prev, [`delete-${template.id}`]: false }));
+            }
           }
         })}
       />
@@ -564,14 +987,37 @@ I have a good faith belief that the use of my copyrighted material is not author
         label="Template Library" 
         icon="pi pi-book" 
         className="p-button-outlined"
-        onClick={() => {
-          // Open template library dialog
-          toastRef.current?.show({
-            severity: 'info',
-            summary: 'Coming Soon',
-            detail: 'Template library feature will be available soon'
-          });
+        onClick={async () => {
+          try {
+            setOperationLoading(prev => ({ ...prev, library: true }));
+            
+            const response = await dmcaTemplatesApi.getTemplateLibrary();
+            
+            // For now, just show a success message
+            // In the future, this would open a template library dialog
+            toastRef.current?.show({
+              severity: 'info',
+              summary: 'Template Library',
+              detail: `Found ${response.data.total_count} templates in library`
+            });
+          } catch (error: any) {
+            toastRef.current?.show({
+              severity: 'error',
+              summary: 'Library Error',
+              detail: error.response?.data?.detail || 'Failed to load template library'
+            });
+          } finally {
+            setOperationLoading(prev => ({ ...prev, library: false }));
+          }
         }}
+        loading={operationLoading.library}
+      />
+      <Button 
+        label="Generate Template" 
+        icon="pi pi-magic" 
+        className="p-button-success p-button-outlined"
+        onClick={() => handleGenerateTemplate()}
+        loading={operationLoading.generate}
       />
       {selectedTemplates.length > 0 && (
         <Button 
@@ -579,6 +1025,7 @@ I have a good faith belief that the use of my copyrighted material is not author
           icon="pi pi-cog" 
           className="p-button-secondary"
           onClick={(e) => menuRef.current?.toggle(e)}
+          loading={operationLoading.bulkExport || operationLoading.bulkDelete || operationLoading.bulkStatus || operationLoading.bulkDuplicate}
         />
       )}
     </div>
@@ -625,6 +1072,26 @@ I have a good faith belief that the use of my copyrighted material is not author
           Manage and customize DMCA takedown notice templates for different platforms and jurisdictions.
           Ensure legal compliance with built-in validation and effectiveness analysis.
         </p>
+        
+        {/* Real-time connection status */}
+        <div className="flex align-items-center gap-2 mb-4">
+          <div className={`w-2 h-2 border-round ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <span className="text-sm text-gray-600">
+            Real-time updates: {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
+          {connectionError && (
+            <>
+              <i className="pi pi-exclamation-triangle text-orange-500" />
+              <span className="text-sm text-orange-600">{connectionError}</span>
+              <Button 
+                icon="pi pi-refresh"
+                className="p-button-text p-button-sm"
+                onClick={reconnect}
+                tooltip="Retry connection"
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <Toolbar 
@@ -644,7 +1111,10 @@ I have a good faith belief that the use of my copyrighted material is not author
               <span>
                 {category} 
                 <Badge 
-                  value={templates.filter(t => t.category === category).length} 
+                  value={
+                    dashboardStats?.category_distribution.find(c => c.category === category)?.count ||
+                    templates.filter(t => t.category === category).length
+                  } 
                   className="ml-2" 
                 />
               </span>
@@ -662,6 +1132,8 @@ I have a good faith belief that the use of my copyrighted material is not author
               emptyMessage={`No ${category.toLowerCase()} templates found.`}
               selectionMode="multiple"
               className="p-datatable-sm"
+              loading={loading}
+              loadingIcon="pi pi-spinner"
             >
               <Column selectionMode="multiple" headerStyle={{width: '3rem'}} />
               <Column 
@@ -766,6 +1238,7 @@ I have a good faith belief that the use of my copyrighted material is not author
                 onClick={handleTemplateSubmit} 
                 className="p-button-primary"
                 disabled={!selectedTemplate?.title || !selectedTemplate?.content}
+                loading={operationLoading.submit}
               />
             </div>
           </div>
@@ -929,12 +1402,31 @@ I have a good faith belief that the use of my copyrighted material is not author
                         Variables: {(selectedTemplate.content.match(/\{\{[^}]+\}\}/g) || []).length}
                       </p>
                       {selectedTemplate.content.length > 0 && (
-                        <Button 
-                          label="Check Compliance"
-                          icon="pi pi-shield"
-                          className="p-button-sm p-button-outlined w-full"
-                          onClick={() => handleComplianceCheck(selectedTemplate)}
-                        />
+                        <>
+                          <Button 
+                            label="Check Compliance"
+                            icon="pi pi-shield"
+                            className="p-button-sm p-button-outlined w-full mb-2"
+                            onClick={() => handleComplianceCheck(selectedTemplate)}
+                            loading={operationLoading[`compliance-${selectedTemplate.id}`]}
+                          />
+                          <Button 
+                            label="Validate Variables"
+                            icon="pi pi-check-circle"
+                            className="p-button-sm p-button-outlined p-button-secondary w-full mb-2"
+                            onClick={() => handleVariableValidation(selectedTemplate)}
+                            loading={operationLoading[`variables-${selectedTemplate.id}`]}
+                          />
+                          {selectedTemplate.jurisdiction && (
+                            <Button 
+                              label="Check Jurisdiction"
+                              icon="pi pi-globe"
+                              className="p-button-sm p-button-outlined p-button-info w-full"
+                              onClick={() => handleJurisdictionValidation(selectedTemplate)}
+                              loading={operationLoading[`jurisdiction-${selectedTemplate.id}`]}
+                            />
+                          )}
+                        </>
                       )}
                     </div>
                   </Panel>
@@ -976,12 +1468,12 @@ I have a good faith belief that the use of my copyrighted material is not author
               <div className="flex align-items-center gap-3 mb-3">
                 <span className="text-lg font-semibold">Compliance Score:</span>
                 <ProgressBar 
-                  value={validationResult.complianceScore} 
+                  value={validationResult.compliance_score} 
                   className="w-full"
-                  color={validationResult.complianceScore >= 80 ? 'green' : 
-                         validationResult.complianceScore >= 60 ? 'orange' : 'red'}
+                  color={validationResult.compliance_score >= 80 ? 'green' : 
+                         validationResult.compliance_score >= 60 ? 'orange' : 'red'}
                 />
-                <span className="font-bold">{validationResult.complianceScore}%</span>
+                <span className="font-bold">{validationResult.compliance_score}%</span>
               </div>
             </div>
 
@@ -990,12 +1482,12 @@ I have a good faith belief that the use of my copyrighted material is not author
             <div className="grid">
               <div className="col-12 md:col-6">
                 <Panel header="Required Elements" className="h-full">
-                  {validationResult.requiredElements.map((element, index) => (
+                  {validationResult.required_elements.map((element, index) => (
                     <div key={index} className="flex align-items-center gap-2 mb-2">
                       <i className={`pi ${element.present ? 'pi-check text-green-500' : 'pi-times text-red-500'}`} />
                       <div className="flex-1">
                         <div className="font-medium text-sm">{element.description}</div>
-                        <div className="text-xs text-gray-500">{element.legalRequirement}</div>
+                        <div className="text-xs text-gray-500">{element.legal_reference}</div>
                       </div>
                     </div>
                   ))}

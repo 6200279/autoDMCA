@@ -1,0 +1,97 @@
+.websocket-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.websocket-status-badge:hover {
+  transform: scale(1.05);
+  cursor: pointer;
+}
+
+.websocket-details .field {
+  margin-bottom: 1rem;
+}
+
+.websocket-details .field:last-child {
+  margin-bottom: 0;
+}
+
+.websocket-details label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text-color-secondary);
+  font-size: 0.875rem;
+}
+
+.websocket-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.websocket-health-warning {
+  position: fixed;
+  top: 70px;
+  right: 1rem;
+  z-index: 1000;
+  max-width: 400px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .websocket-health-warning {
+    position: relative;
+    top: 0;
+    right: 0;
+    margin: 0 1rem 1rem;
+  }
+}
+
+/* Animation for status changes */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.websocket-status-badge.connecting,
+.websocket-status-badge.reconnecting {
+  animation: pulse 2s infinite;
+}
+
+/* Status-specific styling */
+.websocket-status-badge.success {
+  background-color: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.websocket-status-badge.warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.websocket-status-badge.danger {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.websocket-status-badge.info {
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.websocket-status-badge.secondary {
+  background-color: rgba(107, 114, 128, 0.1);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}

@@ -1,0 +1,115 @@
+# Secure Docker configuration for Content Protection Platform
+# Based on security best practices and OWASP guidelines
+
+FROM python:3.11-slim-bullseye AS security-base
+
+# Security: Create non-root user early
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin -c "App User" appuser
+
+# Security: Set secure filesystem permissions
+RUN chmod 1777 /tmp && chmod 755 /var /var/log
+
+# Security: Update system packages and remove unnecessary packages
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        # Required system packages
+        libpq-dev \
+        libmagic1 \
+        libmagic-dev \
+        gcc \
+        g++ \
+        libc6-dev \
+        curl \
+        ca-certificates \
+        # Security tools
+        gnupg2 \
+        dirmngr \
+    && \
+    # Security: Remove package cache and unnecessary files
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    # Security: Remove development tools after use (in production stage)
+    apt-get autoremove -y
+
+# Security: Set up secure working directory
+WORKDIR /app
+RUN chown appuser:appuser /app
+RUN chmod 755 /app
+
+# Security: Copy requirements and install Python dependencies
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir --user -r requirements.txt && \
+    # Security: Remove pip cache
+    pip cache purge && \
+    # Security: Remove unnecessary files
+    find /root/.local -name "*.pyc" -delete && \
+    find /root/.local -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+# Production stage
+FROM python:3.11-slim-bullseye AS production
+
+# Security: Install only runtime dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libpq5 \
+        libmagic1 \
+        ca-certificates \
+        curl \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Security: Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin -c "App User" appuser
+
+# Security: Copy Python packages from previous stage
+COPY --from=security-base /root/.local /home/appuser/.local
+RUN chown -R appuser:appuser /home/appuser/.local
+
+# Security: Set up application directory
+WORKDIR /app
+RUN chown appuser:appuser /app
+
+# Security: Copy application code with proper permissions
+COPY --chown=appuser:appuser . /app/
+
+# Security: Set secure file permissions
+RUN find /app -type f -exec chmod 644 {} \; && \
+    find /app -type d -exec chmod 755 {} \; && \
+    chmod 755 /app/entrypoint.sh
+
+# Security: Create logs directory with proper permissions
+RUN mkdir -p /app/logs && \
+    chown appuser:appuser /app/logs && \
+    chmod 755 /app/logs
+
+# Security: Create upload directory with restricted permissions
+RUN mkdir -p /app/uploads && \
+    chown appuser:appuser /app/uploads && \
+    chmod 700 /app/uploads
+
+# Security: Set PATH for non-root user
+ENV PATH="/home/appuser/.local/bin:$PATH"
+
+# Security: Set secure environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Security: Drop to non-root user
+USER appuser
+
+# Security: Use non-root port
+EXPOSE 8000
+
+# Health check for container monitoring
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Security: Use specific entrypoint script
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

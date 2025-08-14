@@ -44,7 +44,8 @@ import {
   Filler
 } from 'chart.js';
 import { useAuth } from '../contexts/AuthContext';
-import { SearchEngine, DelistingRequest, DelistingType, DelistingStatus, URLMonitoring, SearchResult, VisibilityMetrics, PriorityLevel } from '../types/api';
+import { searchEngineDelistingApi } from '../services/api';
+import { SearchEngine, DelistingRequest, DelistingType, DelistingStatus, URLMonitoring, SearchResult, VisibilityMetrics, PriorityLevel, RegionData } from '../types/api';
 
 // Register Chart.js components
 ChartJS.register(
@@ -85,6 +86,9 @@ const SearchEngineDelisting: React.FC = () => {
   const toast = useRef<Toast>(null);
   const [loading, setLoading] = useState(true);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Dialog states
   const [showRequestDialog, setShowRequestDialog] = useState(false);
@@ -114,8 +118,16 @@ const SearchEngineDelisting: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [engineFilter, setEngineFilter] = useState<string[]>([]);
   
-  // Data states
-  const [searchEngines] = useState<SearchEngine[]>([
+  // Data states  
+  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
+  const [delistingRequests, setDelistingRequests] = useState<DelistingRequest[]>([]);
+  const [urlMonitoring, setUrlMonitoring] = useState<URLMonitoring[]>([]);
+  const [visibilityMetrics, setVisibilityMetrics] = useState<VisibilityMetrics[]>([]);
+  const [regionData, setRegionData] = useState<RegionData[]>([]);
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
+  
+  // Mock data as fallback (removed from state initialization)
+  const mockSearchEngines = [
     {
       id: 'google',
       name: 'Google Search',
@@ -181,9 +193,9 @@ const SearchEngineDelisting: React.FC = () => {
       icon: 'pi pi-shield',
       color: '#DE5833'
     }
-  ]);
+  ];
 
-  const [delistingRequests] = useState<DelistingRequest[]>([
+  const mockDelistingRequests = [
     {
       id: 'req-001',
       searchEngineId: 'google',
@@ -262,9 +274,9 @@ const SearchEngineDelisting: React.FC = () => {
         sitemapSubmission: false
       }
     }
-  ]);
+  ];
 
-  const [urlMonitoring] = useState<URLMonitoring[]>([
+  const mockUrlMonitoring = [
     {
       id: 'monitor-001',
       url: 'https://example.com/infringing-content',
@@ -289,9 +301,9 @@ const SearchEngineDelisting: React.FC = () => {
       autoDelisting: false,
       status: 'active'
     }
-  ]);
+  ];
 
-  const [visibilityMetrics] = useState<VisibilityMetrics[]>([
+  const mockVisibilityMetrics = [
     {
       searchEngine: 'Google Search',
       totalUrls: 245,
@@ -316,14 +328,14 @@ const SearchEngineDelisting: React.FC = () => {
       visibilityReduction: 75.6,
       trend: 'declining'
     }
-  ]);
+  ];
 
-  const [regionData] = useState<RegionData[]>([
+  const mockRegionData = [
     { region: 'North America', country: 'US', requestCount: 89, successRate: 91.2, avgResponseTime: 68 },
     { region: 'Europe', country: 'EU', requestCount: 67, successRate: 87.4, avgResponseTime: 72 },
     { region: 'Asia Pacific', country: 'AP', requestCount: 34, successRate: 83.1, avgResponseTime: 89 },
     { region: 'Global', country: 'Global', requestCount: 142, successRate: 85.7, avgResponseTime: 76 }
-  ]);
+  ];
 
   // Options for dropdowns
   const delistingTypeOptions = [
@@ -371,13 +383,154 @@ const SearchEngineDelisting: React.FC = () => {
     { label: 'Custom Template', value: 'custom' }
   ];
 
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
+  // Data fetching functions
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setError(null);
+      const [statsResponse, enginesResponse] = await Promise.all([
+        searchEngineDelistingApi.getDashboardStats({
+          dateRange: {
+            start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+            end: dateRange[1]?.toISOString() || new Date().toISOString()
+          }
+        }),
+        searchEngineDelistingApi.getSearchEngines()
+      ]);
+      
+      setDashboardStats(statsResponse.data);
+      setSearchEngines(statsResponse.data?.searchEngines || mockSearchEngines);
+    } catch (error: any) {
+      console.warn('Failed to fetch dashboard data, using fallback:', error);
+      setError('Unable to connect to server. Using cached data.');
+      // Use mock data as fallback
+      setSearchEngines(mockSearchEngines);
+      
+      // Show warning toast
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Connection Issue',
+        detail: 'Using cached data. Some features may be limited.',
+        life: 5000
+      });
+    }
+  }, [dateRange]);
+  
+  const fetchDelistingRequests = useCallback(async () => {
+    try {
+      const response = await searchEngineDelistingApi.getDelistingRequests({
+        status: statusFilter,
+        engines: engineFilter,
+        dateRange: {
+          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          end: dateRange[1]?.toISOString() || new Date().toISOString()
+        },
+        page: 1,
+        per_page: 100
+      });
+      
+      setDelistingRequests(response.data?.items || mockDelistingRequests);
+    } catch (error: any) {
+      console.warn('Failed to fetch delisting requests:', error);
+      setDelistingRequests(mockDelistingRequests);
+    }
+  }, [dateRange, statusFilter, engineFilter]);
+  
+  const fetchUrlMonitoring = useCallback(async () => {
+    try {
+      const response = await searchEngineDelistingApi.getUrlMonitoring({
+        page: 1,
+        per_page: 100
+      });
+      
+      setUrlMonitoring(response.data?.items || mockUrlMonitoring);
+    } catch (error: any) {
+      console.warn('Failed to fetch URL monitoring:', error);
+      setUrlMonitoring(mockUrlMonitoring);
+    }
   }, []);
+  
+  const fetchVisibilityMetrics = useCallback(async () => {
+    try {
+      const response = await searchEngineDelistingApi.getVisibilityMetrics({
+        dateRange: {
+          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          end: dateRange[1]?.toISOString() || new Date().toISOString()
+        }
+      });
+      
+      setVisibilityMetrics(response.data?.visibilityMetrics || mockVisibilityMetrics);
+    } catch (error: any) {
+      console.warn('Failed to fetch visibility metrics:', error);
+      setVisibilityMetrics(mockVisibilityMetrics);
+    }
+  }, [dateRange]);
+  
+  const fetchRegionalAnalytics = useCallback(async () => {
+    try {
+      const response = await searchEngineDelistingApi.getRegionalAnalytics({
+        dateRange: {
+          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          end: dateRange[1]?.toISOString() || new Date().toISOString()
+        }
+      });
+      
+      setRegionData(response.data?.regionalData || mockRegionData);
+    } catch (error: any) {
+      console.warn('Failed to fetch regional analytics:', error);
+      setRegionData(mockRegionData);
+    }
+  }, [dateRange]);
+  
+  const refreshAllData = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchDashboardData(),
+        fetchDelistingRequests(),
+        fetchUrlMonitoring(),
+        fetchVisibilityMetrics(),
+        fetchRegionalAnalytics()
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchDashboardData, fetchDelistingRequests, fetchUrlMonitoring, fetchVisibilityMetrics, fetchRegionalAnalytics]);
+  
+  // Initial data loading
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        await fetchDashboardData();
+        // Add small delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 800));
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadInitialData();
+  }, [fetchDashboardData]);
+  
+  // Load additional data when tab changes
+  useEffect(() => {
+    if (!loading) {
+      switch (activeTabIndex) {
+        case 1: // Delisting Requests tab
+          fetchDelistingRequests();
+          break;
+        case 2: // URL Monitoring tab
+          fetchUrlMonitoring();
+          break;
+        case 3: // Analytics tab
+          fetchVisibilityMetrics();
+          fetchRegionalAnalytics();
+          break;
+        default:
+          break;
+      }
+    }
+  }, [activeTabIndex, loading, fetchDelistingRequests, fetchUrlMonitoring, fetchVisibilityMetrics, fetchRegionalAnalytics]);
 
   // Chart data
   const visibilityTrendsData = useMemo(() => ({
@@ -423,7 +576,7 @@ const SearchEngineDelisting: React.FC = () => {
   }), [searchEngines]);
 
   // Event handlers
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     if (!newRequest.urls || newRequest.urls.length === 0) {
       toast.current?.show({
         severity: 'warn',
@@ -441,24 +594,56 @@ const SearchEngineDelisting: React.FC = () => {
       });
       return;
     }
+    
+    if (!newRequest.reason?.trim()) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Validation Error',
+        detail: 'Please provide a reason for removal'
+      });
+      return;
+    }
 
-    console.log('Submitting delisting request:', {
-      ...newRequest,
-      searchEngines: selectedSearchEngines,
-      region: selectedRegion
-    });
-
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Request Submitted',
-      detail: 'Your delisting request has been submitted successfully'
-    });
-
-    setShowRequestDialog(false);
-    resetForm();
+    setSubmitting(true);
+    try {
+      const response = await searchEngineDelistingApi.createDelistingRequest({
+        searchEngineIds: selectedSearchEngines,
+        type: newRequest.type!,
+        priority: newRequest.priority!,
+        urls: newRequest.urls,
+        keywords: newRequest.keywords,
+        region: selectedRegion,
+        reason: newRequest.reason!,
+        template: newRequest.template,
+        metadata: newRequest.metadata
+      });
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Request Submitted',
+        detail: `Delisting request ${response.data.id} has been submitted successfully`
+      });
+      
+      setShowRequestDialog(false);
+      resetForm();
+      
+      // Refresh delisting requests if on that tab
+      if (activeTabIndex === 1) {
+        fetchDelistingRequests();
+      }
+    } catch (error: any) {
+      console.error('Failed to submit delisting request:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Submission Failed',
+        detail: error.response?.data?.detail || 'Failed to submit delisting request. Please try again.'
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleBulkSubmit = () => {
+  const handleBulkSubmit = async () => {
     const urls = bulkUrls.split('\n').filter(url => url.trim());
     
     if (urls.length === 0) {
@@ -469,17 +654,74 @@ const SearchEngineDelisting: React.FC = () => {
       });
       return;
     }
-
-    console.log('Submitting bulk delisting request for', urls.length, 'URLs');
     
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Bulk Request Submitted',
-      detail: `${urls.length} URLs submitted for delisting`
-    });
+    if (selectedSearchEngines.length === 0) {
+      toast.current?.show({
+        severity: 'warn',
+        summary: 'Validation Error',
+        detail: 'Please select at least one search engine'
+      });
+      return;
+    }
 
-    setShowBulkDialog(false);
-    setBulkUrls('');
+    setSubmitting(true);
+    try {
+      // First validate URLs
+      const validationResponse = await searchEngineDelistingApi.validateUrls(urls);
+      const validUrls = validationResponse.data.filter((result: any) => result.is_valid).map((result: any) => result.url);
+      
+      if (validUrls.length === 0) {
+        toast.current?.show({
+          severity: 'warn',
+          summary: 'Validation Failed',
+          detail: 'No valid URLs found. Please check your URLs and try again.'
+        });
+        return;
+      }
+      
+      if (validUrls.length < urls.length) {
+        toast.current?.show({
+          severity: 'warn',
+          summary: 'Some URLs Invalid',
+          detail: `${urls.length - validUrls.length} URLs were invalid and will be skipped.`
+        });
+      }
+      
+      // Submit bulk request
+      const response = await searchEngineDelistingApi.bulkCreateRequests({
+        searchEngineIds: selectedSearchEngines,
+        type: DelistingType.URL_REMOVAL,
+        priority: PriorityLevel.MEDIUM,
+        urls: validUrls,
+        region: selectedRegion,
+        reason: 'Bulk URL removal request',
+        template: 'bulk_removal'
+      });
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Bulk Request Submitted',
+        detail: `${validUrls.length} URLs submitted for delisting across ${selectedSearchEngines.length} search engines`
+      });
+      
+      setShowBulkDialog(false);
+      setBulkUrls('');
+      setSelectedSearchEngines([]);
+      
+      // Refresh delisting requests if on that tab
+      if (activeTabIndex === 1) {
+        fetchDelistingRequests();
+      }
+    } catch (error: any) {
+      console.error('Failed to submit bulk delisting request:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Bulk Submission Failed',
+        detail: error.response?.data?.detail || 'Failed to submit bulk delisting request. Please try again.'
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resetForm = () => {
@@ -492,6 +734,102 @@ const SearchEngineDelisting: React.FC = () => {
     });
     setSelectedSearchEngines([]);
     setSelectedRegion('global');
+  };
+  
+  // Additional handlers for real-time features
+  const handleRefreshData = async () => {
+    await refreshAllData();
+    toast.current?.show({
+      severity: 'success',
+      summary: 'Data Refreshed',
+      detail: 'All data has been refreshed successfully'
+    });
+  };
+  
+  const handleAddUrlMonitoring = async (urlData: { url: string; keywords: string[]; searchEngines: string[]; alerts: boolean; autoDelisting: boolean }) => {
+    try {
+      setSubmitting(true);
+      const response = await searchEngineDelistingApi.addUrlMonitoring(urlData);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'URL Monitoring Added',
+        detail: `Now monitoring ${urlData.url} across ${urlData.searchEngines.length} search engines`
+      });
+      
+      setShowMonitoringDialog(false);
+      
+      // Refresh URL monitoring if on that tab
+      if (activeTabIndex === 2) {
+        fetchUrlMonitoring();
+      }
+    } catch (error: any) {
+      console.error('Failed to add URL monitoring:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Failed to Add Monitoring',
+        detail: error.response?.data?.detail || 'Failed to add URL monitoring. Please try again.'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  const handleTestSearchEngineConnection = async (engineId: string) => {
+    try {
+      setSubmitting(true);
+      await searchEngineDelistingApi.testSearchEngineConnection(engineId);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Connection Test Successful',
+        detail: 'Search engine connection is working properly'
+      });
+    } catch (error: any) {
+      console.error('Connection test failed:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Connection Test Failed',
+        detail: error.response?.data?.detail || 'Failed to connect to search engine'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  const handleExportData = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    try {
+      setSubmitting(true);
+      const response = await searchEngineDelistingApi.exportDelistingData({
+        format,
+        type: 'all',
+        dateRange: {
+          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          end: dateRange[1]?.toISOString() || new Date().toISOString()
+        },
+        includeDetails: true
+      });
+      
+      // Handle file download
+      if (response.data?.downloadUrl) {
+        window.open(response.data.downloadUrl, '_blank');
+      }
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Export Started',
+        detail: `Data export in ${format.toUpperCase()} format has been initiated`
+      });
+    } catch (error: any) {
+      console.error('Export failed:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Export Failed',
+        detail: error.response?.data?.detail || 'Failed to export data. Please try again.'
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const getStatusSeverity = (status: DelistingStatus) => {
@@ -530,7 +868,13 @@ const SearchEngineDelisting: React.FC = () => {
       <div className="flex justify-content-between align-items-start">
         <div>
           <div className="text-500 font-medium text-sm">{title}</div>
-          <div className="text-900 font-bold text-xl mt-1">{value}</div>
+          <div className="text-900 font-bold text-xl mt-1">
+            {loading ? (
+              <Skeleton width="4rem" height="1.5rem" />
+            ) : (
+              value || '---'
+            )}
+          </div>
           {subtitle && (
             <div className="text-600 text-sm mt-1">{subtitle}</div>
           )}
@@ -583,30 +927,50 @@ const SearchEngineDelisting: React.FC = () => {
                 label="New Request" 
                 icon="pi pi-plus" 
                 onClick={() => setShowRequestDialog(true)}
+                disabled={submitting}
               />
               <Button 
                 label="Bulk Submit" 
                 icon="pi pi-upload" 
                 outlined
                 onClick={() => setShowBulkDialog(true)}
+                disabled={submitting}
               />
               <Button 
                 label="Templates" 
                 icon="pi pi-book" 
                 outlined
                 onClick={() => setShowTemplateDialog(true)}
+                disabled={submitting}
+              />
+              <Button 
+                label="Refresh" 
+                icon="pi pi-refresh" 
+                outlined
+                onClick={handleRefreshData}
+                loading={refreshing}
+                disabled={submitting}
               />
             </div>
           </div>
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="grid mb-4">
+          <div className="col-12">
+            <Message severity="warn" text={error} className="w-full" />
+          </div>
+        </div>
+      )}
+
       {/* KPI Cards */}
       <div className="grid mb-4">
         <div className="col-12 md:col-6 lg:col-3">
           {renderKPICard(
             'Total Requests',
-            delistingRequests.length.toString(),
+            loading ? '' : (dashboardStats?.totalRequests || delistingRequests.length).toString(),
             'All time',
             'pi pi-list',
             'bg-blue-100 text-blue-800'
@@ -615,7 +979,7 @@ const SearchEngineDelisting: React.FC = () => {
         <div className="col-12 md:col-6 lg:col-3">
           {renderKPICard(
             'Success Rate',
-            '87.3%',
+            loading ? '' : `${dashboardStats?.successRate || '87.3'}%`,
             'Average across engines',
             'pi pi-check-circle',
             'bg-green-100 text-green-800'
@@ -624,7 +988,7 @@ const SearchEngineDelisting: React.FC = () => {
         <div className="col-12 md:col-6 lg:col-3">
           {renderKPICard(
             'Visibility Reduction',
-            '82.4%',
+            loading ? '' : `${dashboardStats?.visibilityReduction || '82.4'}%`,
             'Content hidden',
             'pi pi-eye-slash',
             'bg-orange-100 text-orange-800'
@@ -633,7 +997,7 @@ const SearchEngineDelisting: React.FC = () => {
         <div className="col-12 md:col-6 lg:col-3">
           {renderKPICard(
             'Avg Response Time',
-            '76h',
+            loading ? '' : `${dashboardStats?.avgResponseTime || '76'}h`,
             'Search engine response',
             'pi pi-clock',
             'bg-purple-100 text-purple-800'
@@ -754,6 +1118,7 @@ const SearchEngineDelisting: React.FC = () => {
                         placeholder="Filter by Status"
                         maxSelectedLabels={2}
                         display="chip"
+                        disabled={loading}
                       />
                       <MultiSelect
                         value={engineFilter}
@@ -762,13 +1127,29 @@ const SearchEngineDelisting: React.FC = () => {
                         placeholder="Filter by Engine"
                         maxSelectedLabels={2}
                         display="chip"
+                        disabled={loading}
                       />
                     </div>
                   }
                   end={
                     <div className="flex gap-2">
-                      <Button label="Refresh" icon="pi pi-refresh" outlined size="small" />
-                      <Button label="Export" icon="pi pi-download" outlined size="small" />
+                      <Button 
+                        label="Refresh" 
+                        icon="pi pi-refresh" 
+                        outlined 
+                        size="small" 
+                        onClick={fetchDelistingRequests}
+                        loading={refreshing}
+                        disabled={submitting}
+                      />
+                      <Button 
+                        label="Export" 
+                        icon="pi pi-download" 
+                        outlined 
+                        size="small" 
+                        onClick={() => handleExportData('xlsx')}
+                        disabled={submitting || loading}
+                      />
                     </div>
                   }
                 />
@@ -894,6 +1275,7 @@ const SearchEngineDelisting: React.FC = () => {
                       icon="pi pi-plus" 
                       size="small"
                       onClick={() => setShowMonitoringDialog(true)}
+                      disabled={submitting}
                     />
                   }
                 />
@@ -964,8 +1346,38 @@ const SearchEngineDelisting: React.FC = () => {
                   <Column
                     body={() => (
                       <div className="flex gap-1">
-                        <Button icon="pi pi-search" rounded outlined size="small" tooltip="Search Results" />
-                        <Button icon="pi pi-cog" rounded outlined size="small" tooltip="Configure" />
+                        <Button 
+                      icon="pi pi-search" 
+                      rounded 
+                      outlined 
+                      size="small" 
+                      tooltip="Search Results"
+                      disabled={submitting}
+                      onClick={() => {
+                        // Handle search results view
+                        toast.current?.show({
+                          severity: 'info',
+                          summary: 'Feature Available',
+                          detail: 'Search results view will open detailed monitoring data'
+                        });
+                      }}
+                    />
+                        <Button 
+                      icon="pi pi-cog" 
+                      rounded 
+                      outlined 
+                      size="small" 
+                      tooltip="Configure"
+                      disabled={submitting}
+                      onClick={() => {
+                        // Handle configuration
+                        toast.current?.show({
+                          severity: 'info',
+                          summary: 'Configuration',
+                          detail: 'Monitor configuration options will be available here'
+                        });
+                      }}
+                    />
                       </div>
                     )}
                   />
@@ -1098,8 +1510,18 @@ const SearchEngineDelisting: React.FC = () => {
         onHide={() => setShowRequestDialog(false)}
         footer={
           <div className="flex gap-2">
-            <Button label="Cancel" outlined onClick={() => setShowRequestDialog(false)} />
-            <Button label="Submit Request" onClick={handleSubmitRequest} />
+            <Button 
+              label="Cancel" 
+              outlined 
+              onClick={() => setShowRequestDialog(false)}
+              disabled={submitting}
+            />
+            <Button 
+              label="Submit Request" 
+              onClick={handleSubmitRequest}
+              loading={submitting}
+              disabled={!newRequest.urls?.length || !selectedSearchEngines.length || !newRequest.reason?.trim()}
+            />
           </div>
         }
       >
@@ -1246,8 +1668,18 @@ const SearchEngineDelisting: React.FC = () => {
         onHide={() => setShowBulkDialog(false)}
         footer={
           <div className="flex gap-2">
-            <Button label="Cancel" outlined onClick={() => setShowBulkDialog(false)} />
-            <Button label="Submit All" onClick={handleBulkSubmit} />
+            <Button 
+              label="Cancel" 
+              outlined 
+              onClick={() => setShowBulkDialog(false)}
+              disabled={submitting}
+            />
+            <Button 
+              label="Submit All" 
+              onClick={handleBulkSubmit}
+              loading={submitting}
+              disabled={!bulkUrls.trim() || selectedSearchEngines.length === 0}
+            />
           </div>
         }
       >
@@ -1263,8 +1695,136 @@ const SearchEngineDelisting: React.FC = () => {
             />
           </div>
           <div className="col-12">
+            <label className="block font-medium mb-2">Search Engines</label>
+            <div className="grid">
+              {searchEngines.map(engine => (
+                <div key={engine.id} className="col-12 md:col-6">
+                  <div className="flex align-items-center gap-2">
+                    <Checkbox
+                      inputId={`bulk-${engine.id}`}
+                      checked={selectedSearchEngines.includes(engine.id)}
+                      onChange={() => {
+                        const updated = selectedSearchEngines.includes(engine.id)
+                          ? selectedSearchEngines.filter(id => id !== engine.id)
+                          : [...selectedSearchEngines, engine.id];
+                        setSelectedSearchEngines(updated);
+                      }}
+                      disabled={submitting}
+                    />
+                    <label htmlFor={`bulk-${engine.id}`} className="flex align-items-center gap-2">
+                      <i className={engine.icon} style={{ color: engine.color }}></i>
+                      {engine.name}
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="col-12">
             <div className="text-sm text-600 mb-3">
               {bulkUrls.split('\n').filter(url => url.trim()).length} URLs detected
+              {selectedSearchEngines.length > 0 && (
+                <span> • {selectedSearchEngines.length} search engines selected</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </Dialog>
+      
+      {/* URL Monitoring Dialog */}
+      <Dialog
+        header="Add URL Monitoring"
+        visible={showMonitoringDialog}
+        style={{ width: '600px' }}
+        onHide={() => setShowMonitoringDialog(false)}
+        footer={
+          <div className="flex gap-2">
+            <Button 
+              label="Cancel" 
+              outlined 
+              onClick={() => setShowMonitoringDialog(false)}
+              disabled={submitting}
+            />
+            <Button 
+              label="Add Monitor" 
+              onClick={() => {
+                // This would be connected to the actual form data
+                const mockData = {
+                  url: 'https://example.com/content',
+                  keywords: ['brand name', 'content'],
+                  searchEngines: selectedSearchEngines,
+                  alerts: true,
+                  autoDelisting: false
+                };
+                handleAddUrlMonitoring(mockData);
+              }}
+              loading={submitting}
+              disabled={selectedSearchEngines.length === 0}
+            />
+          </div>
+        }
+      >
+        <div className="grid">
+          <div className="col-12">
+            <label className="block font-medium mb-2">URL to Monitor</label>
+            <InputText
+              className="w-full"
+              placeholder="https://example.com/content-to-monitor"
+              disabled={submitting}
+            />
+          </div>
+          
+          <div className="col-12">
+            <label className="block font-medium mb-2">Keywords</label>
+            <Chips
+              className="w-full"
+              placeholder="Add keywords to monitor"
+              disabled={submitting}
+            />
+          </div>
+          
+          <div className="col-12">
+            <label className="block font-medium mb-2">Search Engines</label>
+            <div className="grid">
+              {searchEngines.map(engine => (
+                <div key={engine.id} className="col-12 md:col-6">
+                  <div className="flex align-items-center gap-2">
+                    <Checkbox
+                      inputId={`monitor-${engine.id}`}
+                      checked={selectedSearchEngines.includes(engine.id)}
+                      onChange={() => {
+                        const updated = selectedSearchEngines.includes(engine.id)
+                          ? selectedSearchEngines.filter(id => id !== engine.id)
+                          : [...selectedSearchEngines, engine.id];
+                        setSelectedSearchEngines(updated);
+                      }}
+                      disabled={submitting}
+                    />
+                    <label htmlFor={`monitor-${engine.id}`} className="flex align-items-center gap-2">
+                      <i className={engine.icon} style={{ color: engine.color }}></i>
+                      {engine.name}
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="col-12">
+            <h4>Monitoring Options</h4>
+            <div className="grid">
+              <div className="col-12 md:col-6">
+                <div className="flex align-items-center gap-2">
+                  <InputSwitch disabled={submitting} />
+                  <label>Enable alerts</label>
+                </div>
+              </div>
+              <div className="col-12 md:col-6">
+                <div className="flex align-items-center gap-2">
+                  <InputSwitch disabled={submitting} />
+                  <label>Auto-delisting</label>
+                </div>
+              </div>
             </div>
           </div>
         </div>

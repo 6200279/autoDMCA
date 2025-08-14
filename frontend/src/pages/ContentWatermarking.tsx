@@ -1,1435 +1,1650 @@
-import React, { useState, useRef } from 'react';
-import { TabView, TabPanel } from 'primereact/tabview';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from 'primereact/card';
-import { FileUpload, FileUploadHandlerEvent } from 'primereact/fileupload';
-import { Button } from 'primereact/button';
-import { Dialog } from 'primereact/dialog';
-import { DataTable } from 'primereact/datatable';
-import { Column } from 'primereact/column';
-import { ProgressBar } from 'primereact/progressbar';
-import { Slider } from 'primereact/slider';
-import { Dropdown } from 'primereact/dropdown';
+import { TabView, TabPanel } from 'primereact/tabview';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
-import { Checkbox } from 'primereact/checkbox';
-import { Toast } from 'primereact/toast';
-import { ConfirmDialog } from 'primereact/confirmdialog';
-import { Chip } from 'primereact/chip';
+import { Button } from 'primereact/button';
+import { Dropdown, DropdownChangeEvent } from 'primereact/dropdown';
+import { FileUpload, FileUploadUploadEvent } from 'primereact/fileupload';
+import { DataTable } from 'primereact/datatable';
+import { Column } from 'primereact/column';
+import { Tag } from 'primereact/tag';
+import { ProgressBar } from 'primereact/progressbar';
+import { Message } from 'primereact/message';
+import { Divider } from 'primereact/divider';
 import { Badge } from 'primereact/badge';
+import { Toast } from 'primereact/toast';
+import { confirmDialog } from 'primereact/confirmdialog';
+import { Chip } from 'primereact/chip';
+import { InputSwitch } from 'primereact/inputswitch';
+import { Skeleton } from 'primereact/skeleton';
 import { Panel } from 'primereact/panel';
-import { Splitter, SplitterPanel } from 'primereact/splitter';
+import { MultiSelect, MultiSelectChangeEvent } from 'primereact/multiselect';
+import { Slider } from 'primereact/slider';
+import { ColorPicker, ColorPickerChangeEvent } from 'primereact/colorpicker';
+import { SelectButton, SelectButtonChangeEvent } from 'primereact/selectbutton';
+import { Knob } from 'primereact/knob';
+import { Image } from 'primereact/image';
+import { Toolbar } from 'primereact/toolbar';
+import { SplitButton } from 'primereact/splitbutton';
+import { MenuItem } from 'primereact/menuitem';
+import { InputNumber, InputNumberChangeEvent } from 'primereact/inputnumber';
+import { Accordion, AccordionTab } from 'primereact/accordion';
 import { Timeline } from 'primereact/timeline';
 import { Chart } from 'primereact/chart';
-import { Tag } from 'primereact/tag';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { useWebSocket } from '../contexts/WebSocketContext';
+import { contentWatermarkingApi } from '../services/api';
+import {
+  WatermarkContent,
+  WatermarkTemplate,
+  WatermarkSettings,
+  WatermarkType,
+  WatermarkPosition,
+  TemplateCategory,
+  ContentStatus,
+  BatchWatermarkJob,
+  BatchJobStatus,
+  WatermarkDetectionResult,
+  DetectionConfidence,
+  WatermarkingDashboard,
+  WatermarkAnalytics,
+  ContentCollection,
+  CreateWatermarkTemplate,
+  WatermarkPreview,
+  TemplateLibrary,
+  WatermarkingSettings,
+  SystemHealth,
+  ImportStatus,
+  ExportRequest,
+  WatermarkingWebSocketMessage,
+  WatermarkingSubscription
+} from '../types/api';
 
-// Types for watermarking system
-interface WatermarkSettings {
-  id: string;
+interface ContentWatermarkingState {
+  loading: boolean;
+  activeTab: number;
+  
+  // Content Management
+  content: WatermarkContent[];
+  selectedContent: WatermarkContent[];
+  contentLoading: boolean;
+  contentPagination: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+  };
+  contentFilters: {
+    status?: ContentStatus;
+    type?: string;
+    search?: string;
+  };
+  
+  // Templates
+  templates: WatermarkTemplate[];
+  selectedTemplate: WatermarkTemplate | null;
+  templateLoading: boolean;
+  templateLibrary: TemplateLibrary | null;
+  templatePreview: WatermarkPreview | null;
+  
+  // Batch Operations
+  batchJobs: BatchWatermarkJob[];
+  activeBatchJob: BatchWatermarkJob | null;
+  batchLoading: boolean;
+  
+  // Detection
+  detectionResults: WatermarkDetectionResult[];
+  detectionLoading: boolean;
+  
+  // Collections
+  collections: ContentCollection[];
+  selectedCollection: ContentCollection | null;
+  
+  // Analytics
+  dashboard: WatermarkingDashboard | null;
+  analytics: WatermarkAnalytics | null;
+  
+  // Settings
+  settings: WatermarkingSettings | null;
+  systemHealth: SystemHealth | null;
+  
+  // Import/Export
+  importStatus: ImportStatus | null;
+  exportInProgress: boolean;
+  
+  // WebSocket
+  wsSubscription: WatermarkingSubscription | null;
+  realTimeUpdates: WatermarkingWebSocketMessage[];
+}
+
+interface TemplateForm {
   name: string;
   type: WatermarkType;
-  strength: number;
-  subscriberId?: string;
-  subscriberName?: string;
-  metadata: Record<string, any>;
-  createdAt: Date;
-  isActive: boolean;
+  category: TemplateCategory;
+  description: string;
+  is_public: boolean;
+  tags: string[];
+  settings: WatermarkSettings;
+  preview_file?: File;
 }
 
-interface WatermarkedContent {
-  id: string;
-  filename: string;
-  originalSize: number;
-  watermarkedSize: number;
-  watermarkId: string;
-  watermarkType: WatermarkType;
-  subscriberId: string;
-  subscriberName: string;
-  uploadDate: Date;
-  status: 'processing' | 'completed' | 'failed';
-  downloadUrl?: string;
-  previewUrl?: string;
-  leakDetections?: LeakDetection[];
+interface BatchForm {
+  name: string;
+  content_ids: string[];
+  template_id: string;
+  output_format: 'original' | 'jpg' | 'png' | 'pdf';
+  quality: 'low' | 'medium' | 'high';
+  preserve_originals: boolean;
+  notification_email: string;
 }
-
-interface LeakDetection {
-  id: string;
-  detectedAt: Date;
-  source: string;
-  confidence: number;
-  watermarkData: string;
-  evidenceUrl: string;
-  status: 'verified' | 'investigating' | 'false-positive';
-  subscriberId: string;
-  subscriberName: string;
-}
-
-interface BatchProcessing {
-  id: string;
-  totalFiles: number;
-  processedFiles: number;
-  failedFiles: number;
-  status: 'running' | 'completed' | 'paused' | 'failed';
-  startTime: Date;
-  estimatedCompletion?: Date;
-}
-
-type WatermarkType = 
-  | 'invisible-digital'
-  | 'subscriber-specific'
-  | 'metadata-exif'
-  | 'steganographic'
-  | 'audio-inaudible'
-  | 'text-hidden';
 
 const ContentWatermarking: React.FC = () => {
-  // State management
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [watermarkSettings, setWatermarkSettings] = useState<WatermarkSettings[]>([]);
-  const [watermarkedContent, setWatermarkedContent] = useState<WatermarkedContent[]>([]);
-  const [leakDetections, setLeakDetections] = useState<LeakDetection[]>([]);
-  const [batchProcessing, setBatchProcessing] = useState<BatchProcessing | null>(null);
-  
-  // Dialog states
-  const [showWatermarkDialog, setShowWatermarkDialog] = useState(false);
-  const [showBatchDialog, setShowBatchDialog] = useState(false);
-  const [showLeakAnalysisDialog, setShowLeakAnalysisDialog] = useState(false);
-  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
-  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  
-  // Form states
-  const [selectedWatermarkType, setSelectedWatermarkType] = useState<WatermarkType>('invisible-digital');
-  const [watermarkStrength, setWatermarkStrength] = useState(75);
-  const [subscriberId, setSubscriberId] = useState('');
-  const [subscriberName, setSubscriberName] = useState('');
-  const [watermarkName, setWatermarkName] = useState('');
-  const [watermarkMetadata, setWatermarkMetadata] = useState('');
-  const [selectedContent, setSelectedContent] = useState<WatermarkedContent | null>(null);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  
-  // Refs
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { subscribe, unsubscribe, isConnected } = useWebSocket();
   const toast = useRef<Toast>(null);
   const fileUploadRef = useRef<FileUpload>(null);
+  const detectionFileUploadRef = useRef<FileUpload>(null);
+  const subscriptionIdRef = useRef<string>('watermarking-page');
 
-  // Watermark type options
-  const watermarkTypes = [
-    { label: 'Invisible Digital Watermark', value: 'invisible-digital', icon: 'pi pi-eye-slash' },
-    { label: 'Subscriber-Specific ID', value: 'subscriber-specific', icon: 'pi pi-user' },
-    { label: 'Metadata/EXIF Watermark', value: 'metadata-exif', icon: 'pi pi-info-circle' },
-    { label: 'Steganographic Watermark', value: 'steganographic', icon: 'pi pi-image' },
-    { label: 'Audio Inaudible Marker', value: 'audio-inaudible', icon: 'pi pi-volume-off' },
-    { label: 'Hidden Text Watermark', value: 'text-hidden', icon: 'pi pi-file-word' }
-  ];
+  // State
+  const [state, setState] = useState<ContentWatermarkingState>({
+    loading: true,
+    activeTab: 0,
+    content: [],
+    selectedContent: [],
+    contentLoading: false,
+    contentPagination: { page: 1, per_page: 10, total: 0, pages: 0 },
+    contentFilters: {},
+    templates: [],
+    selectedTemplate: null,
+    templateLoading: false,
+    templateLibrary: null,
+    templatePreview: null,
+    batchJobs: [],
+    activeBatchJob: null,
+    batchLoading: false,
+    detectionResults: [],
+    detectionLoading: false,
+    collections: [],
+    selectedCollection: null,
+    dashboard: null,
+    analytics: null,
+    settings: null,
+    systemHealth: null,
+    importStatus: null,
+    exportInProgress: false,
+    wsSubscription: null,
+    realTimeUpdates: []
+  });
 
-  // Mock data for demonstration
-  React.useEffect(() => {
-    const mockWatermarks: WatermarkSettings[] = [
-      {
-        id: 'wm-001',
-        name: 'Premium Subscriber Watermark',
-        type: 'subscriber-specific',
-        strength: 80,
-        subscriberId: 'sub-001',
-        subscriberName: 'John Doe Premium',
-        metadata: { tier: 'premium', region: 'US' },
-        createdAt: new Date('2024-01-15'),
-        isActive: true
+  const [templateForm, setTemplateForm] = useState<TemplateForm>({
+    name: '',
+    type: WatermarkType.TEXT,
+    category: TemplateCategory.PERSONAL,
+    description: '',
+    is_public: false,
+    tags: [],
+    settings: {
+      text: {
+        content: '',
+        font_family: 'Arial',
+        font_size: 24,
+        color: '#000000',
+        opacity: 0.7,
+        rotation: 0,
+        bold: false,
+        italic: false,
+        outline: false,
+        shadow: false
       },
-      {
-        id: 'wm-002',
-        name: 'Standard Digital Watermark',
-        type: 'invisible-digital',
-        strength: 70,
-        subscriberId: 'sub-002',
-        subscriberName: 'Jane Smith',
-        metadata: { tier: 'standard' },
-        createdAt: new Date('2024-01-20'),
-        isActive: true
-      }
-    ];
-
-    const mockContent: WatermarkedContent[] = [
-      {
-        id: 'content-001',
-        filename: 'exclusive_video_001.mp4',
-        originalSize: 125000000,
-        watermarkedSize: 125001500,
-        watermarkId: 'wm-001',
-        watermarkType: 'subscriber-specific',
-        subscriberId: 'sub-001',
-        subscriberName: 'John Doe Premium',
-        uploadDate: new Date('2024-02-01'),
-        status: 'completed',
-        downloadUrl: '/downloads/exclusive_video_001_watermarked.mp4',
-        previewUrl: '/previews/exclusive_video_001_preview.jpg',
-        leakDetections: []
+      position: {
+        type: WatermarkPosition.BOTTOM_RIGHT,
+        margin_x: 20,
+        margin_y: 20
       },
-      {
-        id: 'content-002',
-        filename: 'premium_photo_set.zip',
-        originalSize: 45000000,
-        watermarkedSize: 45002000,
-        watermarkId: 'wm-002',
-        watermarkType: 'invisible-digital',
-        subscriberId: 'sub-002',
-        subscriberName: 'Jane Smith',
-        uploadDate: new Date('2024-02-02'),
-        status: 'completed',
-        downloadUrl: '/downloads/premium_photo_set_watermarked.zip',
-        leakDetections: [
-          {
-            id: 'leak-001',
-            detectedAt: new Date('2024-02-05'),
-            source: 'unauthorized-site.com',
-            confidence: 95,
-            watermarkData: 'sub-002-2024-02-02-premium',
-            evidenceUrl: '/evidence/leak-001-evidence.pdf',
-            status: 'verified',
-            subscriberId: 'sub-002',
-            subscriberName: 'Jane Smith'
-          }
-        ]
+      quality: {
+        compression: 85,
+        preserve_metadata: true
       }
-    ];
+    }
+  });
 
-    const mockLeaks: LeakDetection[] = [
-      {
-        id: 'leak-001',
-        detectedAt: new Date('2024-02-05'),
-        source: 'unauthorized-site.com',
-        confidence: 95,
-        watermarkData: 'sub-002-2024-02-02-premium',
-        evidenceUrl: '/evidence/leak-001-evidence.pdf',
-        status: 'verified',
-        subscriberId: 'sub-002',
-        subscriberName: 'Jane Smith'
-      },
-      {
-        id: 'leak-002',
-        detectedAt: new Date('2024-02-07'),
-        source: 'piracy-forum.net',
-        confidence: 88,
-        watermarkData: 'sub-001-2024-02-01-premium',
-        evidenceUrl: '/evidence/leak-002-evidence.pdf',
-        status: 'investigating',
-        subscriberId: 'sub-001',
-        subscriberName: 'John Doe Premium'
-      }
-    ];
+  const [batchForm, setBatchForm] = useState<BatchForm>({
+    name: '',
+    content_ids: [],
+    template_id: '',
+    output_format: 'original',
+    quality: 'medium',
+    preserve_originals: true,
+    notification_email: user?.email || ''
+  });
 
-    setWatermarkSettings(mockWatermarks);
-    setWatermarkedContent(mockContent);
-    setLeakDetections(mockLeaks);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [showBatchDialog, setShowBatchDialog] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Load initial data
+  useEffect(() => {
+    loadDashboard();
+    loadContent();
+    loadTemplates();
+    loadCollections();
+    loadSettings();
+    loadSystemHealth();
+    setupWebSocketSubscription();
+    setState(prev => ({ ...prev, loading: false }));
   }, []);
 
-  // File upload handler
-  const onFileUpload = (event: FileUploadHandlerEvent) => {
-    const files = Array.from(event.files);
-    setUploadedFiles(prev => [...prev, ...files]);
-    
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Files Uploaded',
-      detail: `${files.length} file(s) ready for watermarking`
-    });
-  };
-
-  // Create watermark
-  const handleCreateWatermark = () => {
-    const newWatermark: WatermarkSettings = {
-      id: `wm-${Date.now()}`,
-      name: watermarkName,
-      type: selectedWatermarkType,
-      strength: watermarkStrength,
-      subscriberId: subscriberId || undefined,
-      subscriberName: subscriberName || undefined,
-      metadata: watermarkMetadata ? JSON.parse(watermarkMetadata) : {},
-      createdAt: new Date(),
-      isActive: true
-    };
-
-    setWatermarkSettings(prev => [...prev, newWatermark]);
-    setShowWatermarkDialog(false);
-    
-    // Reset form
-    setWatermarkName('');
-    setSubscriberId('');
-    setSubscriberName('');
-    setWatermarkMetadata('');
-    setWatermarkStrength(75);
-
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Watermark Created',
-      detail: `Watermark "${newWatermark.name}" created successfully`
-    });
-  };
-
-  // Process files with watermark
-  const handleProcessFiles = async (watermarkId: string) => {
-    if (uploadedFiles.length === 0) {
+  // Load dashboard data
+  const loadDashboard = useCallback(async () => {
+    try {
+      const response = await contentWatermarkingApi.getDashboard();
+      setState(prev => ({ ...prev, dashboard: response.data }));
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
       toast.current?.show({
-        severity: 'warn',
-        summary: 'No Files',
-        detail: 'Please upload files first'
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to load dashboard data'
       });
-      return;
     }
+  }, []);
 
-    const watermark = watermarkSettings.find(w => w.id === watermarkId);
-    if (!watermark) return;
+  // Load content
+  const loadContent = useCallback(async (filters = state.contentFilters, pagination = state.contentPagination) => {
+    try {
+      setState(prev => ({ ...prev, contentLoading: true }));
+      const response = await contentWatermarkingApi.getContent({
+        ...filters,
+        page: pagination.page,
+        per_page: pagination.per_page
+      });
+      
+      setState(prev => ({
+        ...prev,
+        content: response.data.items,
+        contentPagination: {
+          page: response.data.page,
+          per_page: response.data.per_page,
+          total: response.data.total,
+          pages: response.data.pages
+        },
+        contentLoading: false
+      }));
+    } catch (error) {
+      console.error('Failed to load content:', error);
+      setState(prev => ({ ...prev, contentLoading: false }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to load content'
+      });
+    }
+  }, [state.contentFilters, state.contentPagination]);
 
-    // Simulate processing
-    setProcessingProgress(0);
-    const interval = setInterval(() => {
-      setProcessingProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          
-          // Create watermarked content entries
-          const newContent: WatermarkedContent[] = uploadedFiles.map((file, index) => ({
-            id: `content-${Date.now()}-${index}`,
-            filename: file.name,
-            originalSize: file.size,
-            watermarkedSize: file.size + Math.floor(file.size * 0.001), // Simulate size increase
-            watermarkId: watermark.id,
-            watermarkType: watermark.type,
-            subscriberId: watermark.subscriberId || 'anonymous',
-            subscriberName: watermark.subscriberName || 'Anonymous User',
-            uploadDate: new Date(),
-            status: 'completed',
-            downloadUrl: `/downloads/${file.name}_watermarked`,
-            previewUrl: `/previews/${file.name}_preview`,
-            leakDetections: []
-          }));
+  // Load templates
+  const loadTemplates = useCallback(async () => {
+    try {
+      setState(prev => ({ ...prev, templateLoading: true }));
+      const [templatesResponse, libraryResponse] = await Promise.all([
+        contentWatermarkingApi.getTemplates(),
+        contentWatermarkingApi.getLibraryTemplates()
+      ]);
+      
+      setState(prev => ({
+        ...prev,
+        templates: templatesResponse.data.items,
+        templateLibrary: libraryResponse.data,
+        templateLoading: false
+      }));
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+      setState(prev => ({ ...prev, templateLoading: false }));
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to load templates'
+      });
+    }
+  }, []);
 
-          setWatermarkedContent(prev => [...prev, ...newContent]);
-          setUploadedFiles([]);
-          
-          toast.current?.show({
-            severity: 'success',
-            summary: 'Processing Complete',
-            detail: `${newContent.length} file(s) watermarked successfully`
-          });
-          
-          return 100;
+  // Load collections
+  const loadCollections = useCallback(async () => {
+    try {
+      const response = await contentWatermarkingApi.getCollections();
+      setState(prev => ({ ...prev, collections: response.data }));
+    } catch (error) {
+      console.error('Failed to load collections:', error);
+    }
+  }, []);
+
+  // Load settings
+  const loadSettings = useCallback(async () => {
+    try {
+      const response = await contentWatermarkingApi.getSettings();
+      setState(prev => ({ ...prev, settings: response.data }));
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  }, []);
+
+  // Load system health
+  const loadSystemHealth = useCallback(async () => {
+    try {
+      const response = await contentWatermarkingApi.getSystemHealth();
+      setState(prev => ({ ...prev, systemHealth: response.data }));
+    } catch (error) {
+      console.error('Failed to load system health:', error);
+    }
+  }, []);
+
+  // Setup WebSocket subscription for real-time updates
+  const setupWebSocketSubscription = useCallback(async () => {
+    try {
+      const response = await contentWatermarkingApi.subscribeToUpdates({
+        types: ['content_processing', 'batch_progress', 'detection_result', 'template_update'],
+        content_ids: state.content.map(c => c.id),
+        batch_ids: state.batchJobs.map(j => j.id)
+      });
+      
+      setState(prev => ({ 
+        ...prev, 
+        wsSubscription: { 
+          id: response.data.subscription_id,
+          types: ['content_processing', 'batch_progress', 'detection_result', 'template_update'],
+          active: true
         }
-        return prev + 10;
-      });
-    }, 500);
-  };
-
-  // Format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Status badge template
-  const statusBodyTemplate = (rowData: WatermarkedContent) => {
-    const severity = rowData.status === 'completed' ? 'success' : 
-                    rowData.status === 'processing' ? 'info' : 'danger';
-    return <Badge value={rowData.status} severity={severity} />;
-  };
-
-  // Leak detection badge template
-  const leakBodyTemplate = (rowData: WatermarkedContent) => {
-    const leakCount = rowData.leakDetections?.length || 0;
-    if (leakCount === 0) {
-      return <Tag value="No Leaks" severity="success" icon="pi pi-check" />;
+      }));
+    } catch (error) {
+      console.error('Failed to setup WebSocket subscription:', error);
     }
-    return <Tag value={`${leakCount} Leak${leakCount > 1 ? 's' : ''}`} severity="danger" icon="pi pi-exclamation-triangle" />;
+  }, [state.content, state.batchJobs]);
+
+  // Handle WebSocket messages
+  const handleWebSocketMessage = useCallback((message: WatermarkingWebSocketMessage) => {
+    setState(prev => ({
+      ...prev,
+      realTimeUpdates: [message, ...prev.realTimeUpdates.slice(0, 49)] // Keep last 50 updates
+    }));
+
+    switch (message.type) {
+      case 'content_processing_complete':
+        loadContent();
+        loadDashboard();
+        toast.current?.show({
+          severity: 'success',
+          summary: 'Processing Complete',
+          detail: `Content "${message.payload.content?.name}" has been processed successfully`
+        });
+        break;
+      
+      case 'batch_progress_update':
+        if (message.payload.batch_job) {
+          setState(prev => ({
+            ...prev,
+            batchJobs: prev.batchJobs.map(job => 
+              job.id === message.payload.batch_job.id ? message.payload.batch_job : job
+            )
+          }));
+        }
+        break;
+      
+      case 'watermark_detection_complete':
+        setState(prev => ({
+          ...prev,
+          detectionResults: [message.payload.result, ...prev.detectionResults.slice(0, 19)]
+        }));
+        toast.current?.show({
+          severity: 'info',
+          summary: 'Detection Complete',
+          detail: `Detected ${message.payload.result.detected_watermarks.length} watermark(s)`
+        });
+        break;
+      
+      case 'template_update':
+        loadTemplates();
+        break;
+    }
+  }, [loadContent, loadDashboard, loadTemplates]);
+
+  // File upload handler
+  const handleFileUpload = useCallback(async (event: FileUploadUploadEvent) => {
+    const files = Array.isArray(event.files) ? event.files : [event.files];
+    
+    try {
+      // Initialize progress tracking
+      setUploadProgress(prev => {
+        const newProgress = { ...prev };
+        files.forEach(file => {
+          newProgress[file.name] = 0;
+        });
+        return newProgress;
+      });
+
+      // Simulate progress for demo purposes
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          const newProgress = { ...prev };
+          files.forEach(file => {
+            if (newProgress[file.name] < 90) {
+              newProgress[file.name] = Math.min(90, newProgress[file.name] + Math.random() * 20);
+            }
+          });
+          return newProgress;
+        });
+      }, 500);
+
+      const response = await contentWatermarkingApi.uploadContent(files, {
+        auto_organize: true,
+        extract_metadata: true
+      });
+
+      clearInterval(progressInterval);
+      
+      // Complete progress
+      setUploadProgress(prev => {
+        const newProgress = { ...prev };
+        files.forEach(file => {
+          newProgress[file.name] = 100;
+        });
+        return newProgress;
+      });
+
+      // Clear progress after a short delay
+      setTimeout(() => setUploadProgress({}), 2000);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Upload Complete',
+        detail: `Successfully uploaded ${files.length} file(s)`
+      });
+
+      loadContent();
+      loadDashboard();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      setUploadProgress({});
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Upload Failed',
+        detail: 'Failed to upload files. Please try again.'
+      });
+    }
+  }, [loadContent, loadDashboard]);
+
+  // Apply watermark
+  const applyWatermark = useCallback(async (contentId: string, templateId: string) => {
+    try {
+      await contentWatermarkingApi.applyWatermark(contentId, templateId);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Watermark applied successfully'
+      });
+
+      loadContent();
+      loadDashboard();
+    } catch (error) {
+      console.error('Failed to apply watermark:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to apply watermark'
+      });
+    }
+  }, [loadContent, loadDashboard]);
+
+  // Create template
+  const createTemplate = useCallback(async () => {
+    try {
+      const templateData: CreateWatermarkTemplate = {
+        name: templateForm.name,
+        type: templateForm.type,
+        category: templateForm.category,
+        description: templateForm.description,
+        settings: templateForm.settings,
+        is_public: templateForm.is_public,
+        tags: templateForm.tags,
+        preview_file: templateForm.preview_file
+      };
+
+      await contentWatermarkingApi.createTemplate(templateData);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Template created successfully'
+      });
+
+      setShowTemplateDialog(false);
+      loadTemplates();
+      resetTemplateForm();
+    } catch (error) {
+      console.error('Failed to create template:', error);
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Failed to create template'
+      });
+    }
+  }, [templateForm, loadTemplates]);
+
+  // Reset template form
+  const resetTemplateForm = () => {
+    setTemplateForm({
+      name: '',
+      type: WatermarkType.TEXT,
+      category: TemplateCategory.PERSONAL,
+      description: '',
+      is_public: false,
+      tags: [],
+      settings: {
+        text: {
+          content: '',
+          font_family: 'Arial',
+          font_size: 24,
+          color: '#000000',
+          opacity: 0.7,
+          rotation: 0,
+          bold: false,
+          italic: false,
+          outline: false,
+          shadow: false
+        },
+        position: {
+          type: WatermarkPosition.BOTTOM_RIGHT,
+          margin_x: 20,
+          margin_y: 20
+        },
+        quality: {
+          compression: 85,
+          preserve_metadata: true
+        }
+      }
+    });
   };
 
-  // Actions template
-  const actionsBodyTemplate = (rowData: WatermarkedContent) => {
-    return (
-      <div className="flex gap-2">
-        <Button
-          icon="pi pi-eye"
-          size="small"
-          outlined
-          tooltip="Preview"
-          onClick={() => {
-            setSelectedContent(rowData);
-            setShowPreviewDialog(true);
-          }}
-        />
-        <Button
-          icon="pi pi-download"
-          size="small"
-          outlined
-          tooltip="Download"
-          onClick={() => {
-            toast.current?.show({
-              severity: 'info',
-              summary: 'Download Started',
-              detail: `Downloading ${rowData.filename}`
-            });
-          }}
-        />
-        <Button
-          icon="pi pi-search"
-          size="small"
-          outlined
-          tooltip="Analyze for Leaks"
-          onClick={() => {
-            setSelectedContent(rowData);
-            setShowLeakAnalysisDialog(true);
-          }}
-        />
-      </div>
-    );
-  };
-
-  // Leak confidence template
-  const confidenceBodyTemplate = (rowData: LeakDetection) => {
-    const getColor = (confidence: number) => {
-      if (confidence >= 90) return 'success';
-      if (confidence >= 70) return 'warning';
-      return 'danger';
+  // Status templates
+  const statusBodyTemplate = (rowData: WatermarkContent) => {
+    const getSeverity = (status: ContentStatus) => {
+      switch (status) {
+        case ContentStatus.UPLOADED: return 'info';
+        case ContentStatus.PROCESSING: return 'warning';
+        case ContentStatus.WATERMARKED: return 'success';
+        case ContentStatus.FAILED: return 'danger';
+        case ContentStatus.ARCHIVED: return 'secondary';
+        default: return 'info';
+      }
     };
 
+    return <Tag value={rowData.status} severity={getSeverity(rowData.status)} />;
+  };
+
+  const sizeBodyTemplate = (rowData: WatermarkContent) => {
+    return `${(rowData.file_size / 1024 / 1024).toFixed(2)} MB`;
+  };
+
+  const thumbnailBodyTemplate = (rowData: WatermarkContent) => {
+    return rowData.thumbnail_url ? (
+      <Image src={rowData.thumbnail_url} alt={rowData.name} width="50" preview />
+    ) : (
+      <i className="pi pi-file text-2xl" />
+    );
+  };
+
+  const actionsBodyTemplate = (rowData: WatermarkContent) => {
+    const menuItems: MenuItem[] = [
+      {
+        label: 'Apply Watermark',
+        icon: 'pi pi-plus',
+        command: () => {
+          if (state.selectedTemplate) {
+            applyWatermark(rowData.id, state.selectedTemplate.id);
+          } else {
+            toast.current?.show({
+              severity: 'warn',
+              summary: 'Warning',
+              detail: 'Please select a template first'
+            });
+          }
+        }
+      },
+      {
+        label: 'Download',
+        icon: 'pi pi-download',
+        command: async () => {
+          try {
+            const response = await contentWatermarkingApi.downloadContent(rowData.id, true);
+            // Handle file download
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = rowData.original_filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          } catch (error) {
+            toast.current?.show({
+              severity: 'error',
+              summary: 'Error',
+              detail: 'Failed to download file'
+            });
+          }
+        }
+      },
+      {
+        label: 'Delete',
+        icon: 'pi pi-trash',
+        command: () => {
+          confirmDialog({
+            message: 'Are you sure you want to delete this content?',
+            header: 'Delete Confirmation',
+            icon: 'pi pi-exclamation-triangle',
+            accept: async () => {
+              try {
+                await contentWatermarkingApi.deleteContent(rowData.id);
+                toast.current?.show({
+                  severity: 'success',
+                  summary: 'Success',
+                  detail: 'Content deleted successfully'
+                });
+                loadContent();
+                loadDashboard();
+              } catch (error) {
+                toast.current?.show({
+                  severity: 'error',
+                  summary: 'Error',
+                  detail: 'Failed to delete content'
+                });
+              }
+            }
+          });
+        }
+      }
+    ];
+
+    return <SplitButton label="Actions" icon="pi pi-cog" model={menuItems} />;
+  };
+
+  // Dashboard overview cards
+  const renderDashboardOverview = () => {
+    if (!state.dashboard) return <Skeleton height="200px" />;
+
+    const { overview } = state.dashboard;
+
     return (
-      <div className="flex align-items-center gap-2">
-        <ProgressBar
-          value={rowData.confidence}
-          style={{ width: '100px' }}
-          color={getColor(rowData.confidence)}
-        />
-        <span className="text-sm font-medium">{rowData.confidence}%</span>
+      <div className="grid">
+        <div className="col-12 md:col-3">
+          <Card className="h-full">
+            <div className="flex align-items-center">
+              <div className="flex-1">
+                <div className="text-2xl font-bold text-primary">{overview.total_content}</div>
+                <div className="text-sm text-500">Total Content</div>
+              </div>
+              <i className="pi pi-file text-3xl text-primary" />
+            </div>
+          </Card>
+        </div>
+        
+        <div className="col-12 md:col-3">
+          <Card className="h-full">
+            <div className="flex align-items-center">
+              <div className="flex-1">
+                <div className="text-2xl font-bold text-green-500">{overview.watermarked_content}</div>
+                <div className="text-sm text-500">Watermarked</div>
+              </div>
+              <i className="pi pi-shield text-3xl text-green-500" />
+            </div>
+          </Card>
+        </div>
+        
+        <div className="col-12 md:col-3">
+          <Card className="h-full">
+            <div className="flex align-items-center">
+              <div className="flex-1">
+                <div className="text-2xl font-bold text-orange-500">{overview.active_jobs}</div>
+                <div className="text-sm text-500">Active Jobs</div>
+              </div>
+              <i className="pi pi-cog text-3xl text-orange-500" />
+            </div>
+          </Card>
+        </div>
+        
+        <div className="col-12 md:col-3">
+          <Card className="h-full">
+            <div className="flex align-items-center">
+              <div className="flex-1">
+                <div className="text-2xl font-bold text-blue-500">{(overview.storage_used / 1024 / 1024 / 1024).toFixed(1)} GB</div>
+                <div className="text-sm text-500">Storage Used</div>
+              </div>
+              <i className="pi pi-database text-3xl text-blue-500" />
+            </div>
+          </Card>
+        </div>
       </div>
     );
   };
 
-  // Leak status template
-  const leakStatusBodyTemplate = (rowData: LeakDetection) => {
-    const severity = rowData.status === 'verified' ? 'danger' : 
-                    rowData.status === 'investigating' ? 'warning' : 'info';
-    return <Badge value={rowData.status} severity={severity} />;
-  };
-
-  // Chrome extension data
-  const extensionFeatures = [
-    { icon: 'pi pi-globe', title: 'Auto-Watermark', description: 'Automatically watermark content as you browse' },
-    { icon: 'pi pi-shield', title: 'Real-time Protection', description: 'Instant content protection on upload' },
-    { icon: 'pi pi-bell', title: 'Leak Alerts', description: 'Get notified when leaks are detected' },
-    { icon: 'pi pi-cog', title: 'Custom Settings', description: 'Configure watermarking preferences' }
-  ];
+  if (state.loading) {
+    return (
+      <div className="grid">
+        <div className="col-12">
+          <Card>
+            <Skeleton height="4rem" className="mb-2" />
+            <Skeleton height="20rem" />
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="content-watermarking p-4">
+    <div className="grid">
       <Toast ref={toast} />
-      <ConfirmDialog />
-
-      {/* Header */}
-      <div className="flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-900 m-0">Content Watermarking</h1>
-          <p className="text-600 mt-2 mb-0">
-            Protect your content with invisible watermarks and track leak sources
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            icon="pi pi-cog"
-            label="Settings"
-            outlined
-            onClick={() => setShowSettingsDialog(true)}
-          />
-          <Button
-            icon="pi pi-plus"
-            label="New Watermark"
-            onClick={() => setShowWatermarkDialog(true)}
-          />
+      
+      <div className="col-12">
+        <div className="flex justify-content-between align-items-center mb-4">
+          <div>
+            <div className="flex align-items-center gap-3">
+              <h2 className="text-3xl font-bold text-900 mb-2">Content Watermarking</h2>
+              {isConnected ? (
+                <Tag icon="pi pi-check-circle" value="Connected" severity="success" className="font-normal" />
+              ) : (
+                <Tag icon="pi pi-times-circle" value="Disconnected" severity="danger" className="font-normal" />
+              )}
+            </div>
+            <p className="text-600 m-0">Protect your content with digital watermarks and detect unauthorized usage</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              label="Import Content"
+              icon="pi pi-upload"
+              className="p-button-outlined"
+              onClick={() => fileUploadRef.current?.choose()}
+            />
+            <Button
+              label="Batch Operations"
+              icon="pi pi-list"
+              className="p-button-outlined"
+              onClick={() => setShowBatchDialog(true)}
+              disabled={state.content.length === 0 || state.templates.length === 0}
+            />
+            <Button
+              label="New Template"
+              icon="pi pi-plus"
+              onClick={() => setShowTemplateDialog(true)}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <TabView activeIndex={activeIndex} onTabChange={(e) => setActiveIndex(e.index)}>
-        
-        {/* Upload & Watermark Tab */}
-        <TabPanel header="Upload & Watermark" leftIcon="pi pi-upload">
-          <div className="grid">
-            
-            {/* File Upload Section */}
-            <div className="col-12 lg:col-8">
-              <Card title="Upload Content for Watermarking" className="h-full">
-                <FileUpload
-                  ref={fileUploadRef}
-                  name="content"
-                  multiple
-                  accept="image/*,video/*,audio/*,.zip,.rar"
-                  maxFileSize={500000000} // 500MB
-                  customUpload
-                  uploadHandler={onFileUpload}
-                  emptyTemplate={
-                    <div className="text-center py-6">
-                      <i className="pi pi-cloud-upload text-6xl text-400"></i>
-                      <p className="text-600 mt-3 mb-0">
-                        Drag and drop files here or click to select
-                      </p>
-                      <p className="text-400 text-sm mt-1">
-                        Supports images, videos, audio files, and archives (max 500MB per file)
-                      </p>
+      <div className="col-12">
+        <Card>
+          <TabView activeIndex={state.activeTab} onTabChange={(e) => setState(prev => ({ ...prev, activeTab: e.index }))}>
+            {/* Dashboard Tab */}
+            <TabPanel header="Dashboard" leftIcon="pi pi-chart-line">
+              <div className="grid">
+                <div className="col-12">
+                  {renderDashboardOverview()}
+                </div>
+                
+                <div className="col-12 md:col-8">
+                  <Card title="Recent Activity">
+                    {state.dashboard?.recent_activity ? (
+                      <Timeline 
+                        value={state.dashboard.recent_activity.map(activity => ({
+                          status: activity.status,
+                          date: new Date(activity.timestamp).toLocaleString(),
+                          icon: activity.status === 'success' ? 'pi pi-check' : 
+                                activity.status === 'failed' ? 'pi pi-times' : 'pi pi-exclamation-triangle',
+                          color: activity.status === 'success' ? '#10B981' : 
+                                 activity.status === 'failed' ? '#EF4444' : '#F59E0B',
+                          description: activity.description
+                        }))} 
+                        content={(item) => (
+                          <div>
+                            <div className="font-semibold">{item.description}</div>
+                            <div className="text-sm text-500">{item.date}</div>
+                          </div>
+                        )}
+                      />
+                    ) : (
+                      <Skeleton height="300px" />
+                    )}
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-4">
+                  <Card title="Processing Queue">
+                    {state.dashboard?.processing_queue ? (
+                      <div>
+                        <div className="flex justify-content-between align-items-center mb-3">
+                          <span>Pending Jobs</span>
+                          <Badge value={state.dashboard.processing_queue.pending_jobs} severity="info" />
+                        </div>
+                        <div className="flex justify-content-between align-items-center mb-3">
+                          <span>Estimated Time</span>
+                          <span className="text-600">{state.dashboard.processing_queue.estimated_time}</span>
+                        </div>
+                        {state.dashboard.processing_queue.current_job && (
+                          <div>
+                            <div className="text-sm text-600 mb-2">Current Job: {state.dashboard.processing_queue.current_job.name}</div>
+                            <ProgressBar value={state.dashboard.processing_queue.current_job.progress} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center text-500">No active jobs</div>
+                    )}
+                  </Card>
+                  
+                  {state.systemHealth && (
+                    <Card title="System Health" className="mt-3">
+                      <div className="flex align-items-center gap-2 mb-3">
+                        <i className={`pi ${
+                          state.systemHealth.status === 'healthy' ? 'pi-check-circle text-green-500' :
+                          state.systemHealth.status === 'degraded' ? 'pi-exclamation-triangle text-orange-500' :
+                          'pi-times-circle text-red-500'
+                        }`} />
+                        <span className={`font-semibold ${
+                          state.systemHealth.status === 'healthy' ? 'text-green-500' :
+                          state.systemHealth.status === 'degraded' ? 'text-orange-500' :
+                          'text-red-500'
+                        }`}>
+                          {state.systemHealth.status.charAt(0).toUpperCase() + state.systemHealth.status.slice(1)}
+                        </span>
+                      </div>
+                      <div className="grid">
+                        <div className="col-6">
+                          <div className="text-sm text-600">Uptime</div>
+                          <div className="font-semibold">{state.systemHealth.performance.uptime}%</div>
+                        </div>
+                        <div className="col-6">
+                          <div className="text-sm text-600">Queue Size</div>
+                          <div className="font-semibold">{state.systemHealth.performance.queue_size}</div>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            </TabPanel>
+
+            {/* Content Management Tab */}
+            <TabPanel header="Content Library" leftIcon="pi pi-images">
+              <div className="mb-4">
+                <Toolbar
+                  left={
+                    <div className="flex gap-2">
+                      <FileUpload
+                        ref={fileUploadRef}
+                        mode="advanced"
+                        multiple
+                        accept="image/*,video/*,.pdf"
+                        maxFileSize={100000000}
+                        customUpload
+                        uploadHandler={handleFileUpload}
+                        auto
+                        chooseLabel="Upload Files"
+                        uploadLabel="Processing..."
+                        cancelLabel="Cancel"
+                        className="p-fileupload-basic"
+                        progressBarTemplate={() => {
+                          const progressEntries = Object.entries(uploadProgress);
+                          if (progressEntries.length === 0) return null;
+                          
+                          return (
+                            <div className="mt-2">
+                              {progressEntries.map(([filename, progress]) => (
+                                <div key={filename} className="mb-2">
+                                  <div className="flex justify-content-between align-items-center mb-1">
+                                    <small className="text-600">{filename}</small>
+                                    <small className="text-600">{Math.round(progress)}%</small>
+                                  </div>
+                                  <ProgressBar value={progress} className="mb-1" style={{ height: '4px' }} />
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }}
+                      />
+                    </div>
+                  }
+                  right={
+                    <div className="flex gap-2">
+                      <InputText
+                        placeholder="Search content..."
+                        value={state.contentFilters.search || ''}
+                        onChange={(e) => setState(prev => ({
+                          ...prev,
+                          contentFilters: { ...prev.contentFilters, search: e.target.value }
+                        }))}
+                        className="w-20rem"
+                      />
+                      <Dropdown
+                        placeholder="Filter by status"
+                        value={state.contentFilters.status}
+                        onChange={(e: DropdownChangeEvent) => setState(prev => ({
+                          ...prev,
+                          contentFilters: { ...prev.contentFilters, status: e.value }
+                        }))}
+                        options={Object.values(ContentStatus).map(status => ({ label: status, value: status }))}
+                        showClear
+                        className="w-12rem"
+                      />
                     </div>
                   }
                 />
+              </div>
 
-                {/* Uploaded Files Preview */}
-                {uploadedFiles.length > 0 && (
-                  <div className="mt-4">
-                    <h5>Uploaded Files ({uploadedFiles.length})</h5>
-                    <div className="flex flex-wrap gap-2">
-                      {uploadedFiles.map((file, index) => (
-                        <Chip
-                          key={index}
-                          label={`${file.name} (${formatFileSize(file.size)})`}
-                          icon="pi pi-file"
-                          removable
-                          onRemove={() => {
-                            setUploadedFiles(prev => prev.filter((_, i) => i !== index));
-                          }}
-                        />
+              <DataTable
+                value={state.content}
+                selection={state.selectedContent}
+                onSelectionChange={(e) => setState(prev => ({ ...prev, selectedContent: e.value }))}
+                dataKey="id"
+                loading={state.contentLoading}
+                paginator
+                rows={state.contentPagination.per_page}
+                totalRecords={state.contentPagination.total}
+                lazy
+                onPage={(e) => {
+                  const newPagination = {
+                    ...state.contentPagination,
+                    page: (e.page || 0) + 1
+                  };
+                  loadContent(state.contentFilters, newPagination);
+                }}
+                className="p-datatable-gridlines"
+                emptyMessage="No content found"
+              >
+                <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} />
+                <Column field="thumbnail_url" header="Preview" body={thumbnailBodyTemplate} style={{ width: '80px' }} />
+                <Column field="name" header="Name" sortable />
+                <Column field="content_type" header="Type" sortable />
+                <Column field="file_size" header="Size" body={sizeBodyTemplate} />
+                <Column field="status" header="Status" body={statusBodyTemplate} sortable />
+                <Column field="watermarked_versions" header="Versions" body={(rowData) => rowData.watermarked_versions.length} />
+                <Column field="uploaded_at" header="Uploaded" body={(rowData) => new Date(rowData.uploaded_at).toLocaleDateString()} sortable />
+                <Column body={actionsBodyTemplate} style={{ width: '120px' }} />
+              </DataTable>
+            </TabPanel>
+
+            {/* Templates Tab */}
+            <TabPanel header="Templates" leftIcon="pi pi-palette">
+              <div className="mb-4">
+                <Toolbar
+                  left={
+                    <div className="flex gap-2 align-items-center">
+                      <Button
+                        label="New Template"
+                        icon="pi pi-plus"
+                        onClick={() => setShowTemplateDialog(true)}
+                      />
+                      <Button
+                        label="Import Template"
+                        icon="pi pi-upload"
+                        className="p-button-outlined"
+                        onClick={() => {
+                          toast.current?.show({
+                            severity: 'info',
+                            summary: 'Import Template',
+                            detail: 'Template import functionality coming soon...'
+                          });
+                        }}
+                      />
+                    </div>
+                  }
+                  right={
+                    <div className="flex gap-2">
+                      <InputText
+                        placeholder="Search templates..."
+                        className="w-20rem"
+                      />
+                      <Dropdown
+                        placeholder="Filter by category"
+                        options={[
+                          { label: 'Personal', value: 'personal' },
+                          { label: 'Business', value: 'business' },
+                          { label: 'Brand', value: 'brand' },
+                          { label: 'Copyright', value: 'copyright' }
+                        ]}
+                        className="w-12rem"
+                        showClear
+                      />
+                    </div>
+                  }
+                />
+              </div>
+
+              <div className="grid">
+                {state.templates.map(template => (
+                  <div key={template.id} className="col-12 md:col-6 lg:col-4">
+                    <Card className="h-full">
+                      <div className="flex justify-content-between align-items-start mb-3">
+                        <div>
+                          <h4 className="m-0 mb-1">{template.name}</h4>
+                          <small className="text-500">{template.category}</small>
+                        </div>
+                        <Tag value={template.type} severity="info" />
+                      </div>
+                      
+                      {template.preview_url && (
+                        <div className="mb-3">
+                          <Image 
+                            src={template.preview_url} 
+                            alt={template.name}
+                            width="100%" 
+                            height="120px"
+                            style={{ objectFit: 'cover' }}
+                            preview
+                          />
+                        </div>
+                      )}
+                      
+                      <p className="text-600 text-sm mb-3">{template.description}</p>
+                      
+                      <div className="flex justify-content-between align-items-center">
+                        <div className="flex gap-1">
+                          {template.tags?.map(tag => (
+                            <Chip key={tag} label={tag} className="p-chip-sm" />
+                          )) || null}
+                        </div>
+                        
+                        <div className="flex gap-1">
+                          <Button
+                            icon="pi pi-eye"
+                            className="p-button-text p-button-sm"
+                            onClick={() => {
+                              setState(prev => ({ ...prev, selectedTemplate: template }));
+                              setShowPreview(true);
+                            }}
+                            tooltip="Preview"
+                          />
+                          <Button
+                            icon="pi pi-copy"
+                            className="p-button-text p-button-sm"
+                            onClick={async () => {
+                              try {
+                                await contentWatermarkingApi.duplicateTemplate(template.id);
+                                toast.current?.show({
+                                  severity: 'success',
+                                  summary: 'Success',
+                                  detail: 'Template duplicated successfully'
+                                });
+                                loadTemplates();
+                              } catch (error) {
+                                toast.current?.show({
+                                  severity: 'error',
+                                  summary: 'Error',
+                                  detail: 'Failed to duplicate template'
+                                });
+                              }
+                            }}
+                            tooltip="Duplicate"
+                          />
+                          <Button
+                            icon="pi pi-trash"
+                            className="p-button-text p-button-sm p-button-danger"
+                            onClick={() => {
+                              confirmDialog({
+                                message: 'Are you sure you want to delete this template?',
+                                header: 'Delete Template',
+                                icon: 'pi pi-exclamation-triangle',
+                                accept: async () => {
+                                  try {
+                                    await contentWatermarkingApi.deleteTemplate(template.id);
+                                    toast.current?.show({
+                                      severity: 'success',
+                                      summary: 'Success',
+                                      detail: 'Template deleted successfully'
+                                    });
+                                    loadTemplates();
+                                  } catch (error) {
+                                    toast.current?.show({
+                                      severity: 'error',
+                                      summary: 'Error',
+                                      detail: 'Failed to delete template'
+                                    });
+                                  }
+                                }
+                              });
+                            }}
+                            tooltip="Delete"
+                          />
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                ))}
+                
+                {state.templates.length === 0 && (
+                  <div className="col-12 text-center py-8">
+                    <i className="pi pi-palette text-6xl text-400 mb-4" />
+                    <h3 className="text-900 mb-3">No Templates Found</h3>
+                    <p className="text-600 mb-4">Create your first watermark template to get started.</p>
+                    <Button
+                      label="Create Template"
+                      icon="pi pi-plus"
+                      onClick={() => setShowTemplateDialog(true)}
+                    />
+                  </div>
+                )}
+              </div>
+            </TabPanel>
+
+            {/* Detection Tab */}
+            <TabPanel header="Detection" leftIcon="pi pi-search">
+              <div className="mb-4">
+                <Toolbar
+                  left={
+                    <div className="flex gap-2">
+                      <Button
+                        label="Upload for Detection"
+                        icon="pi pi-upload"
+                        onClick={() => detectionFileUploadRef.current?.choose()}
+                      />
+                      <Button
+                        label="Bulk Detection"
+                        icon="pi pi-list"
+                        className="p-button-outlined"
+                        onClick={() => {
+                          toast.current?.show({
+                            severity: 'info',
+                            summary: 'Bulk Detection',
+                            detail: 'Bulk detection feature coming soon...'
+                          });
+                        }}
+                      />
+                    </div>
+                  }
+                  right={
+                    <div className="flex gap-2">
+                      <Dropdown
+                        placeholder="Sensitivity"
+                        value="medium"
+                        options={[
+                          { label: 'Low', value: 'low' },
+                          { label: 'Medium', value: 'medium' },
+                          { label: 'High', value: 'high' }
+                        ]}
+                        className="w-10rem"
+                      />
+                    </div>
+                  }
+                />
+              </div>
+
+              <div className="grid">
+                <div className="col-12 md:col-8">
+                  <Card title="Detection Results">
+                    <DataTable
+                      value={state.detectionResults}
+                      loading={state.detectionLoading}
+                      emptyMessage="No detection results found"
+                      paginator
+                      rows={10}
+                      className="p-datatable-gridlines"
+                    >
+                      <Column field="id" header="ID" style={{ width: '80px' }} />
+                      <Column field="filename" header="File" />
+                      <Column 
+                        field="detected_watermarks" 
+                        header="Detected" 
+                        body={(rowData) => (
+                          <Badge 
+                            value={rowData.detected_watermarks.length} 
+                            severity={rowData.detected_watermarks.length > 0 ? 'success' : 'secondary'}
+                          />
+                        )} 
+                      />
+                      <Column 
+                        field="confidence_score" 
+                        header="Confidence" 
+                        body={(rowData) => (
+                          <ProgressBar value={rowData.confidence_score * 100} style={{ height: '6px' }} />
+                        )} 
+                      />
+                      <Column 
+                        field="processed_at" 
+                        header="Processed" 
+                        body={(rowData) => new Date(rowData.processed_at).toLocaleDateString()} 
+                      />
+                      <Column 
+                        body={(rowData) => (
+                          <Button
+                            icon="pi pi-eye"
+                            className="p-button-text p-button-sm"
+                            onClick={() => {
+                              // Show detailed detection results
+                              toast.current?.show({
+                                severity: 'info',
+                                summary: 'Detection Details',
+                                detail: `Found ${rowData.detected_watermarks.length} watermark(s) with ${Math.round(rowData.confidence_score * 100)}% confidence`
+                              });
+                            }}
+                          />
+                        )}
+                        style={{ width: '50px' }}
+                      />
+                    </DataTable>
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-4">
+                  <Card title="Detection Statistics">
+                    <div className="grid">
+                      <div className="col-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-500">
+                            {state.detectionResults.length}
+                          </div>
+                          <div className="text-sm text-500">Total Scanned</div>
+                        </div>
+                      </div>
+                      <div className="col-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-500">
+                            {state.detectionResults.filter(r => r.detected_watermarks.length > 0).length}
+                          </div>
+                          <div className="text-sm text-500">Detected</div>
+                        </div>
+                      </div>
+                      <div className="col-12">
+                        <div className="text-center mt-3">
+                          <div className="text-lg font-semibold">
+                            {state.detectionResults.length > 0 
+                              ? Math.round((state.detectionResults.filter(r => r.detected_watermarks.length > 0).length / state.detectionResults.length) * 100)
+                              : 0}%
+                          </div>
+                          <div className="text-sm text-500">Detection Rate</div>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                  
+                  <Card title="Recent Detections" className="mt-3">
+                    <Timeline 
+                      value={state.detectionResults.slice(0, 5).map(result => ({
+                        status: result.detected_watermarks.length > 0 ? 'Detected' : 'None Found',
+                        date: new Date(result.processed_at).toLocaleString(),
+                        icon: result.detected_watermarks.length > 0 ? 'pi pi-check' : 'pi pi-times',
+                        color: result.detected_watermarks.length > 0 ? '#10B981' : '#6B7280',
+                        file: result.filename
+                      }))} 
+                      content={(item) => (
+                        <div>
+                          <div className="font-semibold">{item.file}</div>
+                          <div className="text-sm text-500">{item.status} - {item.date}</div>
+                        </div>
+                      )}
+                      className="custom-timeline"
+                    />
+                  </Card>
+                </div>
+              </div>
+
+              <FileUpload
+                ref={detectionFileUploadRef}
+                style={{ display: 'none' }}
+                mode="advanced"
+                multiple
+                accept="image/*,video/*,.pdf"
+                maxFileSize={50000000}
+                customUpload
+                uploadHandler={async (e) => {
+                  const files = Array.isArray(e.files) ? e.files : [e.files];
+                  
+                  try {
+                    setState(prev => ({ ...prev, detectionLoading: true }));
+                    
+                    const response = await contentWatermarkingApi.bulkDetection(files, {
+                      sensitivity: 'medium',
+                      expected_templates: state.templates.map(t => t.id)
+                    });
+                    
+                    setState(prev => ({ ...prev, detectionLoading: false }));
+                    
+                    toast.current?.show({
+                      severity: 'success',
+                      summary: 'Detection Complete',
+                      detail: `Analyzed ${files.length} file(s) for watermarks`
+                    });
+                  } catch (error) {
+                    setState(prev => ({ ...prev, detectionLoading: false }));
+                    toast.current?.show({
+                      severity: 'error',
+                      summary: 'Detection Failed',
+                      detail: 'Failed to analyze files for watermarks'
+                    });
+                  }
+                }}
+              />
+            </TabPanel>
+
+            {/* Analytics Tab */}
+            <TabPanel header="Analytics" leftIcon="pi pi-chart-bar">
+              <div className="mb-4">
+                <Toolbar
+                  left={
+                    <div className="flex gap-2">
+                      <Button
+                        label="Generate Report"
+                        icon="pi pi-file-pdf"
+                        onClick={() => {
+                          toast.current?.show({
+                            severity: 'info',
+                            summary: 'Report Generation',
+                            detail: 'Generating comprehensive analytics report...'
+                          });
+                        }}
+                      />
+                      <Button
+                        label="Export Data"
+                        icon="pi pi-download"
+                        className="p-button-outlined"
+                        onClick={() => {
+                          toast.current?.show({
+                            severity: 'info',
+                            summary: 'Export Data',
+                            detail: 'Exporting analytics data...'
+                          });
+                        }}
+                      />
+                    </div>
+                  }
+                  right={
+                    <div className="flex gap-2 align-items-center">
+                      <label className="font-semibold">Date Range:</label>
+                      <Dropdown
+                        value="last_30_days"
+                        options={[
+                          { label: 'Last 7 Days', value: 'last_7_days' },
+                          { label: 'Last 30 Days', value: 'last_30_days' },
+                          { label: 'Last 90 Days', value: 'last_90_days' },
+                          { label: 'This Year', value: 'this_year' }
+                        ]}
+                        className="w-12rem"
+                      />
+                    </div>
+                  }
+                />
+              </div>
+
+              <div className="grid">
+                <div className="col-12 md:col-6 lg:col-3">
+                  <Card className="h-full">
+                    <div className="flex align-items-center">
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold text-blue-500">
+                          {state.analytics?.usage_stats?.watermarks_applied || 0}
+                        </div>
+                        <div className="text-sm text-500">Watermarks Applied</div>
+                        <div className="text-xs text-green-500 mt-1">+12% this month</div>
+                      </div>
+                      <i className="pi pi-shield text-3xl text-blue-500" />
+                    </div>
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-6 lg:col-3">
+                  <Card className="h-full">
+                    <div className="flex align-items-center">
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold text-green-500">
+                          {state.analytics?.usage_stats?.watermarks_detected || 0}
+                        </div>
+                        <div className="text-sm text-500">Watermarks Detected</div>
+                        <div className="text-xs text-green-500 mt-1">+8% this month</div>
+                      </div>
+                      <i className="pi pi-search text-3xl text-green-500" />
+                    </div>
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-6 lg:col-3">
+                  <Card className="h-full">
+                    <div className="flex align-items-center">
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold text-orange-500">
+                          {state.analytics?.usage_stats?.processing_time_avg || '0s'}
+                        </div>
+                        <div className="text-sm text-500">Avg Processing Time</div>
+                        <div className="text-xs text-green-500 mt-1">-15% this month</div>
+                      </div>
+                      <i className="pi pi-clock text-3xl text-orange-500" />
+                    </div>
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-6 lg:col-3">
+                  <Card className="h-full">
+                    <div className="flex align-items-center">
+                      <div className="flex-1">
+                        <div className="text-2xl font-bold text-purple-500">
+                          {state.analytics?.usage_stats?.success_rate ? Math.round(state.analytics.usage_stats.success_rate * 100) : 0}%
+                        </div>
+                        <div className="text-sm text-500">Success Rate</div>
+                        <div className="text-xs text-green-500 mt-1">+3% this month</div>
+                      </div>
+                      <i className="pi pi-check-circle text-3xl text-purple-500" />
+                    </div>
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-8">
+                  <Card title="Processing Trends">
+                    <Chart 
+                      type="line" 
+                      data={{
+                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                        datasets: [{
+                          label: 'Watermarks Applied',
+                          data: [12, 19, 8, 15, 22, 18],
+                          borderColor: '#3B82F6',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                          tension: 0.4
+                        }, {
+                          label: 'Detections',
+                          data: [5, 8, 12, 6, 9, 15],
+                          borderColor: '#10B981',
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          tension: 0.4
+                        }]
+                      }}
+                      options={{
+                        plugins: {
+                          legend: {
+                            display: true,
+                            position: 'top'
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true
+                          }
+                        }
+                      }}
+                      height="300px"
+                    />
+                  </Card>
+                </div>
+                
+                <div className="col-12 md:col-4">
+                  <Card title="Content Types">
+                    <Chart 
+                      type="doughnut"
+                      data={{
+                        labels: ['Images', 'Videos', 'Documents'],
+                        datasets: [{
+                          data: [45, 35, 20],
+                          backgroundColor: ['#3B82F6', '#10B981', '#F59E0B']
+                        }]
+                      }}
+                      options={{
+                        plugins: {
+                          legend: {
+                            display: true,
+                            position: 'bottom'
+                          }
+                        }
+                      }}
+                      height="250px"
+                    />
+                  </Card>
+                  
+                  <Card title="Template Usage" className="mt-3">
+                    <div className="space-y-3">
+                      {state.templates.slice(0, 5).map((template, index) => (
+                        <div key={template.id} className="flex justify-content-between align-items-center">
+                          <span className="text-sm">{template.name}</span>
+                          <div className="flex align-items-center gap-2">
+                            <ProgressBar 
+                              value={(5 - index) * 20} 
+                              style={{ width: '60px', height: '6px' }}
+                            />
+                            <span className="text-xs text-500">{(5 - index) * 20}%</span>
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  </Card>
+                </div>
+              </div>
+            </TabPanel>
+          </TabView>
+        </Card>
+      </div>
 
-                {/* Processing Progress */}
-                {processingProgress > 0 && processingProgress < 100 && (
-                  <div className="mt-4">
-                    <h5>Processing Files...</h5>
-                    <ProgressBar value={processingProgress} />
-                  </div>
-                )}
-              </Card>
-            </div>
-
-            {/* Watermark Selection */}
-            <div className="col-12 lg:col-4">
-              <Card title="Select Watermark" className="h-full">
-                {watermarkSettings.length > 0 ? (
-                  <div className="flex flex-column gap-3">
-                    {watermarkSettings.map(watermark => (
-                      <div
-                        key={watermark.id}
-                        className="p-3 border-1 border-200 border-round hover:bg-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex justify-content-between align-items-start mb-2">
-                          <span className="font-semibold text-900">{watermark.name}</span>
-                          <Tag
-                            value={watermark.type.replace('-', ' ')}
-                            severity="info"
-                            className="text-xs"
-                          />
-                        </div>
-                        <div className="text-sm text-600 mb-2">
-                          Strength: {watermark.strength}%
-                        </div>
-                        {watermark.subscriberName && (
-                          <div className="text-sm text-500 mb-3">
-                            <i className="pi pi-user mr-2"></i>
-                            {watermark.subscriberName}
-                          </div>
-                        )}
-                        <Button
-                          label="Apply Watermark"
-                          size="small"
-                          className="w-full"
-                          disabled={uploadedFiles.length === 0}
-                          onClick={() => handleProcessFiles(watermark.id)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <i className="pi pi-info-circle text-4xl text-400 mb-3"></i>
-                    <p className="text-600">No watermarks available</p>
-                    <Button
-                      label="Create Watermark"
-                      size="small"
-                      onClick={() => setShowWatermarkDialog(true)}
-                    />
-                  </div>
-                )}
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-
-        {/* Watermarked Content Tab */}
-        <TabPanel header="Watermarked Content" leftIcon="pi pi-shield">
-          <Card>
+      {/* Template Creation Dialog */}
+      {showTemplateDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex align-items-center justify-content-center z-50">
+          <Card className="w-11 max-w-4xl max-h-screen overflow-auto">
             <div className="flex justify-content-between align-items-center mb-4">
-              <h3 className="m-0">Watermarked Content Library</h3>
-              <div className="flex gap-2">
-                <Button
-                  icon="pi pi-refresh"
-                  label="Refresh"
-                  outlined
-                  size="small"
-                  onClick={() => {
-                    toast.current?.show({
-                      severity: 'info',
-                      summary: 'Refreshed',
-                      detail: 'Content library updated'
-                    });
-                  }}
-                />
-                <Button
-                  icon="pi pi-download"
-                  label="Batch Download"
-                  size="small"
-                  onClick={() => setShowBatchDialog(true)}
-                />
-              </div>
+              <h3 className="m-0">Create Watermark Template</h3>
+              <Button
+                icon="pi pi-times"
+                className="p-button-text p-button-rounded"
+                onClick={() => {
+                  setShowTemplateDialog(false);
+                  resetTemplateForm();
+                }}
+              />
             </div>
             
-            <DataTable
-              value={watermarkedContent}
-              paginator
-              rows={10}
-              dataKey="id"
-              emptyMessage="No watermarked content found"
-              className="p-datatable-sm"
-            >
-              <Column field="filename" header="Filename" sortable />
-              <Column
-                field="watermarkType"
-                header="Watermark Type"
-                body={(rowData) => (
-                  <Tag
-                    value={rowData.watermarkType.replace('-', ' ')}
-                    severity="info"
-                  />
-                )}
-              />
-              <Column
-                field="subscriberName"
-                header="Subscriber"
-                sortable
-              />
-              <Column
-                field="originalSize"
-                header="Size"
-                body={(rowData) => formatFileSize(rowData.originalSize)}
-                sortable
-              />
-              <Column
-                field="uploadDate"
-                header="Date"
-                body={(rowData) => rowData.uploadDate.toLocaleDateString()}
-                sortable
-              />
-              <Column
-                field="status"
-                header="Status"
-                body={statusBodyTemplate}
-              />
-              <Column
-                header="Leak Status"
-                body={leakBodyTemplate}
-              />
-              <Column
-                header="Actions"
-                body={actionsBodyTemplate}
-                style={{ width: '120px' }}
-              />
-            </DataTable>
-          </Card>
-        </TabPanel>
-
-        {/* Leak Detection Tab */}
-        <TabPanel header="Leak Detection" leftIcon="pi pi-exclamation-triangle">
-          <div className="grid">
-            
-            {/* Leak Statistics */}
-            <div className="col-12">
-              <div className="grid">
-                <div className="col-12 md:col-3">
-                  <Card className="text-center">
-                    <div className="text-900 font-medium mb-2">Total Leaks Detected</div>
-                    <div className="text-4xl font-bold text-red-500">{leakDetections.length}</div>
-                  </Card>
-                </div>
-                <div className="col-12 md:col-3">
-                  <Card className="text-center">
-                    <div className="text-900 font-medium mb-2">Verified Leaks</div>
-                    <div className="text-4xl font-bold text-orange-500">
-                      {leakDetections.filter(l => l.status === 'verified').length}
-                    </div>
-                  </Card>
-                </div>
-                <div className="col-12 md:col-3">
-                  <Card className="text-center">
-                    <div className="text-900 font-medium mb-2">Under Investigation</div>
-                    <div className="text-4xl font-bold text-yellow-500">
-                      {leakDetections.filter(l => l.status === 'investigating').length}
-                    </div>
-                  </Card>
-                </div>
-                <div className="col-12 md:col-3">
-                  <Card className="text-center">
-                    <div className="text-900 font-medium mb-2">Average Confidence</div>
-                    <div className="text-4xl font-bold text-blue-500">
-                      {leakDetections.length > 0 
-                        ? Math.round(leakDetections.reduce((acc, l) => acc + l.confidence, 0) / leakDetections.length)
-                        : 0}%
-                    </div>
-                  </Card>
-                </div>
-              </div>
-            </div>
-
-            {/* Leak Detection Table */}
-            <div className="col-12">
-              <Card title="Detected Leaks">
-                <DataTable
-                  value={leakDetections}
-                  paginator
-                  rows={10}
-                  dataKey="id"
-                  emptyMessage="No leaks detected"
-                  className="p-datatable-sm"
-                >
-                  <Column
-                    field="detectedAt"
-                    header="Detected"
-                    body={(rowData) => rowData.detectedAt.toLocaleDateString()}
-                    sortable
-                  />
-                  <Column field="source" header="Source" sortable />
-                  <Column field="subscriberName" header="Subscriber" sortable />
-                  <Column
-                    field="confidence"
-                    header="Confidence"
-                    body={confidenceBodyTemplate}
-                    sortable
-                  />
-                  <Column
-                    field="status"
-                    header="Status"
-                    body={leakStatusBodyTemplate}
-                  />
-                  <Column
-                    header="Actions"
-                    body={(rowData) => (
-                      <div className="flex gap-1">
-                        <Button
-                          icon="pi pi-eye"
-                          size="small"
-                          outlined
-                          tooltip="View Evidence"
-                          onClick={() => {
-                            toast.current?.show({
-                              severity: 'info',
-                              summary: 'Evidence',
-                              detail: 'Opening evidence file...'
-                            });
-                          }}
-                        />
-                        <Button
-                          icon="pi pi-send"
-                          size="small"
-                          outlined
-                          tooltip="Send DMCA"
-                          onClick={() => {
-                            toast.current?.show({
-                              severity: 'success',
-                              summary: 'DMCA Takedown',
-                              detail: 'DMCA notice prepared for sending'
-                            });
-                          }}
-                        />
-                      </div>
-                    )}
-                    style={{ width: '80px' }}
-                  />
-                </DataTable>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-
-        {/* Chrome Extension Tab */}
-        <TabPanel header="Browser Extension" leftIcon="pi pi-globe">
-          <div className="grid">
-            
-            {/* Extension Overview */}
-            <div className="col-12 lg:col-6">
-              <Card title="AutoDMCA Chrome Extension">
-                <div className="text-center mb-4">
-                  <i className="pi pi-chrome text-6xl text-blue-500 mb-3"></i>
-                  <h3 className="text-900 mb-2">Automated Content Watermarking</h3>
-                  <p className="text-600 line-height-3">
-                    Automatically watermark your content as you upload to social media platforms, 
-                    OnlyFans, and other content sites. Real-time protection with zero effort.
-                  </p>
-                </div>
-
-                <div className="flex flex-column gap-3 mb-4">
-                  {extensionFeatures.map((feature, index) => (
-                    <div key={index} className="flex align-items-center gap-3 p-3 border-1 border-200 border-round">
-                      <i className={`${feature.icon} text-2xl text-primary`}></i>
-                      <div>
-                        <div className="font-semibold text-900">{feature.title}</div>
-                        <div className="text-600 text-sm">{feature.description}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    icon="pi pi-download"
-                    label="Download Extension"
-                    className="flex-1"
-                    onClick={() => {
-                      toast.current?.show({
-                        severity: 'info',
-                        summary: 'Download Started',
-                        detail: 'AutoDMCA Chrome Extension downloading...'
-                      });
-                    }}
-                  />
-                  <Button
-                    icon="pi pi-book"
-                    label="Setup Guide"
-                    outlined
-                    onClick={() => {
-                      toast.current?.show({
-                        severity: 'info',
-                        summary: 'Opening Guide',
-                        detail: 'Setup instructions will open in a new tab'
-                      });
-                    }}
-                  />
-                </div>
-              </Card>
-            </div>
-
-            {/* Extension Settings */}
-            <div className="col-12 lg:col-6">
-              <Card title="Extension Configuration">
-                <div className="flex flex-column gap-4">
-                  
-                  <div>
-                    <label className="block text-900 font-medium mb-2">
-                      Default Watermark Type
-                    </label>
-                    <Dropdown
-                      value={selectedWatermarkType}
-                      options={watermarkTypes}
-                      onChange={(e) => setSelectedWatermarkType(e.value)}
-                      optionLabel="label"
-                      optionValue="value"
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-900 font-medium mb-2">
-                      Default Watermark Strength: {watermarkStrength}%
-                    </label>
-                    <Slider
-                      value={watermarkStrength}
-                      onChange={(e) => setWatermarkStrength(e.value as number)}
-                      min={10}
-                      max={100}
-                      step={5}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId="auto-watermark"
-                      checked={true}
-                      onChange={() => {}}
-                    />
-                    <label htmlFor="auto-watermark" className="text-900">
-                      Enable automatic watermarking
-                    </label>
-                  </div>
-
-                  <div className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId="leak-notifications"
-                      checked={true}
-                      onChange={() => {}}
-                    />
-                    <label htmlFor="leak-notifications" className="text-900">
-                      Enable leak detection notifications
-                    </label>
-                  </div>
-
-                  <div className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId="batch-processing"
-                      checked={false}
-                      onChange={() => {}}
-                    />
-                    <label htmlFor="batch-processing" className="text-900">
-                      Enable batch processing for multiple uploads
-                    </label>
-                  </div>
-
-                  <Button
-                    label="Save Configuration"
-                    className="w-full mt-3"
-                    onClick={() => {
-                      toast.current?.show({
-                        severity: 'success',
-                        summary: 'Settings Saved',
-                        detail: 'Extension configuration updated successfully'
-                      });
-                    }}
-                  />
-                </div>
-              </Card>
-
-              {/* Extension Status */}
-              <Card title="Extension Status" className="mt-3">
-                <div className="flex align-items-center gap-3 p-3 bg-green-50 border-round">
-                  <i className="pi pi-check-circle text-2xl text-green-600"></i>
-                  <div>
-                    <div className="font-semibold text-green-900">Extension Active</div>
-                    <div className="text-green-700 text-sm">
-                      Version 2.1.0 - Last sync: 2 minutes ago
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <div className="flex justify-content-between align-items-center mb-2">
-                    <span className="text-900 font-medium">Files Watermarked Today</span>
-                    <span className="text-primary font-bold">247</span>
-                  </div>
-                  <div className="flex justify-content-between align-items-center mb-2">
-                    <span className="text-900 font-medium">Active Watermarks</span>
-                    <span className="text-primary font-bold">{watermarkSettings.filter(w => w.isActive).length}</span>
-                  </div>
-                  <div className="flex justify-content-between align-items-center">
-                    <span className="text-900 font-medium">Leaks Detected This Week</span>
-                    <span className="text-red-600 font-bold">{leakDetections.length}</span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-
-        {/* Analytics Tab */}
-        <TabPanel header="Analytics" leftIcon="pi pi-chart-line">
-          <div className="grid">
-            
-            {/* Watermarking Statistics */}
-            <div className="col-12 lg:col-6">
-              <Card title="Watermarking Statistics">
-                <Chart
-                  type="doughnut"
-                  data={{
-                    labels: watermarkTypes.map(t => t.label),
-                    datasets: [{
-                      data: watermarkTypes.map(() => Math.floor(Math.random() * 100) + 10),
-                      backgroundColor: [
-                        '#FF6384',
-                        '#36A2EB',
-                        '#FFCE56',
-                        '#4BC0C0',
-                        '#9966FF',
-                        '#FF9F40'
-                      ]
-                    }]
-                  }}
-                  options={{
-                    responsive: true,
-                    plugins: {
-                      legend: {
-                        position: 'bottom'
-                      }
-                    }
-                  }}
-                />
-              </Card>
-            </div>
-
-            {/* Leak Detection Timeline */}
-            <div className="col-12 lg:col-6">
-              <Card title="Leak Detection Timeline">
-                <Timeline
-                  value={leakDetections.slice(0, 5)}
-                  content={(item) => (
-                    <div className="p-3">
-                      <div className="font-semibold text-900">{item.source}</div>
-                      <div className="text-600 text-sm mb-2">
-                        Subscriber: {item.subscriberName}
-                      </div>
-                      <div className="flex align-items-center gap-2">
-                        <Badge
-                          value={`${item.confidence}% confidence`}
-                          severity={item.confidence >= 90 ? 'success' : 'warning'}
-                        />
-                        <Badge value={item.status} severity="info" />
-                      </div>
-                    </div>
-                  )}
-                  marker={(item) => (
-                    <span
-                      className={`flex w-2rem h-2rem align-items-center justify-content-center text-white border-circle z-1 shadow-1 ${
-                        item.status === 'verified' ? 'bg-red-500' : 
-                        item.status === 'investigating' ? 'bg-yellow-500' : 'bg-blue-500'
-                      }`}
-                    >
-                      <i className="pi pi-exclamation-triangle"></i>
-                    </span>
-                  )}
-                />
-              </Card>
-            </div>
-
-            {/* Performance Metrics */}
-            <div className="col-12">
-              <Card title="Performance Metrics">
-                <div className="grid">
-                  <div className="col-12 md:col-2">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-500 mb-1">1,247</div>
-                      <div className="text-600 text-sm">Total Files Watermarked</div>
-                    </div>
-                  </div>
-                  <div className="col-12 md:col-2">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-500 mb-1">98.7%</div>
-                      <div className="text-600 text-sm">Success Rate</div>
-                    </div>
-                  </div>
-                  <div className="col-12 md:col-2">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-500 mb-1">2.3s</div>
-                      <div className="text-600 text-sm">Avg Processing Time</div>
-                    </div>
-                  </div>
-                  <div className="col-12 md:col-2">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-red-500 mb-1">{leakDetections.length}</div>
-                      <div className="text-600 text-sm">Leaks Detected</div>
-                    </div>
-                  </div>
-                  <div className="col-12 md:col-2">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-purple-500 mb-1">89%</div>
-                      <div className="text-600 text-sm">Leak Detection Accuracy</div>
-                    </div>
-                  </div>
-                  <div className="col-12 md:col-2">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-cyan-500 mb-1">47</div>
-                      <div className="text-600 text-sm">Active Subscribers</div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-      </TabView>
-
-      {/* Create Watermark Dialog */}
-      <Dialog
-        header="Create New Watermark"
-        visible={showWatermarkDialog}
-        style={{ width: '600px' }}
-        onHide={() => setShowWatermarkDialog(false)}
-        footer={
-          <div className="flex justify-content-end gap-2">
-            <Button
-              label="Cancel"
-              outlined
-              onClick={() => setShowWatermarkDialog(false)}
-            />
-            <Button
-              label="Create Watermark"
-              onClick={handleCreateWatermark}
-              disabled={!watermarkName.trim()}
-            />
-          </div>
-        }
-      >
-        <div className="flex flex-column gap-4">
-          <div>
-            <label className="block text-900 font-medium mb-2">
-              Watermark Name *
-            </label>
-            <InputText
-              value={watermarkName}
-              onChange={(e) => setWatermarkName(e.target.value)}
-              placeholder="Enter watermark name"
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label className="block text-900 font-medium mb-2">
-              Watermark Type
-            </label>
-            <Dropdown
-              value={selectedWatermarkType}
-              options={watermarkTypes}
-              onChange={(e) => setSelectedWatermarkType(e.value)}
-              optionLabel="label"
-              optionValue="value"
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label className="block text-900 font-medium mb-2">
-              Watermark Strength: {watermarkStrength}%
-            </label>
-            <Slider
-              value={watermarkStrength}
-              onChange={(e) => setWatermarkStrength(e.value as number)}
-              min={10}
-              max={100}
-              step={5}
-              className="w-full"
-            />
-            <div className="text-sm text-600 mt-1">
-              Higher strength provides better protection but may affect quality
-            </div>
-          </div>
-
-          <div className="grid">
-            <div className="col-6">
-              <label className="block text-900 font-medium mb-2">
-                Subscriber ID
-              </label>
-              <InputText
-                value={subscriberId}
-                onChange={(e) => setSubscriberId(e.target.value)}
-                placeholder="Optional subscriber ID"
-                className="w-full"
-              />
-            </div>
-            <div className="col-6">
-              <label className="block text-900 font-medium mb-2">
-                Subscriber Name
-              </label>
-              <InputText
-                value={subscriberName}
-                onChange={(e) => setSubscriberName(e.target.value)}
-                placeholder="Optional subscriber name"
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-900 font-medium mb-2">
-              Metadata (JSON)
-            </label>
-            <InputTextarea
-              value={watermarkMetadata}
-              onChange={(e) => setWatermarkMetadata(e.target.value)}
-              placeholder='{"tier": "premium", "region": "US"}'
-              rows={3}
-              className="w-full"
-            />
-            <div className="text-sm text-600 mt-1">
-              Additional metadata in JSON format (optional)
-            </div>
-          </div>
-        </div>
-      </Dialog>
-
-      {/* Preview Dialog */}
-      <Dialog
-        header={`Preview: ${selectedContent?.filename}`}
-        visible={showPreviewDialog}
-        style={{ width: '800px', height: '600px' }}
-        onHide={() => setShowPreviewDialog(false)}
-        maximizable
-      >
-        {selectedContent && (
-          <div className="flex flex-column gap-4">
             <div className="grid">
-              <div className="col-6">
-                <Card title="Original" className="h-full">
-                  <div className="text-center text-600 py-6">
-                    <i className="pi pi-image text-6xl mb-3"></i>
-                    <p>Original content preview</p>
-                  </div>
-                </Card>
+              <div className="col-12 md:col-6">
+                <div className="field">
+                  <label htmlFor="template-name" className="block">Name *</label>
+                  <InputText
+                    id="template-name"
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full"
+                    placeholder="Enter template name"
+                  />
+                </div>
               </div>
-              <div className="col-6">
-                <Card title="Watermarked" className="h-full">
-                  <div className="text-center text-600 py-6">
-                    <i className="pi pi-shield text-6xl mb-3"></i>
-                    <p>Watermarked content preview</p>
-                    <div className="text-sm text-success mt-2">
-                      <i className="pi pi-check-circle mr-1"></i>
-                      Watermark applied successfully
-                    </div>
-                  </div>
-                </Card>
+              
+              <div className="col-12 md:col-6">
+                <div className="field">
+                  <label htmlFor="template-type" className="block">Type *</label>
+                  <Dropdown
+                    id="template-type"
+                    value={templateForm.type}
+                    onChange={(e: DropdownChangeEvent) => setTemplateForm(prev => ({ ...prev, type: e.value }))}
+                    options={Object.values(WatermarkType).map(type => ({ label: type, value: type }))}
+                    className="w-full"
+                    placeholder="Select type"
+                  />
+                </div>
               </div>
-            </div>
 
-            <Card title="Watermark Details">
-              <div className="grid">
-                <div className="col-4">
-                  <strong>Type:</strong> {selectedContent.watermarkType.replace('-', ' ')}
-                </div>
-                <div className="col-4">
-                  <strong>Subscriber:</strong> {selectedContent.subscriberName}
-                </div>
-                <div className="col-4">
-                  <strong>Date:</strong> {selectedContent.uploadDate.toLocaleDateString()}
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-      </Dialog>
-
-      {/* Leak Analysis Dialog */}
-      <Dialog
-        header="Leak Analysis"
-        visible={showLeakAnalysisDialog}
-        style={{ width: '700px' }}
-        onHide={() => setShowLeakAnalysisDialog(false)}
-      >
-        {selectedContent && (
-          <div className="flex flex-column gap-4">
-            <Card title="Content Information">
-              <div className="grid">
-                <div className="col-6">
-                  <strong>Filename:</strong> {selectedContent.filename}
-                </div>
-                <div className="col-6">
-                  <strong>Subscriber:</strong> {selectedContent.subscriberName}
-                </div>
-                <div className="col-6">
-                  <strong>Watermark Type:</strong> {selectedContent.watermarkType}
-                </div>
-                <div className="col-6">
-                  <strong>Upload Date:</strong> {selectedContent.uploadDate.toLocaleDateString()}
+              <div className="col-12">
+                <div className="field">
+                  <label htmlFor="template-description" className="block">Description</label>
+                  <InputTextarea
+                    id="template-description"
+                    value={templateForm.description}
+                    onChange={(e) => setTemplateForm(prev => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                    className="w-full"
+                    placeholder="Enter template description"
+                  />
                 </div>
               </div>
-            </Card>
 
-            <Card title="Scan Results">
-              {selectedContent.leakDetections && selectedContent.leakDetections.length > 0 ? (
-                <div className="flex flex-column gap-3">
-                  {selectedContent.leakDetections.map(leak => (
-                    <div key={leak.id} className="p-3 border-1 border-200 border-round">
-                      <div className="flex justify-content-between align-items-start mb-2">
-                        <div>
-                          <div className="font-semibold text-900">{leak.source}</div>
-                          <div className="text-600 text-sm">
-                            Detected: {leak.detectedAt.toLocaleDateString()}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Badge
-                            value={`${leak.confidence}% confidence`}
-                            severity={leak.confidence >= 90 ? 'success' : 'warning'}
+              {templateForm.type === WatermarkType.TEXT && (
+                <div className="col-12">
+                  <Panel header="Text Settings" className="mb-4">
+                    <div className="grid">
+                      <div className="col-12 md:col-6">
+                        <div className="field">
+                          <label htmlFor="text-content" className="block">Text Content *</label>
+                          <InputText
+                            id="text-content"
+                            value={templateForm.settings.text?.content || ''}
+                            onChange={(e) => setTemplateForm(prev => ({
+                              ...prev,
+                              settings: {
+                                ...prev.settings,
+                                text: { ...prev.settings.text!, content: e.target.value }
+                              }
+                            }))}
+                            className="w-full"
+                            placeholder="Enter watermark text"
                           />
-                          <Badge value={leak.status} severity="info" />
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          label="View Evidence"
-                          size="small"
-                          outlined
-                          icon="pi pi-eye"
-                        />
-                        <Button
-                          label="Send DMCA"
-                          size="small"
-                          icon="pi pi-send"
-                        />
+
+                      <div className="col-12 md:col-6">
+                        <div className="field">
+                          <label htmlFor="text-opacity" className="block">Opacity: {Math.round((templateForm.settings.text?.opacity || 0.7) * 100)}%</label>
+                          <Slider
+                            id="text-opacity"
+                            value={(templateForm.settings.text?.opacity || 0.7) * 100}
+                            onChange={(e) => setTemplateForm(prev => ({
+                              ...prev,
+                              settings: {
+                                ...prev.settings,
+                                text: { ...prev.settings.text!, opacity: (e.value as number) / 100 }
+                              }
+                            }))}
+                            min={0}
+                            max={100}
+                            className="w-full"
+                          />
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <i className="pi pi-check-circle text-4xl text-green-500 mb-3"></i>
-                  <p className="text-600">No leaks detected for this content</p>
+                  </Panel>
                 </div>
               )}
-            </Card>
-
-            <Button
-              label="Start New Scan"
-              className="w-full"
-              onClick={() => {
-                toast.current?.show({
-                  severity: 'info',
-                  summary: 'Scan Started',
-                  detail: 'Scanning for new leaks across the internet...'
-                });
-              }}
-            />
-          </div>
-        )}
-      </Dialog>
-
-      {/* Batch Processing Dialog */}
-      <Dialog
-        header="Batch Processing"
-        visible={showBatchDialog}
-        style={{ width: '600px' }}
-        onHide={() => setShowBatchDialog(false)}
-      >
-        <div className="flex flex-column gap-4">
-          <div className="text-center">
-            <i className="pi pi-download text-4xl text-primary mb-3"></i>
-            <h3 className="text-900 mb-2">Batch Download Watermarked Content</h3>
-            <p className="text-600">
-              Download multiple watermarked files in a single ZIP archive
-            </p>
-          </div>
-
-          <Card title="Selected Files">
-            <div className="text-900 font-medium mb-2">
-              {watermarkedContent.filter(c => c.status === 'completed').length} files available for download
             </div>
-            <div className="text-600 text-sm">
-              Total size: {formatFileSize(
-                watermarkedContent
-                  .filter(c => c.status === 'completed')
-                  .reduce((total, c) => total + c.watermarkedSize, 0)
-              )}
+            
+            <div className="flex justify-content-end gap-2 mt-4">
+              <Button
+                label="Cancel"
+                className="p-button-outlined"
+                onClick={() => {
+                  setShowTemplateDialog(false);
+                  resetTemplateForm();
+                }}
+              />
+              <Button
+                label="Create Template"
+                onClick={createTemplate}
+                disabled={!templateForm.name || (templateForm.type === WatermarkType.TEXT && !templateForm.settings.text?.content)}
+              />
             </div>
           </Card>
-
-          <div className="flex gap-2">
-            <Button
-              label="Download All"
-              className="flex-1"
-              icon="pi pi-download"
-              onClick={() => {
-                toast.current?.show({
-                  severity: 'success',
-                  summary: 'Download Started',
-                  detail: 'Preparing batch download...'
-                });
-                setShowBatchDialog(false);
-              }}
-            />
-            <Button
-              label="Cancel"
-              outlined
-              onClick={() => setShowBatchDialog(false)}
-            />
-          </div>
         </div>
-      </Dialog>
-
-      {/* Settings Dialog */}
-      <Dialog
-        header="Watermarking Settings"
-        visible={showSettingsDialog}
-        style={{ width: '600px' }}
-        onHide={() => setShowSettingsDialog(false)}
-        footer={
-          <div className="flex justify-content-end gap-2">
-            <Button
-              label="Cancel"
-              outlined
-              onClick={() => setShowSettingsDialog(false)}
-            />
-            <Button
-              label="Save Settings"
-              onClick={() => {
-                toast.current?.show({
-                  severity: 'success',
-                  summary: 'Settings Saved',
-                  detail: 'Watermarking settings updated successfully'
-                });
-                setShowSettingsDialog(false);
-              }}
-            />
-          </div>
-        }
-      >
-        <div className="flex flex-column gap-4">
-          <Panel header="Default Settings" toggleable>
-            <div className="flex flex-column gap-3">
-              <div>
-                <label className="block text-900 font-medium mb-2">
-                  Default Watermark Type
-                </label>
-                <Dropdown
-                  value={selectedWatermarkType}
-                  options={watermarkTypes}
-                  onChange={(e) => setSelectedWatermarkType(e.value)}
-                  optionLabel="label"
-                  optionValue="value"
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block text-900 font-medium mb-2">
-                  Default Strength: {watermarkStrength}%
-                </label>
-                <Slider
-                  value={watermarkStrength}
-                  onChange={(e) => setWatermarkStrength(e.value as number)}
-                  min={10}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          </Panel>
-
-          <Panel header="Processing Options" toggleable>
-            <div className="flex flex-column gap-3">
-              <div className="flex align-items-center gap-2">
-                <Checkbox inputId="auto-process" checked={true} />
-                <label htmlFor="auto-process">Auto-process uploaded files</label>
-              </div>
-              <div className="flex align-items-center gap-2">
-                <Checkbox inputId="preserve-metadata" checked={true} />
-                <label htmlFor="preserve-metadata">Preserve original metadata</label>
-              </div>
-              <div className="flex align-items-center gap-2">
-                <Checkbox inputId="backup-original" checked={false} />
-                <label htmlFor="backup-original">Keep backup of original files</label>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel header="Security Settings" toggleable>
-            <div className="flex flex-column gap-3">
-              <div className="flex align-items-center gap-2">
-                <Checkbox inputId="encrypt-watermarks" checked={true} />
-                <label htmlFor="encrypt-watermarks">Encrypt watermark data</label>
-              </div>
-              <div className="flex align-items-center gap-2">
-                <Checkbox inputId="multi-layer" checked={true} />
-                <label htmlFor="multi-layer">Apply multiple watermark layers</label>
-              </div>
-              <div className="flex align-items-center gap-2">
-                <Checkbox inputId="robustness-test" checked={false} />
-                <label htmlFor="robustness-test">Run robustness tests</label>
-              </div>
-            </div>
-          </Panel>
-        </div>
-      </Dialog>
+      )}
     </div>
   );
 };

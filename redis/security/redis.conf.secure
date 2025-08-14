@@ -1,0 +1,165 @@
+# Secure Redis configuration for Content Protection Platform
+# Based on Redis security best practices
+
+# Security: Network and Connection Settings
+bind 127.0.0.1 ::1
+protected-mode yes
+port 6379
+tcp-backlog 511
+timeout 300
+tcp-keepalive 300
+
+# Security: TLS/SSL Configuration
+tls-port 6380
+tls-cert-file /etc/redis/ssl/redis.crt
+tls-key-file /etc/redis/ssl/redis.key
+tls-ca-cert-file /etc/redis/ssl/ca.crt
+tls-dh-params-file /etc/redis/ssl/dhparam.pem
+tls-protocols "TLSv1.2 TLSv1.3"
+tls-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384
+tls-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+tls-prefer-server-ciphers yes
+tls-session-caching no
+tls-session-cache-timeout 60
+tls-session-cache-size 5000
+
+# Security: Authentication
+requirepass your_very_strong_redis_password_here
+# rename-command FLUSHDB ""
+# rename-command FLUSHALL ""
+rename-command DEBUG ""
+rename-command CONFIG ""
+rename-command EVAL ""
+rename-command SCRIPT ""
+rename-command SHUTDOWN REDIS_SHUTDOWN_SECURE
+
+# Security: ACL Configuration
+aclfile /etc/redis/users.acl
+
+# Security: General Settings
+daemonize no  # Supervised by Docker
+supervised no
+pidfile /var/run/redis_6379.pid
+loglevel notice
+logfile /var/log/redis/redis-server.log
+syslog-enabled yes
+syslog-ident redis
+databases 16
+
+# Security: Snapshotting (Persistence)
+save 900 1    # Save if at least 1 key changed in 900 seconds
+save 300 10   # Save if at least 10 keys changed in 300 seconds
+save 60 10000 # Save if at least 10000 keys changed in 60 seconds
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+dbfilename dump.rdb
+dir /var/lib/redis
+
+# Security: Append Only File (AOF)
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
+no-appendfsync-on-rewrite no
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+aof-load-truncated yes
+aof-use-rdb-preamble yes
+
+# Security: Lua Scripting
+lua-time-limit 5000
+
+# Security: Slow Log
+slowlog-log-slower-than 10000
+slowlog-max-len 128
+
+# Security: Latency Monitor
+latency-monitor-threshold 100
+
+# Security: Event Notification
+notify-keyspace-events ""
+
+# Security: Advanced Config
+hash-max-ziplist-entries 512
+hash-max-ziplist-value 64
+list-max-ziplist-size -2
+list-compress-depth 0
+set-max-intset-entries 512
+zset-max-ziplist-entries 128
+zset-max-ziplist-value 64
+hll-sparse-max-bytes 3000
+stream-node-max-bytes 4096
+stream-node-max-entries 100
+activerehashing yes
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit replica 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+client-query-buffer-limit 1gb
+proto-max-bulk-len 512mb
+hz 10
+dynamic-hz yes
+aof-rewrite-incremental-fsync yes
+rdb-save-incremental-fsync yes
+
+# Security: Memory Management
+maxmemory-policy allkeys-lru
+maxmemory-samples 5
+replica-lazy-flush no
+lazyfree-lazy-eviction no
+lazyfree-lazy-expire no
+lazyfree-lazy-server-del no
+replica-lazy-flush no
+
+# Security: Threaded I/O
+io-threads 4
+io-threads-do-reads no
+
+# Security: Kernel OOM Score
+oom-score-adj no
+oom-score-adj-values 0 200 800
+
+# Security: Disable dangerous commands
+rename-command KEYS ""
+rename-command MONITOR ""
+
+# Security: Client Settings
+maxclients 10000
+timeout 300
+
+# Security: Module Loading (disable if not needed)
+# loadmodule /path/to/module.so
+
+# Security: Replica Settings (if using replication)
+replica-serve-stale-data yes
+replica-read-only yes
+repl-diskless-sync no
+repl-diskless-sync-delay 5
+repl-ping-replica-period 10
+repl-timeout 60
+repl-disable-tcp-nodelay no
+repl-backlog-size 1mb
+repl-backlog-ttl 3600
+replica-priority 100
+min-replicas-to-write 1
+min-replicas-max-lag 10
+
+# Security: Redis Sentinel (if using)
+# sentinel announce-ip <ip>
+# sentinel announce-port <port>
+
+# Security: Cluster (if using)
+# cluster-enabled yes
+# cluster-config-file nodes.conf
+# cluster-node-timeout 15000
+# cluster-replica-validity-factor 10
+# cluster-migration-barrier 1
+# cluster-require-full-coverage yes
+
+# Security: Memory Usage Optimization
+activedefrag yes
+active-defrag-ignore-bytes 100mb
+active-defrag-threshold-lower 10
+active-defrag-threshold-upper 100
+active-defrag-cycle-min 1
+active-defrag-cycle-max 25
+active-defrag-max-scan-fields 1000
