@@ -1,0 +1,1280 @@
+name: Logging & Error Tracking Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to configure logging for'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      log_level:
+        description: 'Log level'
+        required: false
+        default: 'INFO'
+        type: choice
+        options:
+          - DEBUG
+          - INFO
+          - WARNING
+          - ERROR
+          - CRITICAL
+
+env:
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+  LOG_LEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
+
+jobs:
+  setup-elk-stack:
+    name: Setup ELK Stack
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create ELK Stack namespace
+        run: |
+          kubectl create namespace logging || true
+          kubectl label namespace logging name=logging || true
+
+      - name: Deploy Elasticsearch
+        run: |
+          cat > elasticsearch.yaml << 'EOF'
+          apiVersion: apps/v1
+          kind: StatefulSet
+          metadata:
+            name: elasticsearch
+            namespace: logging
+            labels:
+              app: elasticsearch
+              component: logging
+          spec:
+            serviceName: elasticsearch
+            replicas: 3
+            selector:
+              matchLabels:
+                app: elasticsearch
+            template:
+              metadata:
+                labels:
+                  app: elasticsearch
+              spec:
+                securityContext:
+                  fsGroup: 1000
+                initContainers:
+                - name: increase-vm-max-map
+                  image: busybox:1.35
+                  command: ['sysctl', '-w', 'vm.max_map_count=262144']
+                  securityContext:
+                    privileged: true
+                - name: increase-fd-ulimit
+                  image: busybox:1.35
+                  command: ['sh', '-c', 'ulimit -n 65536']
+                  securityContext:
+                    privileged: true
+                containers:
+                - name: elasticsearch
+                  image: docker.elastic.co/elasticsearch/elasticsearch:8.10.0
+                  ports:
+                  - containerPort: 9200
+                    name: rest
+                    protocol: TCP
+                  - containerPort: 9300
+                    name: inter-node
+                    protocol: TCP
+                  env:
+                  - name: cluster.name
+                    value: autodmca-logging
+                  - name: node.name
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.name
+                  - name: discovery.seed_hosts
+                    value: "elasticsearch-0.elasticsearch,elasticsearch-1.elasticsearch,elasticsearch-2.elasticsearch"
+                  - name: cluster.initial_master_nodes
+                    value: "elasticsearch-0,elasticsearch-1,elasticsearch-2"
+                  - name: ES_JAVA_OPTS
+                    value: "-Xms2g -Xmx2g"
+                  - name: xpack.security.enabled
+                    value: "false"
+                  - name: xpack.monitoring.collection.enabled
+                    value: "true"
+                  - name: network.host
+                    value: "0.0.0.0"
+                  resources:
+                    requests:
+                      memory: "4Gi"
+                      cpu: "1000m"
+                    limits:
+                      memory: "6Gi"
+                      cpu: "2000m"
+                  volumeMounts:
+                  - name: elasticsearch-data
+                    mountPath: /usr/share/elasticsearch/data
+                  livenessProbe:
+                    httpGet:
+                      path: /_cluster/health
+                      port: 9200
+                    initialDelaySeconds: 90
+                    periodSeconds: 30
+                    timeoutSeconds: 10
+                    failureThreshold: 3
+                  readinessProbe:
+                    httpGet:
+                      path: /_cluster/health?wait_for_status=green&timeout=1s
+                      port: 9200
+                    initialDelaySeconds: 30
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 3
+            volumeClaimTemplates:
+            - metadata:
+                name: elasticsearch-data
+              spec:
+                accessModes: [ "ReadWriteOnce" ]
+                storageClassName: gp3
+                resources:
+                  requests:
+                    storage: 50Gi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: elasticsearch
+            namespace: logging
+            labels:
+              app: elasticsearch
+          spec:
+            selector:
+              app: elasticsearch
+            clusterIP: None
+            ports:
+            - port: 9200
+              name: rest
+            - port: 9300
+              name: inter-node
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: elasticsearch-client
+            namespace: logging
+            labels:
+              app: elasticsearch
+          spec:
+            selector:
+              app: elasticsearch
+            type: ClusterIP
+            ports:
+            - port: 9200
+              name: rest
+              targetPort: 9200
+          EOF
+          
+          kubectl apply -f elasticsearch.yaml
+
+      - name: Deploy Logstash
+        run: |
+          cat > logstash.yaml << 'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: logstash-config
+            namespace: logging
+          data:
+            logstash.yml: |
+              http.host: "0.0.0.0"
+              path.config: /usr/share/logstash/pipeline
+              xpack.monitoring.enabled: true
+              xpack.monitoring.elasticsearch.hosts: ["elasticsearch-client:9200"]
+              queue.type: persisted
+              path.queue: /usr/share/logstash/queue
+              
+            pipeline.yml: |
+              - pipeline.id: main
+                path.config: "/usr/share/logstash/pipeline/logstash.conf"
+                queue.type: persisted
+                
+            logstash.conf: |
+              input {
+                beats {
+                  port => 5044
+                }
+                http {
+                  port => 8080
+                  codec => json
+                }
+                # Kubernetes logs via Filebeat
+                beats {
+                  port => 5045
+                  type => "kubernetes"
+                }
+              }
+              
+              filter {
+                if [kubernetes] {
+                  # Parse Kubernetes metadata
+                  if [kubernetes][pod][name] =~ /backend/ {
+                    grok {
+                      match => { "message" => "%{TIMESTAMP_ISO8601:timestamp} - %{LOGLEVEL:level} - %{DATA:logger} - %{GREEDYDATA:message}" }
+                      overwrite => [ "message" ]
+                    }
+                    
+                    # Parse JSON logs from FastAPI
+                    if [message] =~ /^{.*}$/ {
+                      json {
+                        source => "message"
+                        target => "parsed"
+                      }
+                    }
+                  }
+                  
+                  if [kubernetes][pod][name] =~ /frontend/ {
+                    # Parse nginx access logs
+                    grok {
+                      match => { "message" => "%{COMBINEDAPACHELOG}" }
+                    }
+                  }
+                  
+                  # Add custom fields
+                  mutate {
+                    add_field => { "environment" => "${{ env.ENVIRONMENT }}" }
+                    add_field => { "application" => "autodmca" }
+                  }
+                }
+                
+                # Parse application logs
+                if [fields][app] == "autodmca-backend" {
+                  # Parse Python logs
+                  grok {
+                    match => { "message" => "%{TIMESTAMP_ISO8601:timestamp} - %{LOGLEVEL:level} - %{DATA:module} - %{GREEDYDATA:log_message}" }
+                  }
+                  
+                  # Extract request IDs for tracing
+                  if [log_message] =~ /request_id/ {
+                    grok {
+                      match => { "log_message" => ".*request_id:(?<request_id>[a-f0-9-]+).*" }
+                    }
+                  }
+                  
+                  # Extract user IDs
+                  if [log_message] =~ /user_id/ {
+                    grok {
+                      match => { "log_message" => ".*user_id:(?<user_id>\d+).*" }
+                    }
+                  }
+                  
+                  # Parse error traces
+                  if [level] == "ERROR" or [level] == "CRITICAL" {
+                    mutate {
+                      add_tag => ["error"]
+                    }
+                  }
+                }
+                
+                # Performance metrics parsing
+                if [log_message] =~ /performance/ {
+                  grok {
+                    match => { "log_message" => ".*duration:(?<duration>\d+\.?\d*).*" }
+                  }
+                  mutate {
+                    convert => { "duration" => "float" }
+                    add_tag => ["performance"]
+                  }
+                }
+                
+                # Security event parsing
+                if [log_message] =~ /(login|authentication|security|unauthorized)/ {
+                  mutate {
+                    add_tag => ["security"]
+                  }
+                  
+                  if [log_message] =~ /failed.*login/ {
+                    mutate {
+                      add_tag => ["security_failure"]
+                    }
+                  }
+                }
+                
+                # Business logic parsing
+                if [log_message] =~ /(dmca|takedown|infringement|scan)/ {
+                  mutate {
+                    add_tag => ["business_logic"]
+                  }
+                  
+                  # Extract DMCA request IDs
+                  if [log_message] =~ /dmca_request_id/ {
+                    grok {
+                      match => { "log_message" => ".*dmca_request_id:(?<dmca_request_id>\d+).*" }
+                    }
+                  }
+                }
+                
+                # Clean up timestamp
+                date {
+                  match => [ "timestamp", "ISO8601" ]
+                  target => "@timestamp"
+                }
+                
+                # Remove unwanted fields
+                mutate {
+                  remove_field => [ "host", "agent", "ecs", "input" ]
+                }
+              }
+              
+              output {
+                elasticsearch {
+                  hosts => ["elasticsearch-client:9200"]
+                  index => "autodmca-logs-%{environment}-%{+YYYY.MM.dd}"
+                  template_name => "autodmca-logs"
+                  template => "/usr/share/logstash/templates/autodmca-template.json"
+                  template_overwrite => true
+                }
+                
+                # Send errors to dead letter queue for investigation
+                if "error" in [tags] {
+                  elasticsearch {
+                    hosts => ["elasticsearch-client:9200"]
+                    index => "autodmca-errors-%{environment}-%{+YYYY.MM.dd}"
+                  }
+                }
+                
+                # Send security events to separate index
+                if "security" in [tags] {
+                  elasticsearch {
+                    hosts => ["elasticsearch-client:9200"]
+                    index => "autodmca-security-%{environment}-%{+YYYY.MM.dd}"
+                  }
+                }
+                
+                # Output to stdout for debugging (remove in production)
+                stdout { codec => rubydebug }
+              }
+              
+            autodmca-template.json: |
+              {
+                "index_patterns": ["autodmca-logs-*"],
+                "settings": {
+                  "number_of_shards": 2,
+                  "number_of_replicas": 1,
+                  "index.refresh_interval": "30s",
+                  "index.mapping.total_fields.limit": 2000
+                },
+                "mappings": {
+                  "properties": {
+                    "@timestamp": {
+                      "type": "date"
+                    },
+                    "level": {
+                      "type": "keyword"
+                    },
+                    "logger": {
+                      "type": "keyword"
+                    },
+                    "message": {
+                      "type": "text",
+                      "analyzer": "standard"
+                    },
+                    "environment": {
+                      "type": "keyword"
+                    },
+                    "application": {
+                      "type": "keyword"
+                    },
+                    "request_id": {
+                      "type": "keyword"
+                    },
+                    "user_id": {
+                      "type": "long"
+                    },
+                    "duration": {
+                      "type": "float"
+                    },
+                    "dmca_request_id": {
+                      "type": "long"
+                    },
+                    "kubernetes": {
+                      "properties": {
+                        "pod": {
+                          "properties": {
+                            "name": {
+                              "type": "keyword"
+                            }
+                          }
+                        },
+                        "namespace": {
+                          "type": "keyword"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: logstash
+            namespace: logging
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: logstash
+            template:
+              metadata:
+                labels:
+                  app: logstash
+              spec:
+                containers:
+                - name: logstash
+                  image: docker.elastic.co/logstash/logstash:8.10.0
+                  ports:
+                  - containerPort: 5044
+                    name: beats
+                  - containerPort: 8080
+                    name: http
+                  env:
+                  - name: LS_JAVA_OPTS
+                    value: "-Xmx2g -Xms2g"
+                  resources:
+                    requests:
+                      memory: "3Gi"
+                      cpu: "500m"
+                    limits:
+                      memory: "4Gi"
+                      cpu: "1000m"
+                  volumeMounts:
+                  - name: config
+                    mountPath: /usr/share/logstash/config
+                  - name: pipeline
+                    mountPath: /usr/share/logstash/pipeline
+                  - name: templates
+                    mountPath: /usr/share/logstash/templates
+                  - name: queue
+                    mountPath: /usr/share/logstash/queue
+                  livenessProbe:
+                    httpGet:
+                      path: /
+                      port: 9600
+                    initialDelaySeconds: 60
+                    periodSeconds: 30
+                  readinessProbe:
+                    httpGet:
+                      path: /
+                      port: 9600
+                    initialDelaySeconds: 30
+                    periodSeconds: 10
+                volumes:
+                - name: config
+                  configMap:
+                    name: logstash-config
+                    items:
+                    - key: logstash.yml
+                      path: logstash.yml
+                    - key: pipeline.yml
+                      path: pipelines.yml
+                - name: pipeline
+                  configMap:
+                    name: logstash-config
+                    items:
+                    - key: logstash.conf
+                      path: logstash.conf
+                - name: templates
+                  configMap:
+                    name: logstash-config
+                    items:
+                    - key: autodmca-template.json
+                      path: autodmca-template.json
+                - name: queue
+                  emptyDir: {}
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: logstash
+            namespace: logging
+          spec:
+            selector:
+              app: logstash
+            ports:
+            - port: 5044
+              name: beats
+              targetPort: 5044
+            - port: 8080
+              name: http
+              targetPort: 8080
+          EOF
+          
+          kubectl apply -f logstash.yaml
+
+      - name: Deploy Kibana
+        run: |
+          cat > kibana.yaml << 'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: kibana-config
+            namespace: logging
+          data:
+            kibana.yml: |
+              server.host: "0.0.0.0"
+              server.port: 5601
+              elasticsearch.hosts: ["http://elasticsearch-client:9200"]
+              
+              # Enable monitoring
+              monitoring.ui.container.elasticsearch.enabled: true
+              
+              # Security settings
+              server.ssl.enabled: false
+              
+              # Customize Kibana
+              server.name: "autoDMCA Kibana"
+              
+              # Default index patterns
+              kibana.defaultAppId: "discover"
+              
+              # Logging
+              logging.root.level: info
+              
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: kibana
+            namespace: logging
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: kibana
+            template:
+              metadata:
+                labels:
+                  app: kibana
+              spec:
+                containers:
+                - name: kibana
+                  image: docker.elastic.co/kibana/kibana:8.10.0
+                  ports:
+                  - containerPort: 5601
+                    name: http
+                  env:
+                  - name: NODE_OPTIONS
+                    value: "--max-old-space-size=2048"
+                  resources:
+                    requests:
+                      memory: "2Gi"
+                      cpu: "500m"
+                    limits:
+                      memory: "3Gi"
+                      cpu: "1000m"
+                  volumeMounts:
+                  - name: config
+                    mountPath: /usr/share/kibana/config
+                  livenessProbe:
+                    httpGet:
+                      path: /api/status
+                      port: 5601
+                    initialDelaySeconds: 120
+                    periodSeconds: 30
+                    timeoutSeconds: 10
+                  readinessProbe:
+                    httpGet:
+                      path: /api/status
+                      port: 5601
+                    initialDelaySeconds: 60
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                volumes:
+                - name: config
+                  configMap:
+                    name: kibana-config
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: kibana
+            namespace: logging
+          spec:
+            selector:
+              app: kibana
+            ports:
+            - port: 5601
+              targetPort: 5601
+              name: http
+            type: ClusterIP
+          EOF
+          
+          kubectl apply -f kibana.yaml
+
+      - name: Deploy Filebeat for log collection
+        run: |
+          cat > filebeat.yaml << 'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: filebeat-config
+            namespace: logging
+          data:
+            filebeat.yml: |
+              filebeat.inputs:
+              - type: container
+                paths:
+                  - /var/log/containers/*-${{ env.ENVIRONMENT }}-*.log
+                processors:
+                - add_kubernetes_metadata:
+                    host: ${NODE_NAME}
+                    matchers:
+                    - logs_path:
+                        logs_path: "/var/log/containers/"
+                
+              output.logstash:
+                hosts: ["logstash:5044"]
+                
+              processors:
+              - add_cloud_metadata: ~
+              - add_host_metadata: ~
+              - add_docker_metadata: ~
+              - add_kubernetes_metadata:
+                  host: ${NODE_NAME}
+                  matchers:
+                  - logs_path:
+                      logs_path: "/var/log/containers/"
+              
+              # Logging
+              logging.level: info
+              logging.to_files: true
+              logging.files:
+                path: /var/log/filebeat
+                name: filebeat
+                keepfiles: 7
+                permissions: 0644
+          ---
+          apiVersion: apps/v1
+          kind: DaemonSet
+          metadata:
+            name: filebeat
+            namespace: logging
+            labels:
+              app: filebeat
+          spec:
+            selector:
+              matchLabels:
+                app: filebeat
+            template:
+              metadata:
+                labels:
+                  app: filebeat
+              spec:
+                serviceAccountName: filebeat
+                terminationGracePeriodSeconds: 30
+                hostNetwork: true
+                dnsPolicy: ClusterFirstWithHostNet
+                containers:
+                - name: filebeat
+                  image: docker.elastic.co/beats/filebeat:8.10.0
+                  args: [
+                    "-c", "/etc/filebeat.yml",
+                    "-e",
+                  ]
+                  env:
+                  - name: NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  securityContext:
+                    runAsUser: 0
+                    capabilities:
+                      add:
+                      - SYS_ADMIN
+                  resources:
+                    limits:
+                      memory: 200Mi
+                      cpu: 100m
+                    requests:
+                      cpu: 100m
+                      memory: 100Mi
+                  volumeMounts:
+                  - name: config
+                    mountPath: /etc/filebeat.yml
+                    readOnly: true
+                    subPath: filebeat.yml
+                  - name: data
+                    mountPath: /usr/share/filebeat/data
+                  - name: varlibdockercontainers
+                    mountPath: /var/lib/docker/containers
+                    readOnly: true
+                  - name: varlog
+                    mountPath: /var/log
+                    readOnly: true
+                volumes:
+                - name: config
+                  configMap:
+                    defaultMode: 0640
+                    name: filebeat-config
+                - name: varlibdockercontainers
+                  hostPath:
+                    path: /var/lib/docker/containers
+                - name: varlog
+                  hostPath:
+                    path: /var/log
+                - name: data
+                  hostPath:
+                    path: /var/lib/filebeat-data
+                    type: DirectoryOrCreate
+          ---
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: filebeat
+            namespace: logging
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRole
+          metadata:
+            name: filebeat
+          rules:
+          - apiGroups: [""]
+            resources:
+            - nodes
+            - namespaces
+            - pods
+            verbs:
+            - get
+            - list
+            - watch
+          - apiGroups: ["apps"]
+            resources:
+            - replicasets
+            verbs:
+            - get
+            - list
+            - watch
+          ---
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: ClusterRoleBinding
+          metadata:
+            name: filebeat
+          subjects:
+          - kind: ServiceAccount
+            name: filebeat
+            namespace: logging
+          roleRef:
+            kind: ClusterRole
+            name: filebeat
+            apiGroup: rbac.authorization.k8s.io
+          EOF
+          
+          kubectl apply -f filebeat.yaml
+
+      - name: Wait for ELK stack to be ready
+        run: |
+          echo "Waiting for Elasticsearch to be ready..."
+          kubectl wait --for=condition=ready pod -l app=elasticsearch -n logging --timeout=600s
+          
+          echo "Waiting for Logstash to be ready..."
+          kubectl wait --for=condition=ready pod -l app=logstash -n logging --timeout=300s
+          
+          echo "Waiting for Kibana to be ready..."
+          kubectl wait --for=condition=ready pod -l app=kibana -n logging --timeout=300s
+
+      - name: Configure Kibana index patterns
+        run: |
+          # Port forward to Kibana
+          kubectl port-forward -n logging service/kibana 5601:5601 &
+          KIBANA_PID=$!
+          sleep 30
+          
+          # Create index patterns
+          curl -X POST "localhost:5601/api/saved_objects/index-pattern/autodmca-logs-*" \
+            -H "Content-Type: application/json" \
+            -H "kbn-xsrf: true" \
+            -d '{
+              "attributes": {
+                "title": "autodmca-logs-*",
+                "timeFieldName": "@timestamp"
+              }
+            }'
+          
+          curl -X POST "localhost:5601/api/saved_objects/index-pattern/autodmca-errors-*" \
+            -H "Content-Type: application/json" \
+            -H "kbn-xsrf: true" \
+            -d '{
+              "attributes": {
+                "title": "autodmca-errors-*",
+                "timeFieldName": "@timestamp"
+              }
+            }'
+          
+          curl -X POST "localhost:5601/api/saved_objects/index-pattern/autodmca-security-*" \
+            -H "Content-Type: application/json" \
+            -H "kbn-xsrf: true" \
+            -d '{
+              "attributes": {
+                "title": "autodmca-security-*",
+                "timeFieldName": "@timestamp"
+              }
+            }'
+          
+          # Kill port forward
+          kill $KIBANA_PID
+
+  setup-sentry-integration:
+    name: Setup Sentry Error Tracking
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy Sentry configuration
+        run: |
+          cat > sentry-config.yaml << 'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: sentry-config
+            namespace: ${{ env.ENVIRONMENT }}
+          data:
+            sentry_config.py: |
+              import sentry_sdk
+              from sentry_sdk.integrations.fastapi import FastApiIntegration
+              from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+              from sentry_sdk.integrations.redis import RedisIntegration
+              from sentry_sdk.integrations.celery import CeleryIntegration
+              from sentry_sdk.integrations.logging import LoggingIntegration
+              import logging
+              
+              def init_sentry(dsn: str, environment: str, release: str = None):
+                  """Initialize Sentry error tracking"""
+                  
+                  # Configure logging integration
+                  logging_integration = LoggingIntegration(
+                      level=logging.INFO,        # Capture info and above as breadcrumbs
+                      event_level=logging.ERROR  # Send errors as events
+                  )
+                  
+                  sentry_sdk.init(
+                      dsn=dsn,
+                      environment=environment,
+                      release=release,
+                      integrations=[
+                          FastApiIntegration(auto_enabling_integrations=False),
+                          SqlalchemyIntegration(),
+                          RedisIntegration(),
+                          CeleryIntegration(),
+                          logging_integration,
+                      ],
+                      # Performance monitoring
+                      traces_sample_rate=0.1,  # 10% of transactions
+                      profiles_sample_rate=0.1,  # 10% of transactions for profiling
+                      
+                      # Error filtering
+                      before_send=filter_errors,
+                      
+                      # Additional options
+                      attach_stacktrace=True,
+                      send_default_pii=False,  # Don't send PII
+                      max_breadcrumbs=50,
+                      
+                      # Custom tags
+                      default_tags={
+                          "application": "autodmca",
+                          "component": "backend"
+                      }
+                  )
+              
+              def filter_errors(event, hint):
+                  """Filter out certain errors from being sent to Sentry"""
+                  
+                  # Don't send 404 errors
+                  if event.get('logger') == 'uvicorn.access':
+                      return None
+                  
+                  # Filter out specific exceptions
+                  if 'exc_info' in hint:
+                      exc_type, exc_value, tb = hint['exc_info']
+                      if isinstance(exc_value, (KeyboardInterrupt, SystemExit)):
+                          return None
+                  
+                  # Filter based on error message
+                  if event.get('message'):
+                      message = event['message']
+                      if any(phrase in message.lower() for phrase in [
+                          'connection reset by peer',
+                          'broken pipe',
+                          'client disconnected'
+                      ]):
+                          return None
+                  
+                  return event
+              
+              def add_user_context(user_id: int, email: str = None):
+                  """Add user context to Sentry"""
+                  sentry_sdk.set_user({
+                      "id": user_id,
+                      "email": email
+                  })
+              
+              def add_request_context(request_id: str, endpoint: str, method: str):
+                  """Add request context to Sentry"""
+                  sentry_sdk.set_tag("request_id", request_id)
+                  sentry_sdk.set_tag("endpoint", endpoint)
+                  sentry_sdk.set_tag("method", method)
+              
+              def capture_business_exception(exception: Exception, context: dict = None):
+                  """Capture business logic exceptions with additional context"""
+                  with sentry_sdk.push_scope() as scope:
+                      if context:
+                          for key, value in context.items():
+                              scope.set_extra(key, value)
+                      
+                      scope.set_tag("error_type", "business_logic")
+                      sentry_sdk.capture_exception(exception)
+          EOF
+          
+          kubectl apply -f sentry-config.yaml
+
+      - name: Update application deployment with Sentry
+        run: |
+          # Update backend deployment to include Sentry configuration
+          kubectl patch deployment backend-prod -n ${{ env.ENVIRONMENT }} -p '{
+            "spec": {
+              "template": {
+                "spec": {
+                  "containers": [
+                    {
+                      "name": "backend",
+                      "env": [
+                        {
+                          "name": "SENTRY_DSN",
+                          "valueFrom": {
+                            "secretKeyRef": {
+                              "name": "sentry-secret",
+                              "key": "dsn"
+                            }
+                          }
+                        },
+                        {
+                          "name": "SENTRY_ENVIRONMENT",
+                          "value": "${{ env.ENVIRONMENT }}"
+                        },
+                        {
+                          "name": "SENTRY_RELEASE",
+                          "value": "autodmca@${{ github.sha }}"
+                        }
+                      ],
+                      "volumeMounts": [
+                        {
+                          "name": "sentry-config",
+                          "mountPath": "/app/sentry",
+                          "readOnly": true
+                        }
+                      ]
+                    }
+                  ],
+                  "volumes": [
+                    {
+                      "name": "sentry-config",
+                      "configMap": {
+                        "name": "sentry-config"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }'
+
+  configure-log-aggregation:
+    name: Configure Log Aggregation
+    runs-on: ubuntu-latest
+    needs: [setup-elk-stack]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Create log retention policies
+        run: |
+          cat > log-retention.yaml << 'EOF'
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: log-retention-cleanup
+            namespace: logging
+          spec:
+            schedule: "0 2 * * *"  # Daily at 2 AM
+            jobTemplate:
+              spec:
+                template:
+                  spec:
+                    containers:
+                    - name: curator
+                      image: untergeek/curator:8.0.4
+                      args:
+                      - curator
+                      - --config
+                      - /etc/curator/curator.yml
+                      - /etc/curator/actions.yml
+                      volumeMounts:
+                      - name: config
+                        mountPath: /etc/curator
+                      resources:
+                        requests:
+                          memory: "200Mi"
+                          cpu: "100m"
+                        limits:
+                          memory: "300Mi"
+                          cpu: "200m"
+                    volumes:
+                    - name: config
+                      configMap:
+                        name: curator-config
+                    restartPolicy: OnFailure
+          ---
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: curator-config
+            namespace: logging
+          data:
+            curator.yml: |
+              client:
+                hosts:
+                  - elasticsearch-client
+                port: 9200
+                url_prefix:
+                timeout: 30
+                master_only: False
+              
+              logging:
+                loglevel: INFO
+                logfile:
+                logformat: default
+                blacklist: ['elasticsearch', 'urllib3']
+                
+            actions.yml: |
+              actions:
+                1:
+                  action: delete_indices
+                  description: "Delete logs older than 30 days"
+                  options:
+                    ignore_empty_list: True
+                    timeout_override:
+                    continue_if_exception: False
+                    disable_action: False
+                  filters:
+                  - filtertype: pattern
+                    kind: prefix
+                    value: autodmca-logs-
+                    exclude:
+                  - filtertype: age
+                    source: name
+                    direction: older
+                    timestring: '%Y.%m.%d'
+                    unit: days
+                    unit_count: 30
+                    exclude:
+                    
+                2:
+                  action: delete_indices
+                  description: "Delete error logs older than 90 days"
+                  options:
+                    ignore_empty_list: True
+                    timeout_override:
+                    continue_if_exception: False
+                    disable_action: False
+                  filters:
+                  - filtertype: pattern
+                    kind: prefix
+                    value: autodmca-errors-
+                    exclude:
+                  - filtertype: age
+                    source: name
+                    direction: older
+                    timestring: '%Y.%m.%d'
+                    unit: days
+                    unit_count: 90
+                    exclude:
+                    
+                3:
+                  action: delete_indices
+                  description: "Delete security logs older than 180 days"
+                  options:
+                    ignore_empty_list: True
+                    timeout_override:
+                    continue_if_exception: False
+                    disable_action: False
+                  filters:
+                  - filtertype: pattern
+                    kind: prefix
+                    value: autodmca-security-
+                    exclude:
+                  - filtertype: age
+                    source: name
+                    direction: older
+                    timestring: '%Y.%m.%d'
+                    unit: days
+                    unit_count: 180
+                    exclude:
+          EOF
+          
+          kubectl apply -f log-retention.yaml
+
+      - name: Setup log monitoring alerts
+        run: |
+          cat > log-alerts.yaml << 'EOF'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: log-alert-rules
+            namespace: monitoring
+          data:
+            log-alerts.yml: |
+              groups:
+              - name: logging
+                rules:
+                - alert: HighErrorRate
+                  expr: |
+                    (
+                      sum(rate(elasticsearch_index_stats_index_total{index=~"autodmca-errors-.*"}[5m])) by (index)
+                      / 
+                      sum(rate(elasticsearch_index_stats_index_total{index=~"autodmca-logs-.*"}[5m])) by (index)
+                    ) > 0.1
+                  for: 10m
+                  labels:
+                    severity: warning
+                    component: logging
+                  annotations:
+                    summary: "High error rate in logs"
+                    description: "Error rate is {{ $value | humanizePercentage }} in logs"
+                
+                - alert: LogIngestionStopped
+                  expr: |
+                    increase(elasticsearch_index_stats_index_total{index=~"autodmca-logs-.*"}[5m]) == 0
+                  for: 15m
+                  labels:
+                    severity: critical
+                    component: logging
+                  annotations:
+                    summary: "Log ingestion has stopped"
+                    description: "No new logs have been received for 15 minutes"
+                
+                - alert: ElasticsearchClusterRed
+                  expr: elasticsearch_cluster_health_status{color="red"} == 1
+                  for: 5m
+                  labels:
+                    severity: critical
+                    component: logging
+                  annotations:
+                    summary: "Elasticsearch cluster is red"
+                    description: "Elasticsearch cluster health is red"
+                
+                - alert: ElasticsearchDiskSpaceLow
+                  expr: |
+                    (
+                      elasticsearch_filesystem_data_size_bytes - elasticsearch_filesystem_data_free_bytes
+                    ) / elasticsearch_filesystem_data_size_bytes > 0.9
+                  for: 5m
+                  labels:
+                    severity: warning
+                    component: logging
+                  annotations:
+                    summary: "Elasticsearch disk space low"
+                    description: "Elasticsearch disk usage is {{ $value | humanizePercentage }}"
+                
+                - alert: KibanaDown
+                  expr: up{job="kibana"} == 0
+                  for: 5m
+                  labels:
+                    severity: warning
+                    component: logging
+                  annotations:
+                    summary: "Kibana is down"
+                    description: "Kibana has been down for more than 5 minutes"
+                
+                - alert: LogstashPipelineFailure
+                  expr: logstash_pipeline_events_filtered_total - logstash_pipeline_events_out_total > 1000
+                  for: 10m
+                  labels:
+                    severity: warning
+                    component: logging
+                  annotations:
+                    summary: "Logstash pipeline has high failure rate"
+                    description: "Logstash pipeline is dropping {{ $value }} events"
+          EOF
+          
+          kubectl apply -f log-alerts.yaml
+
+  notification:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [setup-elk-stack, setup-sentry-integration, configure-log-aggregation]
+    if: always()
+    
+    steps:
+      - name: Generate summary
+        run: |
+          if [[ "${{ needs.setup-elk-stack.result }}" == "success" && "${{ needs.setup-sentry-integration.result }}" == "success" && "${{ needs.configure-log-aggregation.result }}" == "success" ]]; then
+            echo "STATUS=success" >> $GITHUB_ENV
+            echo "EMOJI=✅" >> $GITHUB_ENV
+            echo "MESSAGE=Logging and error tracking setup completed successfully" >> $GITHUB_ENV
+          else
+            echo "STATUS=failure" >> $GITHUB_ENV
+            echo "EMOJI=❌" >> $GITHUB_ENV
+            echo "MESSAGE=Logging and error tracking setup failed" >> $GITHUB_ENV
+          fi
+
+      - name: Send notification
+        if: always() && secrets.SLACK_WEBHOOK_URL
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"${{ env.EMOJI }} Logging & Error Tracking Setup - ${{ env.ENVIRONMENT }}\",
+              \"blocks\": [
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*${{ env.MESSAGE }}*\n\n• Environment: \`${{ env.ENVIRONMENT }}\`\n• Log Level: \`${{ env.LOG_LEVEL }}\`\n• ELK Stack: ${{ needs.setup-elk-stack.result }}\n• Sentry Integration: ${{ needs.setup-sentry-integration.result }}\n• Log Aggregation: ${{ needs.configure-log-aggregation.result }}\"
+                  }
+                }
+              ]
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -1,0 +1,318 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@autodmca.com'
+      smtp_auth_username: 'alerts@autodmca.com'
+      smtp_auth_password_file: '/etc/alertmanager/secrets/smtp_password'
+      slack_api_url_file: '/etc/alertmanager/secrets/slack_webhook'
+    
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
+    
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      receiver: 'default-receiver'
+      routes:
+        # Critical alerts go to multiple channels
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          group_wait: 0s
+          group_interval: 5m
+          repeat_interval: 30m
+        
+        # Infrastructure alerts
+        - match:
+            component: infrastructure
+          receiver: 'infrastructure-alerts'
+          group_interval: 15m
+          repeat_interval: 4h
+        
+        # Application alerts
+        - match:
+            component: application
+          receiver: 'application-alerts'
+          group_interval: 10m
+          repeat_interval: 2h
+        
+        # Security alerts
+        - match:
+            component: security
+          receiver: 'security-alerts'
+          group_wait: 0s
+          group_interval: 5m
+          repeat_interval: 1h
+        
+        # Database alerts
+        - match:
+            component: database
+          receiver: 'database-alerts'
+          group_wait: 0s
+          group_interval: 5m
+          repeat_interval: 1h
+        
+        # Kubernetes alerts
+        - match:
+            component: kubernetes
+          receiver: 'kubernetes-alerts'
+          group_interval: 10m
+          repeat_interval: 2h
+    
+    inhibit_rules:
+      # Inhibit any warning-level notifications if there are critical ones
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'instance']
+      
+      # Inhibit specific combinations
+      - source_match:
+          alertname: 'HighDiskUsage'
+        target_match:
+          alertname: 'HighMemoryUsage'
+        equal: ['instance']
+    
+    receivers:
+      - name: 'default-receiver'
+        slack_configs:
+          - channel: '#alerts-general'
+            title: 'autoDMCA Alert - {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Environment:* {{ .Labels.environment | default "unknown" }}
+              {{ end }}
+            send_resolved: true
+      
+      - name: 'critical-alerts'
+        slack_configs:
+          - channel: '#alerts-critical'
+            title: '🚨 CRITICAL ALERT - {{ .GroupLabels.alertname }}'
+            text: |
+              🚨 *CRITICAL ALERT TRIGGERED* 🚨
+              
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Component:* {{ .Labels.component }}
+              *Environment:* {{ .Labels.environment | default "production" }}
+              *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+              {{ end }}
+            color: 'danger'
+            send_resolved: true
+        
+        email_configs:
+          - to: 'oncall@autodmca.com'
+            subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }} - autoDMCA'
+            body: |
+              CRITICAL ALERT TRIGGERED
+              
+              {{ range .Alerts }}
+              Alert: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              Component: {{ .Labels.component }}
+              Environment: {{ .Labels.environment | default "production" }}
+              Instance: {{ .Labels.instance }}
+              Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+              {{ end }}
+              
+              Please investigate immediately.
+        
+        pagerduty_configs:
+          - routing_key_file: '/etc/alertmanager/secrets/pagerduty_key'
+            description: '{{ .GroupLabels.alertname }} - {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+            severity: 'critical'
+      
+      - name: 'infrastructure-alerts'
+        slack_configs:
+          - channel: '#alerts-infrastructure'
+            title: '⚠️ Infrastructure Alert - {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Instance:* {{ .Labels.instance }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            color: 'warning'
+            send_resolved: true
+      
+      - name: 'application-alerts'
+        slack_configs:
+          - channel: '#alerts-application'
+            title: '📱 Application Alert - {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Service:* {{ .Labels.job }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            color: 'warning'
+            send_resolved: true
+        
+        email_configs:
+          - to: 'dev-team@autodmca.com'
+            subject: 'Application Alert: {{ .GroupLabels.alertname }}'
+            body: |
+              Application Alert Details:
+              
+              {{ range .Alerts }}
+              Alert: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              Service: {{ .Labels.job }}
+              Severity: {{ .Labels.severity }}
+              Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+              {{ end }}
+      
+      - name: 'security-alerts'
+        slack_configs:
+          - channel: '#alerts-security'
+            title: '🔒 Security Alert - {{ .GroupLabels.alertname }}'
+            text: |
+              🔒 *SECURITY ALERT* 🔒
+              
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Instance:* {{ .Labels.instance }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            color: 'danger'
+            send_resolved: true
+        
+        email_configs:
+          - to: 'security@autodmca.com'
+            subject: '🔒 SECURITY ALERT: {{ .GroupLabels.alertname }}'
+            body: |
+              SECURITY ALERT DETECTED
+              
+              {{ range .Alerts }}
+              Alert: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              Instance: {{ .Labels.instance }}
+              Severity: {{ .Labels.severity }}
+              Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+              {{ end }}
+              
+              Immediate attention required.
+      
+      - name: 'database-alerts'
+        slack_configs:
+          - channel: '#alerts-database'
+            title: '🗄️ Database Alert - {{ .GroupLabels.alertname }}'
+            text: |
+              🗄️ *DATABASE ALERT* 
+              
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Database:* {{ .Labels.instance }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            color: 'danger'
+            send_resolved: true
+        
+        email_configs:
+          - to: 'dba@autodmca.com'
+            subject: 'Database Alert: {{ .GroupLabels.alertname }}'
+            body: |
+              Database Alert Details:
+              
+              {{ range .Alerts }}
+              Alert: {{ .Annotations.summary }}
+              Description: {{ .Annotations.description }}
+              Database: {{ .Labels.instance }}
+              Severity: {{ .Labels.severity }}
+              Started: {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+              {{ end }}
+      
+      - name: 'kubernetes-alerts'
+        slack_configs:
+          - channel: '#alerts-kubernetes'
+            title: '☸️ Kubernetes Alert - {{ .GroupLabels.alertname }}'
+            text: |
+              ☸️ *KUBERNETES ALERT*
+              
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Namespace:* {{ .Labels.namespace }}
+              *Pod:* {{ .Labels.pod }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            color: 'warning'
+            send_resolved: true
+  
+  notification.tmpl: |
+    {{ define "slack.default.title" }}
+    {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} {{ .GroupLabels.alertname }}
+    {{ end }}
+    
+    {{ define "slack.default.text" }}
+    {{ if eq .Status "firing" }}
+    *Alerts Firing:*
+    {{ range .Alerts }}
+    • *{{ .Annotations.summary }}*
+      {{ .Annotations.description }}
+      *Labels:* {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+    {{ end }}
+    {{ else }}
+    *Alerts Resolved:*
+    {{ range .Alerts }}
+    • {{ .Annotations.summary }}
+    {{ end }}
+    {{ end }}
+    {{ end }}
+    
+    {{ define "email.default.subject" }}
+    {{ if eq .Status "firing" }}[FIRING] {{ else }}[RESOLVED] {{ end }}{{ .GroupLabels.alertname }} ({{ len .Alerts }} alerts)
+    {{ end }}
+    
+    {{ define "email.default.html" }}
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; }
+        .alert { border-left: 4px solid #ff6b6b; padding: 10px; margin: 10px 0; background: #fff5f5; }
+        .resolved { border-left-color: #51cf66; background: #f3fff3; }
+        .critical { border-left-color: #ff0000; background: #ffe0e0; }
+        .warning { border-left-color: #ffa500; background: #fff8e1; }
+        .labels { font-size: 12px; color: #666; }
+      </style>
+    </head>
+    <body>
+      <h2>{{ if eq .Status "firing" }}🔥 Alerts Firing{{ else }}✅ Alerts Resolved{{ end }}</h2>
+      
+      {{ range .Alerts }}
+      <div class="alert {{ if eq .Status "resolved" }}resolved{{ end }} {{ .Labels.severity }}">
+        <h3>{{ .Annotations.summary }}</h3>
+        <p>{{ .Annotations.description }}</p>
+        <div class="labels">
+          <strong>Labels:</strong>
+          {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+        </div>
+        <div class="labels">
+          <strong>Started:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05 UTC" }}
+          {{ if .EndsAt }}<strong>Ended:</strong> {{ .EndsAt.Format "2006-01-02 15:04:05 UTC" }}{{ end }}
+        </div>
+      </div>
+      {{ end }}
+    </body>
+    </html>
+    {{ end }}

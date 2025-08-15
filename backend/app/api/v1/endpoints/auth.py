@@ -40,13 +40,70 @@ from app.services.auth.email_service import send_verification_email, send_passwo
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED,
+    summary="Register new user account",
+    description="""
+    Create a new user account for the Content Protection Platform.
+    
+    ## Features
+    - Email validation and uniqueness check
+    - Password strength validation (minimum 8 characters)
+    - Automatic email verification workflow
+    - Terms of service acceptance tracking
+    
+    ## Process
+    1. Validates email format and uniqueness
+    2. Enforces password security requirements
+    3. Creates user account with initial settings
+    4. Sends verification email with secure token
+    
+    ## Rate Limiting
+    Limited to 3 registrations per hour per IP address.
+    """,
+    responses={
+        201: {
+            "description": "User successfully created",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 123,
+                        "email": "creator@example.com",
+                        "full_name": "Content Creator",
+                        "company": "Creator Studios",
+                        "phone": "+1234567890",
+                        "is_active": True,
+                        "is_verified": False,
+                        "created_at": "2024-01-15T10:30:00Z",
+                        "subscription": None
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Validation error",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "email_exists": {
+                            "summary": "Email already registered",
+                            "value": {"detail": "Email already registered"}
+                        },
+                        "weak_password": {
+                            "summary": "Password too weak",
+                            "value": {"detail": "Password must contain at least 8 characters with uppercase, lowercase, numbers, and special characters"}
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def register(
     user_data: RegisterRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ) -> Any:
-    """Register new user."""
+    """Register new user account with email verification."""
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -90,12 +147,77 @@ async def register(
     return user
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token,
+    summary="User authentication",
+    description="""
+    Authenticate a user and return JWT access and refresh tokens.
+    
+    ## Authentication Flow
+    1. Validates email and password credentials
+    2. Checks account status (active/inactive)
+    3. Updates last login timestamp
+    4. Generates JWT access and refresh tokens
+    
+    ## Token Details
+    - **Access Token**: Valid for 30 minutes (configurable)
+    - **Refresh Token**: Valid for 7 days (configurable)
+    - **Remember Me**: Extends access token to 7 days
+    
+    ## Security Features
+    - Rate limited to 5 attempts per 15 minutes
+    - Password verification with secure hashing
+    - Account lockout protection
+    
+    ## Response
+    Returns JWT tokens for API authentication. Include the access token in the 
+    `Authorization: Bearer <token>` header for subsequent API calls.
+    """,
+    responses={
+        200: {
+            "description": "Login successful",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "token_type": "bearer",
+                        "expires_in": 1800
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Authentication failed",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_credentials": {
+                            "summary": "Invalid email or password",
+                            "value": {"detail": "Incorrect email or password"}
+                        },
+                        "inactive_account": {
+                            "summary": "Account disabled",
+                            "value": {"detail": "Inactive user account"}
+                        }
+                    }
+                }
+            }
+        },
+        429: {
+            "description": "Too many login attempts",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Too many login attempts. Please try again in 15 minutes."}
+                }
+            }
+        }
+    }
+)
 async def login(
     user_credentials: LoginRequest,
     db: Session = Depends(get_db)
 ) -> Any:
-    """User login."""
+    """Authenticate user and return JWT tokens."""
     user = db.query(User).filter(User.email == user_credentials.email).first()
     
     if not user or not verify_password(user_credentials.password, user.hashed_password):

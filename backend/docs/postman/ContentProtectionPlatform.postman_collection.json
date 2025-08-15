@@ -1,0 +1,1127 @@
+{
+	"info": {
+		"_postman_id": "content-protection-api",
+		"name": "Content Protection Platform API",
+		"description": "Comprehensive API collection for the Content Protection Platform - AI-powered content protection and DMCA takedown automation.\n\n## Getting Started\n\n1. Set up environment variables:\n   - `base_url`: https://api.contentprotection.ai\n   - `email`: Your account email\n   - `password`: Your account password\n   - `access_token`: Will be set automatically after login\n   - `refresh_token`: Will be set automatically after login\n\n2. Run the \"Login\" request to authenticate and set tokens\n3. Use other requests with automatic authentication\n\n## Features\n\n- **Authentication**: JWT-based with automatic token refresh\n- **Content Scanning**: AI-powered detection across platforms\n- **Profile Management**: Protected creator profiles\n- **Infringement Tracking**: Detected violations management\n- **DMCA Takedowns**: Automated copyright enforcement\n- **Webhooks**: Real-time event notifications\n\n## Rate Limits\n\n- Authentication: 5 attempts per 15 minutes\n- Scanning: Varies by subscription tier\n- API calls: 1000 requests per hour\n\nFor detailed documentation, visit: https://docs.contentprotection.ai",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Auto-refresh token if needed",
+					"const tokenExpiry = pm.environment.get('token_expires_at');",
+					"const now = new Date().getTime();",
+					"",
+					"if (tokenExpiry && now >= tokenExpiry) {",
+					"    console.log('Token expired, refreshing...');",
+					"    ",
+					"    const refreshRequest = {",
+					"        url: pm.environment.get('base_url') + '/api/v1/auth/refresh',",
+					"        method: 'POST',",
+					"        header: {",
+					"            'Content-Type': 'application/json'",
+					"        },",
+					"        body: {",
+					"            mode: 'raw',",
+					"            raw: JSON.stringify({",
+					"                refresh_token: pm.environment.get('refresh_token')",
+					"            })",
+					"        }",
+					"    };",
+					"    ",
+					"    pm.sendRequest(refreshRequest, (err, response) => {",
+					"        if (err) {",
+					"            console.error('Token refresh failed:', err);",
+					"            return;",
+					"        }",
+					"        ",
+					"        if (response.code === 200) {",
+					"            const data = response.json();",
+					"            pm.environment.set('access_token', data.access_token);",
+					"            pm.environment.set('refresh_token', data.refresh_token);",
+					"            ",
+					"            const expiresIn = data.expires_in * 1000; // Convert to milliseconds",
+					"            const expiresAt = new Date().getTime() + expiresIn;",
+					"            pm.environment.set('token_expires_at', expiresAt);",
+					"            ",
+					"            console.log('Token refreshed successfully');",
+					"        } else {",
+					"            console.error('Token refresh failed with status:', response.code);",
+					"        }",
+					"    });",
+					"}"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://api.contentprotection.ai",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Login successful', function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    const data = pm.response.json();",
+									"    ",
+									"    // Store tokens in environment",
+									"    pm.environment.set('access_token', data.access_token);",
+									"    pm.environment.set('refresh_token', data.refresh_token);",
+									"    ",
+									"    // Calculate token expiration",
+									"    const expiresIn = data.expires_in * 1000; // Convert to milliseconds",
+									"    const expiresAt = new Date().getTime() + expiresIn;",
+									"    pm.environment.set('token_expires_at', expiresAt);",
+									"    ",
+									"    console.log('Authentication tokens stored successfully');",
+									"    console.log('Access token expires in:', data.expires_in, 'seconds');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{email}}\",\n    \"password\": \"{{password}}\",\n    \"remember_me\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticate user and obtain JWT tokens for API access.\n\n**Required Environment Variables:**\n- `email`: Your account email\n- `password`: Your account password\n\n**Response:**\n- `access_token`: Short-lived token for API requests\n- `refresh_token`: Long-lived token for getting new access tokens\n- `expires_in`: Token expiration time in seconds"
+					}
+				},
+				{
+					"name": "Register",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"newuser@example.com\",\n    \"password\": \"SecureP@ssw0rd123\",\n    \"full_name\": \"Content Creator\",\n    \"company\": \"Creator Studios LLC\",\n    \"phone\": \"+1-555-123-4567\",\n    \"accept_terms\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						},
+						"description": "Register a new user account. Email verification will be sent automatically."
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"refresh"
+							]
+						},
+						"description": "Refresh access token using refresh token."
+					}
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Get current authenticated user information."
+					}
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"current_password\": \"current_password\",\n    \"new_password\": \"NewSecureP@ssw0rd123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/change-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"change-password"
+							]
+						},
+						"description": "Change user password."
+					}
+				}
+			],
+			"description": "User authentication and account management endpoints."
+		},
+		{
+			"name": "Profiles",
+			"item": [
+				{
+					"name": "Create Profile",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const profile = pm.response.json();",
+									"    pm.environment.set('profile_id', profile.id);",
+									"    console.log('Profile created with ID:', profile.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Content Creator Profile\",\n    \"platform\": \"onlyfans\",\n    \"username\": \"creator_username\",\n    \"keywords\": [\"creator name\", \"username\", \"exclusive content\"],\n    \"monitoring_enabled\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/profiles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profiles"
+							]
+						},
+						"description": "Create a new protected profile for content monitoring."
+					}
+				},
+				{
+					"name": "List Profiles",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/profiles?limit=50&offset=0",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profiles"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "List all protected profiles."
+					}
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/profiles/{{profile_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profiles",
+								"{{profile_id}}"
+							]
+						},
+						"description": "Get detailed information about a specific profile."
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"keywords\": [\"creator name\", \"username\", \"exclusive content\", \"premium\"],\n    \"monitoring_enabled\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/profiles/{{profile_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profiles",
+								"{{profile_id}}"
+							]
+						},
+						"description": "Update profile settings and monitoring configuration."
+					}
+				}
+			],
+			"description": "Manage protected creator profiles for content monitoring."
+		},
+		{
+			"name": "Content Scanning",
+			"item": [
+				{
+					"name": "Generate AI Signatures",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"profile_id\": {{profile_id}},\n    \"image_urls\": [\n        \"https://example.com/reference1.jpg\",\n        \"https://example.com/reference2.jpg\",\n        \"https://example.com/reference3.jpg\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/profile/signatures",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"profile",
+								"signatures"
+							]
+						},
+						"description": "Generate AI signatures from reference content for profile matching."
+					}
+				},
+				{
+					"name": "Trigger Manual Scan",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const result = pm.response.json();",
+									"    pm.environment.set('job_id', result.job_id);",
+									"    console.log('Scan initiated with job ID:', result.job_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/scan/manual?profile_id={{profile_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"scan",
+								"manual"
+							],
+							"query": [
+								{
+									"key": "profile_id",
+									"value": "{{profile_id}}"
+								}
+							]
+						},
+						"description": "Trigger a manual scan for unauthorized content across platforms."
+					}
+				},
+				{
+					"name": "Check Scan Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/scan/status/{{job_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"scan",
+								"status",
+								"{{job_id}}"
+							]
+						},
+						"description": "Check the status of a scanning job."
+					}
+				},
+				{
+					"name": "Scan Specific URL",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/scan/url?url=https://suspicious-site.com/content&profile_id={{profile_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"scan",
+								"url"
+							],
+							"query": [
+								{
+									"key": "url",
+									"value": "https://suspicious-site.com/content"
+								},
+								{
+									"key": "profile_id",
+									"value": "{{profile_id}}"
+								}
+							]
+						},
+						"description": "Scan a specific URL for content matches."
+					}
+				},
+				{
+					"name": "Get Scan History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/scan/history?profile_id={{profile_id}}&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"scan",
+								"history"
+							],
+							"query": [
+								{
+									"key": "profile_id",
+									"value": "{{profile_id}}"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Get scanning history for a profile."
+					}
+				},
+				{
+					"name": "Configure Scan Schedule",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"profile_id\": {{profile_id}},\n    \"schedule\": {\n        \"frequency\": \"daily\",\n        \"time\": \"02:00\",\n        \"platforms\": [\"google\", \"bing\", \"social_media\"]\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/scan/schedule",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"scan",
+								"schedule"
+							]
+						},
+						"description": "Configure automated scanning schedule for a profile."
+					}
+				}
+			],
+			"description": "AI-powered content scanning and monitoring operations."
+		},
+		{
+			"name": "Infringements",
+			"item": [
+				{
+					"name": "List Infringements",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/infringements?profile_id={{profile_id}}&status=detected&min_confidence=0.8&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"infringements"
+							],
+							"query": [
+								{
+									"key": "profile_id",
+									"value": "{{profile_id}}"
+								},
+								{
+									"key": "status",
+									"value": "detected"
+								},
+								{
+									"key": "min_confidence",
+									"value": "0.8"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "List detected infringements with filtering options."
+					}
+				},
+				{
+					"name": "Get Infringement Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/infringements/12345",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"infringements",
+								"12345"
+							]
+						},
+						"description": "Get detailed information about a specific infringement."
+					}
+				},
+				{
+					"name": "Update Infringement Status",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"confirmed\",\n    \"notes\": \"Verified unauthorized use of copyrighted content\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/infringements/12345",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"infringements",
+								"12345"
+							]
+						},
+						"description": "Update infringement status (confirmed, false_positive, ignored)."
+					}
+				},
+				{
+					"name": "Bulk Process Infringements",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"infringement_ids\": [12345, 12346, 12347],\n    \"action\": \"confirm\",\n    \"notes\": \"Batch confirmation of high-confidence matches\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/infringements/bulk",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"infringements",
+								"bulk"
+							]
+						},
+						"description": "Process multiple infringements in bulk."
+					}
+				}
+			],
+			"description": "Manage detected content infringements."
+		},
+		{
+			"name": "Takedowns",
+			"item": [
+				{
+					"name": "Submit Takedown",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const takedown = pm.response.json();",
+									"    pm.environment.set('takedown_id', takedown.id);",
+									"    console.log('Takedown submitted with ID:', takedown.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"infringement_id\": 12345,\n    \"urgency\": \"high\",\n    \"additional_info\": \"High-confidence match found through AI analysis. This content was stolen from our premium OnlyFans account.\",\n    \"evidence_urls\": [\n        \"https://storage.contentprotection.ai/evidence/12345.jpg\",\n        \"https://original-platform.com/proof-of-ownership\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/takedowns",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"takedowns"
+							]
+						},
+						"description": "Submit a DMCA takedown request for an infringement."
+					}
+				},
+				{
+					"name": "Get Takedown Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/takedowns/{{takedown_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"takedowns",
+								"{{takedown_id}}"
+							]
+						},
+						"description": "Get status and details of a takedown request."
+					}
+				},
+				{
+					"name": "List Takedowns",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/takedowns?status=pending&platform=google&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"takedowns"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "pending"
+								},
+								{
+									"key": "platform",
+									"value": "google"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "List takedown requests with filtering options."
+					}
+				},
+				{
+					"name": "Cancel Takedown",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reason\": \"False positive - content was actually authorized\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/takedowns/{{takedown_id}}/cancel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"takedowns",
+								"{{takedown_id}}",
+								"cancel"
+							]
+						},
+						"description": "Cancel a pending takedown request."
+					}
+				}
+			],
+			"description": "DMCA takedown request management and tracking."
+		},
+		{
+			"name": "Social Media Monitoring",
+			"item": [
+				{
+					"name": "Scan Social Platforms",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"profile_id\": {{profile_id}},\n    \"platforms\": [\"instagram\", \"twitter\", \"tiktok\"],\n    \"scan_type\": \"impersonation\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/social-media/scan",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"social-media",
+								"scan"
+							]
+						},
+						"description": "Scan social media platforms for impersonation and unauthorized content."
+					}
+				},
+				{
+					"name": "Get Impersonation Incidents",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/social-media/incidents?profile_id={{profile_id}}&platform=instagram&status=detected",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"social-media",
+								"incidents"
+							],
+							"query": [
+								{
+									"key": "profile_id",
+									"value": "{{profile_id}}"
+								},
+								{
+									"key": "platform",
+									"value": "instagram"
+								},
+								{
+									"key": "status",
+									"value": "detected"
+								}
+							]
+						},
+						"description": "Get detected impersonation incidents."
+					}
+				},
+				{
+					"name": "Report Impersonation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"incident_id\": 67890,\n    \"platform\": \"instagram\",\n    \"additional_evidence\": \"Fake account using stolen profile pictures and impersonating creator\",\n    \"urgency\": \"high\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/social-media/report",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"social-media",
+								"report"
+							]
+						},
+						"description": "Report impersonation incident to platform."
+					}
+				}
+			],
+			"description": "Social media platform monitoring for impersonation detection."
+		},
+		{
+			"name": "Webhooks",
+			"item": [
+				{
+					"name": "Create Webhook",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const webhook = pm.response.json();",
+									"    pm.environment.set('webhook_id', webhook.id);",
+									"    console.log('Webhook created with ID:', webhook.id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"url\": \"https://your-app.com/webhooks/contentprotection\",\n    \"events\": [\n        \"scan.completed\",\n        \"infringement.detected\",\n        \"takedown.status_changed\"\n    ],\n    \"secret\": \"your-webhook-secret-key\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/webhooks",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webhooks"
+							]
+						},
+						"description": "Create a webhook endpoint for real-time notifications."
+					}
+				},
+				{
+					"name": "List Webhooks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webhooks",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webhooks"
+							]
+						},
+						"description": "List all configured webhook endpoints."
+					}
+				},
+				{
+					"name": "Delete Webhook",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/webhooks/{{webhook_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"webhooks",
+								"{{webhook_id}}"
+							]
+						},
+						"description": "Delete a webhook endpoint."
+					}
+				}
+			],
+			"description": "Webhook configuration for real-time event notifications."
+		},
+		{
+			"name": "Dashboard & Analytics",
+			"item": [
+				{
+					"name": "Get Dashboard Overview",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/dashboard/overview",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"dashboard",
+								"overview"
+							]
+						},
+						"description": "Get dashboard overview with key metrics and statistics."
+					}
+				},
+				{
+					"name": "Get Scan Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/scanning/scan/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"scanning",
+								"scan",
+								"stats"
+							]
+						},
+						"description": "Get detailed scanning statistics and performance metrics."
+					}
+				}
+			],
+			"description": "Dashboard analytics and reporting endpoints."
+		},
+		{
+			"name": "System",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Check system health and status."
+					}
+				},
+				{
+					"name": "API Info",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/info",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"info"
+							]
+						},
+						"description": "Get API version and feature information."
+					}
+				},
+				{
+					"name": "Database Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/metrics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"metrics"
+							]
+						},
+						"description": "Get database performance metrics (requires authentication)."
+					}
+				}
+			],
+			"description": "System monitoring and information endpoints."
+		}
+	]
+}

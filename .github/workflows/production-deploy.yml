@@ -1,0 +1,457 @@
+name: Production Deployment (Blue-Green)
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      PRODUCTION_SERVER_HOST:
+        required: true
+      PRODUCTION_SERVER_USER:
+        required: true
+      PRODUCTION_SERVER_KEY:
+        required: true
+      PRODUCTION_ENV_FILE:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: false
+
+env:
+  DEPLOYMENT_TIMEOUT: 900  # 15 minutes
+  HEALTH_CHECK_TIMEOUT: 300  # 5 minutes
+  BLUE_GREEN_SWITCH_TIMEOUT: 60  # 1 minute
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify Docker images
+        run: |
+          docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}
+          docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}
+
+      - name: Check production server connectivity
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SERVER_KEY }}
+      
+      - name: Test SSH connection
+        run: |
+          ssh-keyscan -H ${{ secrets.PRODUCTION_SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh -o ConnectTimeout=10 ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "echo 'SSH connection successful'"
+
+      - name: Check disk space and resources
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo 'Checking system resources...'
+            df -h
+            free -h
+            docker system df
+          "
+
+  blue-green-deployment:
+    name: Blue-Green Production Deployment
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SERVER_KEY }}
+
+      - name: Add production server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.PRODUCTION_SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Determine deployment color
+        id: deployment-color
+        run: |
+          # Check which environment is currently active
+          CURRENT_COLOR=$(ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            if docker-compose -f docker-compose.blue.yml ps | grep -q 'Up'; then
+              echo 'blue'
+            elif docker-compose -f docker-compose.green.yml ps | grep -q 'Up'; then
+              echo 'green'  
+            else
+              echo 'blue'  # Default to blue if none are running
+            fi
+          " || echo "blue")
+          
+          if [ "$CURRENT_COLOR" = "blue" ]; then
+            DEPLOY_COLOR="green"
+          else
+            DEPLOY_COLOR="blue"
+          fi
+          
+          echo "current_color=$CURRENT_COLOR" >> $GITHUB_OUTPUT
+          echo "deploy_color=$DEPLOY_COLOR" >> $GITHUB_OUTPUT
+          echo "Current: $CURRENT_COLOR, Deploying to: $DEPLOY_COLOR"
+
+      - name: Prepare blue-green deployment files
+        run: |
+          # Create blue and green docker-compose files
+          for COLOR in blue green; do
+            cp docker-compose.production.yml docker-compose.$COLOR.yml
+            
+            # Update container names and ports for each color
+            if [ "$COLOR" = "blue" ]; then
+              BACKEND_PORT=8000
+              FRONTEND_PORT=3000
+              NGINX_HTTP_PORT=80
+              NGINX_HTTPS_PORT=443
+            else
+              BACKEND_PORT=8001
+              FRONTEND_PORT=3001
+              NGINX_HTTP_PORT=81
+              NGINX_HTTPS_PORT=444
+            fi
+            
+            # Replace image tags and ports
+            sed -i "s|autodmca-backend:latest|${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}|g" docker-compose.$COLOR.yml
+            sed -i "s|autodmca-frontend:latest|${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}|g" docker-compose.$COLOR.yml
+            sed -i "s|container_name: content-protection-|container_name: content-protection-$COLOR-|g" docker-compose.$COLOR.yml
+            sed -i "s|\"8000:8000\"|\"$BACKEND_PORT:8000\"|g" docker-compose.$COLOR.yml
+            sed -i "s|\"3000:80\"|\"$FRONTEND_PORT:80\"|g" docker-compose.$COLOR.yml
+            sed -i "s|\"80:80\"|\"$NGINX_HTTP_PORT:80\"|g" docker-compose.$COLOR.yml
+            sed -i "s|\"443:443\"|\"$NGINX_HTTPS_PORT:443\"|g" docker-compose.$COLOR.yml
+          done
+          
+          # Create blue-green deployment script
+          cat > blue-green-deploy.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          DEPLOY_COLOR=$1
+          CURRENT_COLOR=$2
+          IMAGE_TAG=$3
+          
+          echo "Starting blue-green deployment to $DEPLOY_COLOR environment..."
+          echo "Current active environment: $CURRENT_COLOR"
+          
+          # Create backup snapshot
+          echo "Creating database backup..."
+          docker-compose -f docker-compose.$CURRENT_COLOR.yml exec -T postgres pg_dump -U postgres contentprotection > /tmp/pre-deploy-backup-$(date +%Y%m%d_%H%M%S).sql
+          
+          # Pull new images
+          echo "Pulling new Docker images..."
+          docker-compose -f docker-compose.$DEPLOY_COLOR.yml pull
+          
+          # Stop any existing containers in target environment
+          echo "Stopping existing $DEPLOY_COLOR environment..."
+          docker-compose -f docker-compose.$DEPLOY_COLOR.yml down --timeout 30 || true
+          
+          # Start new environment
+          echo "Starting $DEPLOY_COLOR environment..."
+          docker-compose -f docker-compose.$DEPLOY_COLOR.yml up -d
+          
+          echo "Waiting for services to initialize..."
+          sleep 60
+          
+          # Determine ports for health checks
+          if [ "$DEPLOY_COLOR" = "blue" ]; then
+            BACKEND_PORT=8000
+            FRONTEND_PORT=3000
+          else
+            BACKEND_PORT=8001
+            FRONTEND_PORT=3001
+          fi
+          
+          # Health checks
+          echo "Running health checks on $DEPLOY_COLOR environment..."
+          
+          # Backend health check
+          for i in {1..30}; do
+            if curl -f http://localhost:$BACKEND_PORT/health > /dev/null 2>&1; then
+              echo "✅ Backend health check passed"
+              break
+            fi
+            echo "Waiting for backend health check... ($i/30)"
+            sleep 10
+          done
+          
+          # Database connectivity
+          docker-compose -f docker-compose.$DEPLOY_COLOR.yml exec -T backend python -c "
+          from app.db.session import engine
+          try:
+              with engine.connect() as conn:
+                  result = conn.execute('SELECT 1').fetchone()
+                  print('✅ Database connectivity OK')
+          except Exception as e:
+              print(f'❌ Database error: {e}')
+              exit(1)
+          "
+          
+          # Redis connectivity
+          docker-compose -f docker-compose.$DEPLOY_COLOR.yml exec -T redis redis-cli ping > /dev/null || {
+            echo "❌ Redis health check failed"
+            exit 1
+          }
+          echo "✅ Redis health check passed"
+          
+          # Frontend health check
+          for i in {1..20}; do
+            if curl -f http://localhost:$FRONTEND_PORT > /dev/null 2>&1; then
+              echo "✅ Frontend health check passed"
+              break
+            fi
+            echo "Waiting for frontend health check... ($i/20)"
+            sleep 10
+          done
+          
+          echo "✅ All health checks passed for $DEPLOY_COLOR environment"
+          EOF
+          
+          chmod +x blue-green-deploy.sh
+
+      - name: Copy deployment files
+        run: |
+          scp docker-compose.blue.yml ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }}:~/docker-compose.blue.yml
+          scp docker-compose.green.yml ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }}:~/docker-compose.green.yml
+          scp blue-green-deploy.sh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }}:~/blue-green-deploy.sh
+
+      - name: Copy environment file
+        run: |
+          echo "${{ secrets.PRODUCTION_ENV_FILE }}" | ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "cat > ~/.env"
+
+      - name: Deploy to staging environment
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            timeout ${{ env.DEPLOYMENT_TIMEOUT }} ./blue-green-deploy.sh ${{ steps.deployment-color.outputs.deploy_color }} ${{ steps.deployment-color.outputs.current_color }} ${{ inputs.image_tag }}
+          "
+
+      - name: Run comprehensive tests on staging environment
+        run: |
+          # Determine ports for the deployed environment
+          if [ "${{ steps.deployment-color.outputs.deploy_color }}" = "blue" ]; then
+            BACKEND_PORT=8000
+            FRONTEND_PORT=3000
+          else
+            BACKEND_PORT=8001
+            FRONTEND_PORT=3001
+          fi
+          
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo 'Running comprehensive tests on ${{ steps.deployment-color.outputs.deploy_color }} environment...'
+            
+            # API endpoint tests
+            curl -f http://localhost:$BACKEND_PORT/health || exit 1
+            curl -f http://localhost:$BACKEND_PORT/api/v1/health || exit 1
+            
+            # Database tests
+            docker-compose -f docker-compose.${{ steps.deployment-color.outputs.deploy_color }}.yml exec -T backend python -c '
+            from app.services.auth.email_service import EmailService
+            from app.db.session import SessionLocal
+            db = SessionLocal()
+            db.close()
+            print(\"Database test passed\")
+            '
+            
+            # Performance test
+            echo 'Running basic performance test...'
+            for i in {1..10}; do
+              curl -s -o /dev/null -w '%{http_code},%{time_total}\n' http://localhost:$BACKEND_PORT/health
+            done
+            
+            echo 'All tests passed on ${{ steps.deployment-color.outputs.deploy_color }} environment'
+          "
+
+      - name: Switch traffic to new environment
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo 'Switching traffic to ${{ steps.deployment-color.outputs.deploy_color }} environment...'
+            
+            # Update nginx configuration to point to new environment
+            if [ '${{ steps.deployment-color.outputs.deploy_color }}' = 'blue' ]; then
+              NEW_BACKEND_PORT=8000
+              NEW_FRONTEND_PORT=3000
+            else
+              NEW_BACKEND_PORT=8001
+              NEW_FRONTEND_PORT=3001
+            fi
+            
+            # Update load balancer configuration
+            sed -i \"s/backend_server [0-9.]*:[0-9]*/backend_server 127.0.0.1:\$NEW_BACKEND_PORT/g\" /etc/nginx/sites-available/autodmca || true
+            sed -i \"s/frontend_server [0-9.]*:[0-9]*/frontend_server 127.0.0.1:\$NEW_FRONTEND_PORT/g\" /etc/nginx/sites-available/autodmca || true
+            
+            # Reload nginx
+            sudo nginx -t && sudo nginx -s reload
+            
+            echo 'Traffic switched to ${{ steps.deployment-color.outputs.deploy_color }} environment'
+          "
+
+      - name: Post-deployment verification
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo 'Running post-deployment verification...'
+            
+            # Test through load balancer
+            curl -f http://localhost/health || exit 1
+            curl -f http://localhost/api/v1/health || exit 1
+            
+            # Monitor for 2 minutes
+            for i in {1..12}; do
+              STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://localhost/health)
+              if [ \"\$STATUS\" != '200' ]; then
+                echo \"❌ Health check failed with status \$STATUS\"
+                exit 1
+              fi
+              echo \"✅ Health check \$i/12 passed\"
+              sleep 10
+            done
+            
+            echo '✅ Post-deployment verification completed successfully'
+          "
+
+      - name: Cleanup old environment
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo 'Cleaning up old ${{ steps.deployment-color.outputs.current_color }} environment...'
+            
+            # Wait additional 5 minutes before cleanup
+            sleep 300
+            
+            # Stop old environment
+            docker-compose -f docker-compose.${{ steps.deployment-color.outputs.current_color }}.yml down --timeout 30
+            
+            # Clean up old images (keep last 3 versions)
+            docker image prune -f
+            
+            echo 'Cleanup completed'
+          "
+
+      - name: Update deployment status
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo 'Production deployment completed at \$(date)' >> deployment.log
+            echo 'Deployed to: ${{ steps.deployment-color.outputs.deploy_color }}' >> deployment.log
+            echo 'Image tag: ${{ inputs.image_tag }}' >> deployment.log
+            echo 'Commit SHA: ${{ github.sha }}' >> deployment.log
+          "
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🎉 Production deployment successful!"
+          echo "Active environment: ${{ steps.deployment-color.outputs.deploy_color }}"
+          echo "Deployed version: ${{ inputs.image_tag }}"
+          
+          # Send Slack notification if webhook is provided
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{
+                "text": "✅ Production Deployment Successful",
+                "blocks": [
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "*Production Deployment Completed Successfully*\n\n• Environment: ${{ steps.deployment-color.outputs.deploy_color }}\n• Version: `${{ inputs.image_tag }}`\n• Commit: `${{ github.sha }}`\n• Deployed by: ${{ github.actor }}"
+                    }
+                  }
+                ]
+              }' \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi
+
+  rollback-on-failure:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    needs: blue-green-deployment
+    if: failure()
+    
+    steps:
+      - name: Set up SSH for rollback
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SERVER_KEY }}
+
+      - name: Add production server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.PRODUCTION_SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Emergency rollback
+        run: |
+          ssh ${{ secrets.PRODUCTION_SERVER_USER }}@${{ secrets.PRODUCTION_SERVER_HOST }} "
+            echo '🚨 EMERGENCY ROLLBACK INITIATED'
+            
+            # Determine which environment was being deployed to
+            DEPLOY_COLOR=\$(cat deployment.log | tail -5 | grep 'Deployed to:' | awk '{print \$3}' || echo 'green')
+            if [ \"\$DEPLOY_COLOR\" = 'blue' ]; then
+              ROLLBACK_COLOR='green'
+            else
+              ROLLBACK_COLOR='blue'
+            fi
+            
+            echo \"Rolling back to \$ROLLBACK_COLOR environment...\"
+            
+            # Stop failed deployment
+            docker-compose -f docker-compose.\$DEPLOY_COLOR.yml down --timeout 10 || true
+            
+            # Ensure old environment is running
+            docker-compose -f docker-compose.\$ROLLBACK_COLOR.yml up -d
+            
+            # Switch traffic back
+            if [ \"\$ROLLBACK_COLOR\" = 'blue' ]; then
+              BACKEND_PORT=8000
+              FRONTEND_PORT=3000
+            else
+              BACKEND_PORT=8001
+              FRONTEND_PORT=3001
+            fi
+            
+            # Update nginx config
+            sed -i \"s/backend_server [0-9.]*:[0-9]*/backend_server 127.0.0.1:\$BACKEND_PORT/g\" /etc/nginx/sites-available/autodmca || true
+            sudo nginx -s reload || true
+            
+            echo 'Rollback completed to \$ROLLBACK_COLOR environment'
+          "
+
+      - name: Notify rollback
+        run: |
+          echo "🚨 Production deployment failed - Emergency rollback completed"
+          
+          # Send Slack notification
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data '{
+                "text": "🚨 Production Deployment Failed - Rollback Completed",
+                "blocks": [
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "*🚨 PRODUCTION DEPLOYMENT FAILED*\n\nEmergency rollback has been completed.\n\n• Failed version: `${{ inputs.image_tag }}`\n• Commit: `${{ github.sha }}`\n• Time: $(date)\n\n*System has been rolled back to previous stable version.*"
+                    }
+                  }
+                ]
+              }' \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi

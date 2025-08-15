@@ -1,0 +1,490 @@
+name: Kubernetes Deployment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+      deployment_strategy:
+        required: false
+        type: string
+        default: 'rolling'
+    secrets:
+      KUBE_CONFIG:
+        required: true
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: false
+
+env:
+  DEPLOYMENT_TIMEOUT: 900  # 15 minutes
+  HEALTH_CHECK_TIMEOUT: 300  # 5 minutes
+
+jobs:
+  pre-deployment-validation:
+    name: Pre-deployment Validation
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl config current-context
+
+      - name: Verify cluster connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+          kubectl get namespaces
+
+      - name: Verify Docker images
+        run: |
+          # Check if images exist in registry
+          docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}
+          docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}
+
+      - name: Validate Kubernetes manifests
+        run: |
+          # Validate all Kubernetes manifests
+          kubectl apply --dry-run=client -f k8s/${{ inputs.environment }}/
+          
+          # Run kubeval for additional validation
+          kubectl apply --dry-run=server -f k8s/${{ inputs.environment }}/
+
+      - name: Check resource quotas
+        run: |
+          # Check if we have enough resources
+          kubectl describe quota -n ${{ inputs.environment }}
+          kubectl top nodes
+          kubectl describe limits -n ${{ inputs.environment }}
+
+  blue-green-k8s-deployment:
+    name: Blue-Green Kubernetes Deployment
+    runs-on: ubuntu-latest
+    needs: pre-deployment-validation
+    if: inputs.deployment_strategy == 'blue-green'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Determine deployment color
+        id: deployment-color
+        run: |
+          # Check current active deployment
+          CURRENT_COLOR=$(kubectl get service backend-service -n ${{ inputs.environment }} -o jsonpath='{.spec.selector.version}' || echo "blue")
+          
+          if [ "$CURRENT_COLOR" = "blue" ]; then
+            DEPLOY_COLOR="green"
+          else
+            DEPLOY_COLOR="blue"
+          fi
+          
+          echo "current_color=$CURRENT_COLOR" >> $GITHUB_OUTPUT
+          echo "deploy_color=$DEPLOY_COLOR" >> $GITHUB_OUTPUT
+          echo "Current: $CURRENT_COLOR, Deploying to: $DEPLOY_COLOR"
+
+      - name: Prepare deployment manifests
+        run: |
+          # Create environment-specific manifests
+          cp -r k8s/${{ inputs.environment }}/ k8s-deploy/
+          
+          # Update image tags
+          find k8s-deploy/ -name "*.yaml" -exec sed -i \
+            -e "s|IMAGE_TAG_BACKEND|${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}|g" \
+            -e "s|IMAGE_TAG_FRONTEND|${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}|g" \
+            {} \;
+          
+          # Update deployment color
+          find k8s-deploy/ -name "*deployment.yaml" -exec sed -i \
+            -e "s|version: blue|version: ${{ steps.deployment-color.outputs.deploy_color }}|g" \
+            {} \;
+          
+          # Update deployment names for blue-green
+          find k8s-deploy/ -name "*deployment.yaml" -exec sed -i \
+            -e "s|name: backend-prod|name: backend-${{ steps.deployment-color.outputs.deploy_color }}|g" \
+            -e "s|name: frontend-prod|name: frontend-${{ steps.deployment-color.outputs.deploy_color }}|g" \
+            -e "s|name: worker-prod|name: worker-${{ steps.deployment-color.outputs.deploy_color }}|g" \
+            {} \;
+
+      - name: Deploy to staging environment
+        run: |
+          echo "Deploying ${{ steps.deployment-color.outputs.deploy_color }} environment..."
+          
+          # Apply secrets and configs first
+          kubectl apply -f k8s-deploy/secrets.yaml
+          kubectl apply -f k8s-deploy/configmaps.yaml
+          
+          # Deploy applications
+          kubectl apply -f k8s-deploy/backend-deployment.yaml
+          kubectl apply -f k8s-deploy/frontend-deployment.yaml
+          kubectl apply -f k8s-deploy/worker-deployment.yaml
+          
+          # Wait for deployments to be ready
+          kubectl rollout status deployment/backend-${{ steps.deployment-color.outputs.deploy_color }} -n ${{ inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/frontend-${{ steps.deployment-color.outputs.deploy_color }} -n ${{ inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/worker-${{ steps.deployment-color.outputs.deploy_color }} -n ${{ inputs.environment }} --timeout=600s
+
+      - name: Run health checks on staging environment
+        run: |
+          # Get pod names for testing
+          BACKEND_POD=$(kubectl get pods -n ${{ inputs.environment }} -l app=backend,version=${{ steps.deployment-color.outputs.deploy_color }} -o jsonpath='{.items[0].metadata.name}')
+          FRONTEND_POD=$(kubectl get pods -n ${{ inputs.environment }} -l app=frontend,version=${{ steps.deployment-color.outputs.deploy_color }} -o jsonpath='{.items[0].metadata.name}')
+          
+          # Health check backend
+          kubectl exec -n ${{ inputs.environment }} $BACKEND_POD -- curl -f http://localhost:8000/health
+          
+          # Health check frontend  
+          kubectl exec -n ${{ inputs.environment }} $FRONTEND_POD -- curl -f http://localhost:80/
+          
+          # Database connectivity test
+          kubectl exec -n ${{ inputs.environment }} $BACKEND_POD -- python -c "
+          from app.db.session import engine
+          with engine.connect() as conn:
+              result = conn.execute('SELECT 1').fetchone()
+              print('Database OK')
+          "
+
+      - name: Run integration tests
+        run: |
+          # Port forward for testing
+          kubectl port-forward -n ${{ inputs.environment }} service/backend-service 8080:8000 &
+          PF_PID=$!
+          sleep 10
+          
+          # Run basic API tests
+          curl -f http://localhost:8080/health
+          curl -f http://localhost:8080/api/v1/health
+          
+          # Kill port forward
+          kill $PF_PID
+
+      - name: Switch traffic to new environment
+        run: |
+          echo "Switching traffic to ${{ steps.deployment-color.outputs.deploy_color }} environment..."
+          
+          # Update service selectors to point to new deployment
+          kubectl patch service backend-service -n ${{ inputs.environment }} -p '{"spec":{"selector":{"version":"${{ steps.deployment-color.outputs.deploy_color }}"}}}'
+          kubectl patch service frontend-service -n ${{ inputs.environment }} -p '{"spec":{"selector":{"version":"${{ steps.deployment-color.outputs.deploy_color }}"}}}'
+          
+          # Update ingress if needed
+          kubectl patch ingress app-ingress -n ${{ inputs.environment }} --type=merge -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary":"false"}}}'
+
+      - name: Verify traffic switch
+        run: |
+          # Wait for traffic to stabilize
+          sleep 60
+          
+          # Verify endpoints
+          kubectl get endpoints backend-service -n ${{ inputs.environment }}
+          kubectl get endpoints frontend-service -n ${{ inputs.environment }}
+          
+          # Test external access
+          INGRESS_IP=$(kubectl get ingress app-ingress -n ${{ inputs.environment }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          if [ -n "$INGRESS_IP" ]; then
+            curl -f http://$INGRESS_IP/health
+          fi
+
+      - name: Cleanup old environment
+        run: |
+          # Wait additional time before cleanup
+          sleep 300
+          
+          echo "Cleaning up ${{ steps.deployment-color.outputs.current_color }} environment..."
+          
+          # Delete old deployments
+          kubectl delete deployment backend-${{ steps.deployment-color.outputs.current_color }} -n ${{ inputs.environment }} --ignore-not-found=true
+          kubectl delete deployment frontend-${{ steps.deployment-color.outputs.current_color }} -n ${{ inputs.environment }} --ignore-not-found=true
+          kubectl delete deployment worker-${{ steps.deployment-color.outputs.current_color }} -n ${{ inputs.environment }} --ignore-not-found=true
+
+  rolling-k8s-deployment:
+    name: Rolling Kubernetes Deployment
+    runs-on: ubuntu-latest
+    needs: pre-deployment-validation
+    if: inputs.deployment_strategy == 'rolling' || inputs.deployment_strategy == ''
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Prepare deployment manifests
+        run: |
+          # Create environment-specific manifests
+          cp -r k8s/${{ inputs.environment }}/ k8s-deploy/
+          
+          # Update image tags
+          find k8s-deploy/ -name "*.yaml" -exec sed -i \
+            -e "s|IMAGE_TAG_BACKEND|${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}|g" \
+            -e "s|IMAGE_TAG_FRONTEND|${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}|g" \
+            {} \;
+
+      - name: Apply Kubernetes manifests
+        run: |
+          # Apply namespace first
+          kubectl apply -f k8s-deploy/namespace.yaml
+          
+          # Apply RBAC and security
+          kubectl apply -f k8s-deploy/rbac.yaml
+          kubectl apply -f k8s-deploy/service-accounts.yaml
+          
+          # Apply storage
+          kubectl apply -f k8s-deploy/pvcs.yaml
+          
+          # Apply secrets and configs
+          kubectl apply -f k8s-deploy/secrets.yaml
+          kubectl apply -f k8s-deploy/configmaps.yaml
+          
+          # Apply autoscaling
+          kubectl apply -f k8s-deploy/autoscaling.yaml
+          
+          # Deploy applications
+          kubectl apply -f k8s-deploy/backend-deployment.yaml
+          kubectl apply -f k8s-deploy/frontend-deployment.yaml
+          kubectl apply -f k8s-deploy/worker-deployment.yaml
+          
+          # Apply services
+          kubectl apply -f k8s-deploy/services.yaml
+          
+          # Apply ingress
+          kubectl apply -f k8s-deploy/ingress.yaml
+
+      - name: Wait for deployment completion
+        run: |
+          # Wait for all deployments to be ready
+          kubectl rollout status deployment/backend-prod -n ${{ inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/frontend-prod -n ${{ inputs.environment }} --timeout=600s
+          kubectl rollout status deployment/worker-prod -n ${{ inputs.environment }} --timeout=600s
+          
+          # Verify pods are running
+          kubectl get pods -n ${{ inputs.environment }}
+
+      - name: Run post-deployment health checks
+        run: |
+          # Wait for services to stabilize
+          sleep 30
+          
+          # Get service endpoints
+          kubectl get endpoints -n ${{ inputs.environment }}
+          
+          # Port forward for testing
+          kubectl port-forward -n ${{ inputs.environment }} service/backend-service 8080:8000 &
+          PF_PID=$!
+          sleep 10
+          
+          # Health checks
+          curl -f http://localhost:8080/health
+          curl -f http://localhost:8080/api/v1/health
+          
+          # Kill port forward
+          kill $PF_PID
+
+  post-deployment-tests:
+    name: Post-deployment Tests
+    runs-on: ubuntu-latest
+    needs: [rolling-k8s-deployment, blue-green-k8s-deployment]
+    if: always() && (needs.rolling-k8s-deployment.result == 'success' || needs.blue-green-k8s-deployment.result == 'success')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Run smoke tests
+        run: |
+          # Port forward services for testing
+          kubectl port-forward -n ${{ inputs.environment }} service/backend-service 8080:8000 &
+          BACKEND_PF_PID=$!
+          kubectl port-forward -n ${{ inputs.environment }} service/frontend-service 3080:80 &
+          FRONTEND_PF_PID=$!
+          sleep 15
+          
+          # Backend smoke tests
+          echo "Testing backend endpoints..."
+          curl -f http://localhost:8080/health
+          curl -f http://localhost:8080/api/v1/health
+          curl -f http://localhost:8080/metrics
+          
+          # Frontend smoke tests
+          echo "Testing frontend..."
+          curl -f http://localhost:3080/
+          
+          # Kill port forwards
+          kill $BACKEND_PF_PID $FRONTEND_PF_PID
+
+      - name: Verify autoscaling is working
+        run: |
+          # Check HPA status
+          kubectl get hpa -n ${{ inputs.environment }}
+          kubectl describe hpa -n ${{ inputs.environment }}
+          
+          # Check VPA status
+          kubectl get vpa -n ${{ inputs.environment }}
+
+      - name: Check resource utilization
+        run: |
+          # Get resource usage
+          kubectl top pods -n ${{ inputs.environment }}
+          kubectl top nodes
+          
+          # Check pod distribution
+          kubectl get pods -n ${{ inputs.environment }} -o wide
+
+      - name: Generate deployment report
+        run: |
+          cat > deployment_report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "environment": "${{ inputs.environment }}",
+            "image_tag": "${{ inputs.image_tag }}",
+            "deployment_strategy": "${{ inputs.deployment_strategy }}",
+            "pods": $(kubectl get pods -n ${{ inputs.environment }} -o json | jq '.items | length'),
+            "services": $(kubectl get services -n ${{ inputs.environment }} -o json | jq '.items | length'),
+            "ingresses": $(kubectl get ingresses -n ${{ inputs.environment }} -o json | jq '.items | length'),
+            "hpa": $(kubectl get hpa -n ${{ inputs.environment }} -o json | jq '.items | length'),
+            "status": "success"
+          }
+          EOF
+
+      - name: Upload deployment report
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-deployment-report-${{ inputs.environment }}-${{ github.run_number }}
+          path: deployment_report.json
+
+  rollback-on-failure:
+    name: Automatic Rollback
+    runs-on: ubuntu-latest
+    needs: [rolling-k8s-deployment, blue-green-k8s-deployment, post-deployment-tests]
+    if: failure()
+    
+    steps:
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Rollback deployments
+        run: |
+          echo "🚨 INITIATING AUTOMATIC ROLLBACK"
+          
+          # Rollback all deployments to previous version
+          kubectl rollout undo deployment/backend-prod -n ${{ inputs.environment }}
+          kubectl rollout undo deployment/frontend-prod -n ${{ inputs.environment }}
+          kubectl rollout undo deployment/worker-prod -n ${{ inputs.environment }}
+          
+          # Wait for rollback to complete
+          kubectl rollout status deployment/backend-prod -n ${{ inputs.environment }} --timeout=300s
+          kubectl rollout status deployment/frontend-prod -n ${{ inputs.environment }} --timeout=300s
+          kubectl rollout status deployment/worker-prod -n ${{ inputs.environment }} --timeout=300s
+          
+          echo "Rollback completed successfully"
+
+      - name: Verify rollback
+        run: |
+          # Check pod status after rollback
+          kubectl get pods -n ${{ inputs.environment }}
+          
+          # Verify health after rollback
+          kubectl port-forward -n ${{ inputs.environment }} service/backend-service 8080:8000 &
+          PF_PID=$!
+          sleep 10
+          
+          curl -f http://localhost:8080/health
+          kill $PF_PID
+
+  notification:
+    name: Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [rolling-k8s-deployment, blue-green-k8s-deployment, post-deployment-tests, rollback-on-failure]
+    if: always()
+    
+    steps:
+      - name: Determine deployment status
+        run: |
+          if [[ "${{ needs.rolling-k8s-deployment.result }}" == "success" || "${{ needs.blue-green-k8s-deployment.result }}" == "success" ]]; then
+            if [[ "${{ needs.post-deployment-tests.result }}" == "success" ]]; then
+              echo "DEPLOYMENT_STATUS=success" >> $GITHUB_ENV
+              echo "DEPLOYMENT_EMOJI=🎉" >> $GITHUB_ENV
+              echo "DEPLOYMENT_MESSAGE=Kubernetes deployment completed successfully" >> $GITHUB_ENV
+            else
+              echo "DEPLOYMENT_STATUS=warning" >> $GITHUB_ENV
+              echo "DEPLOYMENT_EMOJI=⚠️" >> $GITHUB_ENV
+              echo "DEPLOYMENT_MESSAGE=Deployment completed but post-deployment tests had issues" >> $GITHUB_ENV
+            fi
+          elif [[ "${{ needs.rollback-on-failure.result }}" == "success" ]]; then
+            echo "DEPLOYMENT_STATUS=failure" >> $GITHUB_ENV
+            echo "DEPLOYMENT_EMOJI=🚨" >> $GITHUB_ENV
+            echo "DEPLOYMENT_MESSAGE=Deployment failed - automatic rollback completed" >> $GITHUB_ENV
+          else
+            echo "DEPLOYMENT_STATUS=failure" >> $GITHUB_ENV
+            echo "DEPLOYMENT_EMOJI=💥" >> $GITHUB_ENV
+            echo "DEPLOYMENT_MESSAGE=Deployment failed completely" >> $GITHUB_ENV
+          fi
+
+      - name: Send notification
+        if: always() && secrets.SLACK_WEBHOOK_URL
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{
+              \"text\": \"${{ env.DEPLOYMENT_EMOJI }} Kubernetes Deployment - ${{ inputs.environment }}\",
+              \"blocks\": [
+                {
+                  \"type\": \"section\",
+                  \"text\": {
+                    \"type\": \"mrkdwn\",
+                    \"text\": \"*${{ env.DEPLOYMENT_MESSAGE }}*\n\n• Environment: \`${{ inputs.environment }}\`\n• Strategy: \`${{ inputs.deployment_strategy }}\`\n• Image Tag: \`${{ inputs.image_tag }}\`\n• Deployed by: ${{ github.actor }}\n• Time: $(date)\"
+                  }
+                }
+              ]
+            }" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}

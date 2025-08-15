@@ -1,0 +1,180 @@
+name: Staging Deployment
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        required: true
+        type: string
+      environment:
+        required: true
+        type: string
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      STAGING_SERVER_HOST:
+        required: true
+      STAGING_SERVER_USER:
+        required: true
+      STAGING_SERVER_KEY:
+        required: true
+      STAGING_ENV_FILE:
+        required: true
+
+env:
+  DEPLOYMENT_TIMEOUT: 600  # 10 minutes
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Verify Docker images exist
+        run: |
+          docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}
+          docker manifest inspect ${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SERVER_KEY }}
+
+      - name: Add staging server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.STAGING_SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Prepare deployment files
+        run: |
+          # Create staging docker-compose file
+          cp docker-compose.staging.yml staging-deploy.yml
+          
+          # Replace image tags with specific version
+          sed -i "s|image: autodmca-backend:latest|image: ${{ secrets.DOCKER_USERNAME }}/autodmca-backend:${{ inputs.image_tag }}|g" staging-deploy.yml
+          sed -i "s|image: autodmca-frontend:latest|image: ${{ secrets.DOCKER_USERNAME }}/autodmca-frontend:${{ inputs.image_tag }}|g" staging-deploy.yml
+          
+          # Create deployment script
+          cat > deploy-staging.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "Starting staging deployment..."
+          
+          # Create backup of current state
+          docker-compose -f docker-compose.staging.yml ps > /tmp/pre-deploy-state.txt || true
+          
+          # Pull new images
+          docker-compose -f staging-deploy.yml pull
+          
+          # Stop old containers gracefully
+          docker-compose -f docker-compose.staging.yml down --timeout 30 || true
+          
+          # Start new containers
+          docker-compose -f staging-deploy.yml up -d
+          
+          # Wait for services to be healthy
+          echo "Waiting for services to start..."
+          sleep 30
+          
+          # Health check
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Backend health check passed"
+              break
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 10
+          done
+          
+          for i in {1..30}; do
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend health check passed"
+              break
+            fi
+            echo "Waiting for frontend... ($i/30)"
+            sleep 10
+          done
+          
+          echo "Staging deployment completed successfully"
+          EOF
+          
+          chmod +x deploy-staging.sh
+
+      - name: Copy files to staging server
+        run: |
+          scp staging-deploy.yml ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }}:~/staging-deploy.yml
+          scp deploy-staging.sh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }}:~/deploy-staging.sh
+
+      - name: Copy environment file
+        run: |
+          echo "${{ secrets.STAGING_ENV_FILE }}" | ssh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }} "cat > ~/.env"
+
+      - name: Deploy to staging
+        run: |
+          ssh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }} "
+            cd ~
+            timeout ${{ env.DEPLOYMENT_TIMEOUT }} ./deploy-staging.sh
+          "
+
+      - name: Run smoke tests
+        run: |
+          ssh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }} "
+            # Basic API smoke tests
+            curl -f http://localhost:8000/health || exit 1
+            curl -f http://localhost:8000/api/v1/health || exit 1
+            
+            # Frontend smoke test
+            curl -f http://localhost:3000 || exit 1
+            
+            # Database connectivity test
+            docker-compose -f staging-deploy.yml exec -T backend python -c 'from app.db.session import engine; engine.connect().close(); print(\"Database OK\")'
+            
+            # Redis connectivity test
+            docker-compose -f staging-deploy.yml exec -T redis redis-cli ping
+          "
+
+      - name: Update deployment status
+        run: |
+          echo "Staging deployment completed at $(date)" >> deployment.log
+          echo "Image tag: ${{ inputs.image_tag }}" >> deployment.log
+          echo "Commit SHA: ${{ github.sha }}" >> deployment.log
+
+      - name: Cleanup old images
+        run: |
+          ssh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }} "
+            # Keep only last 3 versions
+            docker image prune -f
+            docker system prune -f --volumes
+          "
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Staging deployment successful!"
+          echo "Deployed version: ${{ inputs.image_tag }}"
+          echo "Staging URL: http://${{ secrets.STAGING_SERVER_HOST }}"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_HOST }} "
+            echo 'Deployment failed, attempting rollback...'
+            docker-compose -f staging-deploy.yml down || true
+            docker-compose -f docker-compose.staging.yml up -d || true
+            echo 'Rollback completed'
+          "

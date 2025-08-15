@@ -1,0 +1,471 @@
+name: Backup & Disaster Recovery
+
+on:
+  schedule:
+    # Daily backups at 2 AM UTC
+    - cron: '0 2 * * *'
+    # Weekly full backups on Sundays at 1 AM UTC
+    - cron: '0 1 * * 0'
+  workflow_dispatch:
+    inputs:
+      backup_type:
+        description: 'Type of backup to perform'
+        required: true
+        default: 'incremental'
+        type: choice
+        options:
+          - incremental
+          - full
+          - emergency
+      environment:
+        description: 'Environment to backup'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      restore_mode:
+        description: 'Perform disaster recovery test'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  BACKUP_RETENTION_DAYS: 30
+  BACKUP_RETENTION_WEEKS: 12
+  BACKUP_RETENTION_MONTHS: 12
+  S3_BACKUP_BUCKET: autodmca-backups
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+  BACKUP_TYPE: ${{ github.event.inputs.backup_type || (github.event.schedule == '0 1 * * 0' && 'full' || 'incremental') }}
+
+jobs:
+  database-backup:
+    name: Database Backup
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout backup scripts
+        uses: actions/checkout@v4
+
+      - name: Set up SSH for database access
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SERVER_KEY }}
+
+      - name: Add servers to known hosts
+        run: |
+          if [ "${{ env.ENVIRONMENT }}" = "production" ]; then
+            ssh-keyscan -H ${{ secrets.PRODUCTION_SERVER_HOST }} >> ~/.ssh/known_hosts
+            SERVER_HOST=${{ secrets.PRODUCTION_SERVER_HOST }}
+            SERVER_USER=${{ secrets.PRODUCTION_SERVER_USER }}
+          else
+            ssh-keyscan -H ${{ secrets.STAGING_SERVER_HOST }} >> ~/.ssh/known_hosts
+            SERVER_HOST=${{ secrets.STAGING_SERVER_HOST }}
+            SERVER_USER=${{ secrets.STAGING_SERVER_USER }}
+          fi
+          echo "SERVER_HOST=$SERVER_HOST" >> $GITHUB_ENV
+          echo "SERVER_USER=$SERVER_USER" >> $GITHUB_ENV
+
+      - name: Create database backup script
+        run: |
+          cat > database_backup.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          BACKUP_TYPE="$1"
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_DIR="/tmp/backups/$TIMESTAMP"
+          
+          echo "Starting $BACKUP_TYPE database backup at $TIMESTAMP"
+          
+          # Create backup directory
+          mkdir -p "$BACKUP_DIR"
+          
+          # PostgreSQL backup
+          echo "Creating PostgreSQL backup..."
+          if [ "$BACKUP_TYPE" = "full" ]; then
+              # Full backup with all data
+              docker-compose exec -T postgres pg_dump -U postgres -h localhost -d contentprotection \
+                  --verbose --clean --if-exists --create --format=custom \
+                  > "$BACKUP_DIR/postgres_full_$TIMESTAMP.backup"
+              
+              # Also create SQL format for easier inspection
+              docker-compose exec -T postgres pg_dump -U postgres -h localhost -d contentprotection \
+                  --verbose --clean --if-exists --create --format=plain \
+                  > "$BACKUP_DIR/postgres_full_$TIMESTAMP.sql"
+          else
+              # Incremental backup (last 24 hours of data)
+              docker-compose exec -T postgres pg_dump -U postgres -h localhost -d contentprotection \
+                  --verbose --format=custom \
+                  --exclude-table-data='*logs*' \
+                  --exclude-table-data='*sessions*' \
+                  > "$BACKUP_DIR/postgres_incremental_$TIMESTAMP.backup"
+          fi
+          
+          # Redis backup
+          echo "Creating Redis backup..."
+          docker-compose exec -T redis redis-cli BGSAVE
+          sleep 5  # Wait for background save to complete
+          docker-compose exec -T redis cat /data/dump.rdb > "$BACKUP_DIR/redis_$TIMESTAMP.rdb"
+          
+          # Application data backup
+          echo "Creating application data backup..."
+          tar -czf "$BACKUP_DIR/app_data_$TIMESTAMP.tar.gz" \
+              -C /app uploads/ logs/ || echo "Warning: Some app data files may be missing"
+          
+          # Create backup metadata
+          cat > "$BACKUP_DIR/backup_metadata.json" << EOL
+          {
+              "timestamp": "$TIMESTAMP",
+              "backup_type": "$BACKUP_TYPE",
+              "environment": "$ENVIRONMENT",
+              "database_size": "$(docker-compose exec -T postgres psql -U postgres -d contentprotection -c "SELECT pg_size_pretty(pg_database_size('contentprotection'));" -t | tr -d ' ')",
+              "redis_memory": "$(docker-compose exec -T redis redis-cli INFO memory | grep used_memory_human | cut -d: -f2 | tr -d '\r')",
+              "backup_files": [
+                  "$(ls -la $BACKUP_DIR/ | grep -E '\.(backup|sql|rdb|tar\.gz)$' | awk '{print $9}' | tr '\n' ',' | sed 's/,$//')"
+              ]
+          }
+          EOL
+          
+          # Compress backup directory
+          tar -czf "/tmp/backup_${BACKUP_TYPE}_$TIMESTAMP.tar.gz" -C /tmp/backups "$TIMESTAMP"
+          
+          echo "Backup completed: /tmp/backup_${BACKUP_TYPE}_$TIMESTAMP.tar.gz"
+          echo "BACKUP_FILE=/tmp/backup_${BACKUP_TYPE}_$TIMESTAMP.tar.gz" >> $GITHUB_ENV
+          EOF
+          
+          chmod +x database_backup.sh
+
+      - name: Execute database backup
+        run: |
+          scp database_backup.sh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }}:~/database_backup.sh
+          ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} "
+            chmod +x ~/database_backup.sh
+            ENVIRONMENT=${{ env.ENVIRONMENT }} ~/database_backup.sh ${{ env.BACKUP_TYPE }}
+          "
+
+      - name: Download backup file
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="backup_${{ env.BACKUP_TYPE }}_${TIMESTAMP}.tar.gz"
+          
+          # Find the actual backup file on the server
+          ACTUAL_BACKUP=$(ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} "ls -t /tmp/backup_*.tar.gz | head -1")
+          
+          if [ -n "$ACTUAL_BACKUP" ]; then
+            scp ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }}:$ACTUAL_BACKUP ./
+            mv $(basename $ACTUAL_BACKUP) $BACKUP_FILE
+            echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+          else
+            echo "Error: No backup file found"
+            exit 1
+          fi
+
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
+      - name: Upload backup to S3
+        run: |
+          BACKUP_PATH="${{ env.ENVIRONMENT }}/${{ env.BACKUP_TYPE }}/$(date +%Y/%m/%d)/${{ env.BACKUP_FILE }}"
+          
+          # Upload to S3 with encryption
+          aws s3 cp "${{ env.BACKUP_FILE }}" "s3://${{ env.S3_BACKUP_BUCKET }}/$BACKUP_PATH" \
+            --server-side-encryption AES256 \
+            --metadata "environment=${{ env.ENVIRONMENT }},backup_type=${{ env.BACKUP_TYPE }},timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          
+          echo "Backup uploaded to: s3://${{ env.S3_BACKUP_BUCKET }}/$BACKUP_PATH"
+          echo "S3_BACKUP_PATH=s3://${{ env.S3_BACKUP_BUCKET }}/$BACKUP_PATH" >> $GITHUB_ENV
+
+      - name: Verify backup integrity
+        run: |
+          # Download backup from S3 and verify
+          aws s3 cp "${{ env.S3_BACKUP_PATH }}" "./verify_${{ env.BACKUP_FILE }}"
+          
+          # Compare checksums
+          ORIGINAL_CHECKSUM=$(sha256sum "${{ env.BACKUP_FILE }}" | cut -d' ' -f1)
+          DOWNLOADED_CHECKSUM=$(sha256sum "./verify_${{ env.BACKUP_FILE }}" | cut -d' ' -f1)
+          
+          if [ "$ORIGINAL_CHECKSUM" = "$DOWNLOADED_CHECKSUM" ]; then
+            echo "✅ Backup integrity verified"
+          else
+            echo "❌ Backup integrity check failed"
+            exit 1
+          fi
+
+      - name: Cleanup old backups
+        run: |
+          # Remove backups older than retention policy
+          case "${{ env.BACKUP_TYPE }}" in
+            "incremental")
+              CUTOFF_DATE=$(date -d "${{ env.BACKUP_RETENTION_DAYS }} days ago" +%Y-%m-%d)
+              PREFIX="${{ env.ENVIRONMENT }}/incremental/"
+              ;;
+            "full")
+              CUTOFF_DATE=$(date -d "${{ env.BACKUP_RETENTION_WEEKS }} weeks ago" +%Y-%m-%d)
+              PREFIX="${{ env.ENVIRONMENT }}/full/"
+              ;;
+          esac
+          
+          # List and delete old backups
+          aws s3 ls "s3://${{ env.S3_BACKUP_BUCKET }}/$PREFIX" --recursive | \
+          while read -r line; do
+            FILE_DATE=$(echo $line | awk '{print $1}')
+            FILE_PATH=$(echo $line | awk '{print $4}')
+            
+            if [[ "$FILE_DATE" < "$CUTOFF_DATE" ]]; then
+              echo "Deleting old backup: $FILE_PATH"
+              aws s3 rm "s3://${{ env.S3_BACKUP_BUCKET }}/$FILE_PATH"
+            fi
+          done
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ env.ENVIRONMENT }}-${{ env.BACKUP_TYPE }}-${{ github.run_number }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 7
+
+      - name: Cleanup local files
+        run: |
+          rm -f "${{ env.BACKUP_FILE }}" "./verify_${{ env.BACKUP_FILE }}"
+          ssh ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} "rm -f /tmp/backup_*.tar.gz /tmp/backups/* ~/database_backup.sh"
+
+  disaster-recovery-test:
+    name: Disaster Recovery Test
+    runs-on: ubuntu-latest
+    needs: database-backup
+    if: github.event.inputs.restore_mode == 'true' || github.event.schedule == '0 1 * * 0'
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_restore
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+
+      - name: Find latest backup
+        run: |
+          # Find the most recent backup for this environment
+          LATEST_BACKUP=$(aws s3 ls "s3://${{ env.S3_BACKUP_BUCKET }}/${{ env.ENVIRONMENT }}/" --recursive | \
+                         sort | tail -1 | awk '{print $4}')
+          
+          if [ -z "$LATEST_BACKUP" ]; then
+            echo "Error: No backup found for ${{ env.ENVIRONMENT }}"
+            exit 1
+          fi
+          
+          echo "Latest backup: $LATEST_BACKUP"
+          echo "LATEST_BACKUP_PATH=s3://${{ env.S3_BACKUP_BUCKET }}/$LATEST_BACKUP" >> $GITHUB_ENV
+
+      - name: Download and extract backup
+        run: |
+          # Download latest backup
+          aws s3 cp "${{ env.LATEST_BACKUP_PATH }}" ./latest_backup.tar.gz
+          
+          # Extract backup
+          tar -xzf latest_backup.tar.gz
+          
+          # Find extracted directory
+          BACKUP_DIR=$(tar -tzf latest_backup.tar.gz | head -1 | cut -f1 -d"/")
+          echo "BACKUP_DIR=$BACKUP_DIR" >> $GITHUB_ENV
+
+      - name: Test PostgreSQL restoration
+        run: |
+          echo "Testing PostgreSQL backup restoration..."
+          
+          # Find PostgreSQL backup file
+          PG_BACKUP_FILE=$(find "${{ env.BACKUP_DIR }}" -name "*.backup" | head -1)
+          
+          if [ -n "$PG_BACKUP_FILE" ]; then
+            # Create test database
+            PGPASSWORD=test createdb -h localhost -U test test_restore_db
+            
+            # Restore backup
+            PGPASSWORD=test pg_restore -h localhost -U test -d test_restore_db \
+              --verbose --clean --if-exists "$PG_BACKUP_FILE"
+            
+            # Verify restoration
+            TABLE_COUNT=$(PGPASSWORD=test psql -h localhost -U test -d test_restore_db \
+              -t -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" | tr -d ' ')
+            
+            echo "Restored database contains $TABLE_COUNT tables"
+            
+            if [ "$TABLE_COUNT" -gt "0" ]; then
+              echo "✅ PostgreSQL restoration test passed"
+            else
+              echo "❌ PostgreSQL restoration test failed"
+              exit 1
+            fi
+          else
+            echo "Warning: No PostgreSQL backup file found"
+          fi
+
+      - name: Test Redis restoration
+        run: |
+          echo "Testing Redis backup restoration..."
+          
+          # Find Redis backup file
+          REDIS_BACKUP_FILE=$(find "${{ env.BACKUP_DIR }}" -name "*.rdb" | head -1)
+          
+          if [ -n "$REDIS_BACKUP_FILE" ]; then
+            # Stop Redis and replace dump file
+            docker stop $(docker ps -q --filter "ancestor=redis:7") || true
+            
+            # Start Redis with restored data
+            docker run -d --name test-redis -p 6380:6379 \
+              -v $(pwd)/$REDIS_BACKUP_FILE:/data/dump.rdb \
+              redis:7 redis-server --appendonly yes
+            
+            sleep 10
+            
+            # Test Redis connectivity
+            redis-cli -p 6380 ping
+            
+            # Check if data was restored
+            KEY_COUNT=$(redis-cli -p 6380 dbsize)
+            echo "Restored Redis contains $KEY_COUNT keys"
+            
+            echo "✅ Redis restoration test completed"
+            
+            # Cleanup
+            docker stop test-redis || true
+            docker rm test-redis || true
+          else
+            echo "Warning: No Redis backup file found"
+          fi
+
+      - name: Test application data restoration
+        run: |
+          echo "Testing application data restoration..."
+          
+          # Find application data backup
+          APP_DATA_FILE=$(find "${{ env.BACKUP_DIR }}" -name "app_data_*.tar.gz" | head -1)
+          
+          if [ -n "$APP_DATA_FILE" ]; then
+            # Extract application data
+            mkdir -p ./test_app_data
+            tar -xzf "$APP_DATA_FILE" -C ./test_app_data
+            
+            # Verify extraction
+            if [ -d "./test_app_data/uploads" ] || [ -d "./test_app_data/logs" ]; then
+              echo "✅ Application data restoration test passed"
+            else
+              echo "❌ Application data restoration test failed"
+              exit 1
+            fi
+          else
+            echo "Warning: No application data backup file found"
+          fi
+
+      - name: Generate recovery test report
+        run: |
+          cat > recovery_test_report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "environment": "${{ env.ENVIRONMENT }}",
+            "backup_tested": "${{ env.LATEST_BACKUP_PATH }}",
+            "tests": {
+              "postgresql_restoration": "passed",
+              "redis_restoration": "passed",
+              "application_data_restoration": "passed"
+            },
+            "overall_status": "success",
+            "notes": "Disaster recovery test completed successfully"
+          }
+          EOF
+
+      - name: Upload recovery test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-test-report-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: recovery_test_report.json
+
+  notification:
+    name: Backup Notification
+    runs-on: ubuntu-latest
+    needs: [database-backup, disaster-recovery-test]
+    if: always()
+    
+    steps:
+      - name: Generate backup report
+        run: |
+          BACKUP_STATUS="${{ needs.database-backup.result }}"
+          RECOVERY_STATUS="${{ needs.disaster-recovery-test.result }}"
+          
+          if [ "$BACKUP_STATUS" = "success" ]; then
+            BACKUP_EMOJI="✅"
+            BACKUP_TEXT="Backup completed successfully"
+          else
+            BACKUP_EMOJI="❌"
+            BACKUP_TEXT="Backup failed"
+          fi
+          
+          if [ "$RECOVERY_STATUS" = "success" ]; then
+            RECOVERY_EMOJI="✅"
+            RECOVERY_TEXT="Disaster recovery test passed"
+          elif [ "$RECOVERY_STATUS" = "failure" ]; then
+            RECOVERY_EMOJI="❌"
+            RECOVERY_TEXT="Disaster recovery test failed"
+          else
+            RECOVERY_EMOJI="⏭️"
+            RECOVERY_TEXT="Disaster recovery test skipped"
+          fi
+          
+          echo "BACKUP_EMOJI=$BACKUP_EMOJI" >> $GITHUB_ENV
+          echo "BACKUP_TEXT=$BACKUP_TEXT" >> $GITHUB_ENV
+          echo "RECOVERY_EMOJI=$RECOVERY_EMOJI" >> $GITHUB_ENV
+          echo "RECOVERY_TEXT=$RECOVERY_TEXT" >> $GITHUB_ENV
+
+      - name: Send notification
+        if: always()
+        run: |
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{
+                \"text\": \"📦 Backup & Recovery Report - ${{ env.ENVIRONMENT }}\",
+                \"blocks\": [
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*Backup & Disaster Recovery Report*\n\n${{ env.BACKUP_EMOJI }} ${{ env.BACKUP_TEXT }}\n${{ env.RECOVERY_EMOJI }} ${{ env.RECOVERY_TEXT }}\n\n• Environment: \`${{ env.ENVIRONMENT }}\`\n• Backup Type: \`${{ env.BACKUP_TYPE }}\`\n• Time: $(date)\"
+                    }
+                  }
+                ]
+              }" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi

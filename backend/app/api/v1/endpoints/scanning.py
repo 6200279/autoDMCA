@@ -25,7 +25,84 @@ crawler = WebCrawler()
 content_matcher = ContentMatcher()
 
 
-@router.post("/scan/manual")
+@router.post("/scan/manual",
+    summary="Trigger manual content scan",
+    description="""
+    Initiate a manual scan for unauthorized content across supported platforms.
+    
+    ## Overview
+    Triggers an immediate scan using AI-powered content detection to find potential 
+    infringements of protected content. This is part of the "Manual Submission Tool" 
+    feature allowing users to proactively search for violations.
+    
+    ## Process
+    1. Validates profile ownership and permissions
+    2. Retrieves AI signatures (face encodings, content hashes)
+    3. Launches background scanning job across platforms
+    4. Returns job ID for status tracking
+    
+    ## Platforms Scanned
+    - Search engines (Google, Bing, DuckDuckGo)
+    - Adult content platforms
+    - Social media networks
+    - File sharing sites
+    - Custom domain lists
+    
+    ## AI Detection
+    - Facial recognition matching
+    - Content similarity analysis
+    - Visual hash comparison
+    - Keyword and metadata analysis
+    
+    ## Rate Limiting
+    - Standard users: 10 manual scans per day
+    - Premium users: 50 manual scans per day
+    - Enterprise users: Unlimited
+    """,
+    responses={
+        200: {
+            "description": "Scan initiated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "success",
+                        "message": "Scan initiated",
+                        "job_id": "scan_12345abc",
+                        "profile_id": 42,
+                        "estimated_duration": "5-15 minutes",
+                        "platforms": ["google", "bing", "onlyfans", "pornhub"]
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Invalid request",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "profile_not_found": {
+                            "summary": "Profile not found",
+                            "value": {"detail": "Profile not found or access denied"}
+                        },
+                        "no_signatures": {
+                            "summary": "No AI signatures",
+                            "value": {"detail": "Profile has no AI signatures. Upload reference content first."}
+                        }
+                    }
+                }
+            }
+        },
+        429: {
+            "description": "Rate limit exceeded",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Daily scan limit reached. Upgrade to Premium for more scans."}
+                }
+            }
+        }
+    },
+    tags=["content-scanning"]
+)
 async def trigger_manual_scan(
     profile_id: int,
     background_tasks: BackgroundTasks,

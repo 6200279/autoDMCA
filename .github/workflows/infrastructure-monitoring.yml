@@ -1,0 +1,750 @@
+name: Infrastructure Monitoring & Alerting
+
+on:
+  schedule:
+    # Run every 15 minutes
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to monitor'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      alert_threshold:
+        description: 'Alert threshold percentage'
+        required: false
+        default: '80'
+        type: string
+
+env:
+  MONITORING_TIMEOUT: 300  # 5 minutes
+  ALERT_THRESHOLD: ${{ github.event.inputs.alert_threshold || '80' }}
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'production' }}
+
+jobs:
+  infrastructure-health-check:
+    name: Infrastructure Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout monitoring scripts
+        uses: actions/checkout@v4
+
+      - name: Set up Python for monitoring
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install monitoring dependencies
+        run: |
+          pip install requests psutil docker prometheus-client influxdb-client
+
+      - name: Set up SSH for server monitoring
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SERVER_KEY }}
+
+      - name: Add servers to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.PRODUCTION_SERVER_HOST }} >> ~/.ssh/known_hosts
+          if [ "${{ env.ENVIRONMENT }}" = "staging" ]; then
+            ssh-keyscan -H ${{ secrets.STAGING_SERVER_HOST }} >> ~/.ssh/known_hosts
+          fi
+
+      - name: Create monitoring script
+        run: |
+          cat > infrastructure_monitor.py << 'EOF'
+          import requests
+          import json
+          import subprocess
+          import sys
+          import time
+          from datetime import datetime, timezone
+          import os
+          
+          def check_server_resources(server_host, server_user):
+              """Check server CPU, memory, disk usage"""
+              try:
+                  # Get system metrics via SSH
+                  cmd = f"ssh {server_user}@{server_host}"
+                  
+                  # CPU usage
+                  cpu_result = subprocess.run(
+                      f"{cmd} \"top -bn1 | grep 'Cpu(s)' | awk '{{print $2}}' | sed 's/%us,//'\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  cpu_usage = float(cpu_result.stdout.strip()) if cpu_result.stdout.strip() else 0
+                  
+                  # Memory usage
+                  mem_result = subprocess.run(
+                      f"{cmd} \"free | grep Mem | awk '{{printf \\\"%.2f\\\", $3/$2 * 100.0}}'\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  mem_usage = float(mem_result.stdout.strip()) if mem_result.stdout.strip() else 0
+                  
+                  # Disk usage
+                  disk_result = subprocess.run(
+                      f"{cmd} \"df -h / | awk 'NR==2 {{print $5}}' | sed 's/%//'\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  disk_usage = float(disk_result.stdout.strip()) if disk_result.stdout.strip() else 0
+                  
+                  # Load average
+                  load_result = subprocess.run(
+                      f"{cmd} \"uptime | awk -F'load average:' '{{print $2}}' | awk '{{print $1}}' | sed 's/,//'\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  load_avg = float(load_result.stdout.strip()) if load_result.stdout.strip() else 0
+                  
+                  return {
+                      'cpu_usage': cpu_usage,
+                      'memory_usage': mem_usage,
+                      'disk_usage': disk_usage,
+                      'load_average': load_avg,
+                      'timestamp': datetime.now(timezone.utc).isoformat()
+                  }
+              except Exception as e:
+                  print(f"Error checking server resources: {e}")
+                  return None
+          
+          def check_docker_containers(server_host, server_user):
+              """Check Docker container status"""
+              try:
+                  cmd = f"ssh {server_user}@{server_host}"
+                  
+                  # Get container status
+                  result = subprocess.run(
+                      f"{cmd} \"docker ps --format 'table {{{{.Names}}}}\\t{{{{.Status}}}}\\t{{{{.Ports}}}}'\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  
+                  containers = []
+                  for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+                      if line.strip():
+                          parts = line.split('\t')
+                          if len(parts) >= 2:
+                              containers.append({
+                                  'name': parts[0],
+                                  'status': parts[1],
+                                  'ports': parts[2] if len(parts) > 2 else '',
+                                  'healthy': 'Up' in parts[1]
+                              })
+                  
+                  return containers
+              except Exception as e:
+                  print(f"Error checking Docker containers: {e}")
+                  return []
+          
+          def check_application_endpoints(base_url):
+              """Check application endpoint health"""
+              endpoints = [
+                  '/health',
+                  '/api/v1/health',
+                  '/'
+              ]
+              
+              results = []
+              for endpoint in endpoints:
+                  try:
+                      response = requests.get(f"{base_url}{endpoint}", timeout=10)
+                      results.append({
+                          'endpoint': endpoint,
+                          'status_code': response.status_code,
+                          'response_time': response.elapsed.total_seconds(),
+                          'healthy': response.status_code == 200
+                      })
+                  except Exception as e:
+                      results.append({
+                          'endpoint': endpoint,
+                          'status_code': 0,
+                          'response_time': 0,
+                          'healthy': False,
+                          'error': str(e)
+                      })
+              
+              return results
+          
+          def check_database_connectivity(server_host, server_user):
+              """Check database connectivity"""
+              try:
+                  cmd = f"ssh {server_user}@{server_host}"
+                  
+                  # Test PostgreSQL connection
+                  pg_result = subprocess.run(
+                      f"{cmd} \"docker-compose exec -T postgres pg_isready -U postgres\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  
+                  # Test Redis connection
+                  redis_result = subprocess.run(
+                      f"{cmd} \"docker-compose exec -T redis redis-cli ping\"",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  
+                  return {
+                      'postgres_healthy': pg_result.returncode == 0,
+                      'redis_healthy': 'PONG' in redis_result.stdout,
+                      'postgres_output': pg_result.stdout.strip(),
+                      'redis_output': redis_result.stdout.strip()
+                  }
+              except Exception as e:
+                  print(f"Error checking database connectivity: {e}")
+                  return {
+                      'postgres_healthy': False,
+                      'redis_healthy': False,
+                      'error': str(e)
+                  }
+          
+          def generate_alert(message, severity='warning'):
+              """Generate alert message"""
+              return {
+                  'message': message,
+                  'severity': severity,
+                  'timestamp': datetime.now(timezone.utc).isoformat(),
+                  'environment': os.getenv('ENVIRONMENT', 'unknown')
+              }
+          
+          def main():
+              environment = os.getenv('ENVIRONMENT', 'production')
+              alert_threshold = float(os.getenv('ALERT_THRESHOLD', '80'))
+              
+              if environment == 'production':
+                  server_host = os.getenv('PRODUCTION_SERVER_HOST')
+                  server_user = os.getenv('PRODUCTION_SERVER_USER')
+                  base_url = "http://localhost"
+              else:
+                  server_host = os.getenv('STAGING_SERVER_HOST')
+                  server_user = os.getenv('STAGING_SERVER_USER')
+                  base_url = f"http://{server_host}"
+              
+              print(f"Starting infrastructure monitoring for {environment} environment...")
+              
+              # Collect monitoring data
+              monitoring_data = {
+                  'environment': environment,
+                  'timestamp': datetime.now(timezone.utc).isoformat(),
+                  'server_resources': check_server_resources(server_host, server_user),
+                  'docker_containers': check_docker_containers(server_host, server_user),
+                  'application_endpoints': check_application_endpoints(base_url),
+                  'database_connectivity': check_database_connectivity(server_host, server_user)
+              }
+              
+              # Generate alerts
+              alerts = []
+              
+              # Check server resources
+              if monitoring_data['server_resources']:
+                  resources = monitoring_data['server_resources']
+                  if resources['cpu_usage'] > alert_threshold:
+                      alerts.append(generate_alert(f"High CPU usage: {resources['cpu_usage']:.1f}%", 'critical'))
+                  if resources['memory_usage'] > alert_threshold:
+                      alerts.append(generate_alert(f"High memory usage: {resources['memory_usage']:.1f}%", 'critical'))
+                  if resources['disk_usage'] > alert_threshold:
+                      alerts.append(generate_alert(f"High disk usage: {resources['disk_usage']:.1f}%", 'critical'))
+                  if resources['load_average'] > 2.0:
+                      alerts.append(generate_alert(f"High load average: {resources['load_average']:.2f}", 'warning'))
+              
+              # Check container health
+              unhealthy_containers = [c for c in monitoring_data['docker_containers'] if not c['healthy']]
+              if unhealthy_containers:
+                  for container in unhealthy_containers:
+                      alerts.append(generate_alert(f"Container {container['name']} is unhealthy: {container['status']}", 'critical'))
+              
+              # Check application endpoints
+              failed_endpoints = [e for e in monitoring_data['application_endpoints'] if not e['healthy']]
+              if failed_endpoints:
+                  for endpoint in failed_endpoints:
+                      alerts.append(generate_alert(f"Endpoint {endpoint['endpoint']} failed: HTTP {endpoint['status_code']}", 'critical'))
+              
+              # Check database connectivity
+              db_status = monitoring_data['database_connectivity']
+              if not db_status['postgres_healthy']:
+                  alerts.append(generate_alert("PostgreSQL database is not accessible", 'critical'))
+              if not db_status['redis_healthy']:
+                  alerts.append(generate_alert("Redis cache is not accessible", 'critical'))
+              
+              # Output results
+              monitoring_data['alerts'] = alerts
+              print(json.dumps(monitoring_data, indent=2))
+              
+              # Save to file
+              with open('monitoring_report.json', 'w') as f:
+                  json.dump(monitoring_data, f, indent=2)
+              
+              # Exit with error if critical alerts
+              critical_alerts = [a for a in alerts if a['severity'] == 'critical']
+              if critical_alerts:
+                  print(f"\n❌ Found {len(critical_alerts)} critical alerts!")
+                  return 1
+              elif alerts:
+                  print(f"\n⚠️ Found {len(alerts)} warnings")
+                  return 0
+              else:
+                  print("\n✅ All systems healthy")
+                  return 0
+          
+          if __name__ == "__main__":
+              sys.exit(main())
+          EOF
+
+      - name: Run infrastructure monitoring
+        env:
+          PRODUCTION_SERVER_HOST: ${{ secrets.PRODUCTION_SERVER_HOST }}
+          PRODUCTION_SERVER_USER: ${{ secrets.PRODUCTION_SERVER_USER }}
+          STAGING_SERVER_HOST: ${{ secrets.STAGING_SERVER_HOST }}
+          STAGING_SERVER_USER: ${{ secrets.STAGING_SERVER_USER }}
+        run: |
+          python infrastructure_monitor.py
+
+      - name: Upload monitoring report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monitoring-report-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: monitoring_report.json
+
+      - name: Send alerts to Slack
+        if: always()
+        run: |
+          if [ -f monitoring_report.json ]; then
+            ALERTS=$(cat monitoring_report.json | jq -r '.alerts // []')
+            ALERT_COUNT=$(echo "$ALERTS" | jq 'length')
+            
+            if [ "$ALERT_COUNT" -gt "0" ]; then
+              CRITICAL_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.severity == "critical")] | length')
+              WARNING_COUNT=$(echo "$ALERTS" | jq '[.[] | select(.severity == "warning")] | length')
+              
+              # Determine alert emoji and color
+              if [ "$CRITICAL_COUNT" -gt "0" ]; then
+                EMOJI="🚨"
+                COLOR="danger"
+              else
+                EMOJI="⚠️"
+                COLOR="warning"
+              fi
+              
+              # Create alert message
+              ALERT_MESSAGE="$EMOJI Infrastructure Alert - ${{ env.ENVIRONMENT }} Environment\n\n"
+              ALERT_MESSAGE+="Critical alerts: $CRITICAL_COUNT\n"
+              ALERT_MESSAGE+="Warnings: $WARNING_COUNT\n\n"
+              
+              # Add specific alerts
+              echo "$ALERTS" | jq -r '.[] | "• \(.severity | ascii_upcase): \(.message)"' | head -10 >> alert_details.txt
+              
+              if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+                curl -X POST -H 'Content-type: application/json' \
+                  --data "{
+                    \"text\": \"$ALERT_MESSAGE\",
+                    \"attachments\": [
+                      {
+                        \"color\": \"$COLOR\",
+                        \"fields\": [
+                          {
+                            \"title\": \"Environment\",
+                            \"value\": \"${{ env.ENVIRONMENT }}\",
+                            \"short\": true
+                          },
+                          {
+                            \"title\": \"Time\",
+                            \"value\": \"$(date)\",
+                            \"short\": true
+                          }
+                        ]
+                      }
+                    ]
+                  }" \
+                  ${{ secrets.SLACK_WEBHOOK_URL }}
+              fi
+            fi
+          fi
+
+  performance-monitoring:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install performance monitoring tools
+        run: |
+          pip install requests numpy matplotlib
+
+      - name: Create performance test script
+        run: |
+          cat > performance_monitor.py << 'EOF'
+          import requests
+          import time
+          import statistics
+          import json
+          from datetime import datetime, timezone
+          import os
+          
+          def test_endpoint_performance(base_url, endpoint, num_requests=10):
+              """Test endpoint performance"""
+              response_times = []
+              status_codes = []
+              
+              for i in range(num_requests):
+                  try:
+                      start_time = time.time()
+                      response = requests.get(f"{base_url}{endpoint}", timeout=30)
+                      end_time = time.time()
+                      
+                      response_times.append(end_time - start_time)
+                      status_codes.append(response.status_code)
+                      
+                  except Exception as e:
+                      response_times.append(30.0)  # Timeout
+                      status_codes.append(0)
+                  
+                  time.sleep(0.1)  # Small delay between requests
+              
+              return {
+                  'endpoint': endpoint,
+                  'num_requests': num_requests,
+                  'avg_response_time': statistics.mean(response_times),
+                  'min_response_time': min(response_times),
+                  'max_response_time': max(response_times),
+                  'median_response_time': statistics.median(response_times),
+                  'success_rate': sum(1 for code in status_codes if code == 200) / num_requests * 100,
+                  'status_codes': status_codes
+              }
+          
+          def main():
+              environment = os.getenv('ENVIRONMENT', 'production')
+              
+              if environment == 'production':
+                  base_url = "http://localhost"
+              else:
+                  base_url = f"http://{os.getenv('STAGING_SERVER_HOST', 'localhost')}"
+              
+              endpoints = [
+                  '/health',
+                  '/api/v1/health',
+                  '/api/v1/auth/me',
+                  '/api/v1/dashboard/stats'
+              ]
+              
+              performance_data = {
+                  'environment': environment,
+                  'timestamp': datetime.now(timezone.utc).isoformat(),
+                  'base_url': base_url,
+                  'results': []
+              }
+              
+              print(f"Starting performance monitoring for {environment}...")
+              
+              for endpoint in endpoints:
+                  print(f"Testing {endpoint}...")
+                  result = test_endpoint_performance(base_url, endpoint)
+                  performance_data['results'].append(result)
+                  
+                  # Print summary
+                  print(f"  Avg: {result['avg_response_time']:.3f}s")
+                  print(f"  Success rate: {result['success_rate']:.1f}%")
+              
+              # Generate performance alerts
+              alerts = []
+              for result in performance_data['results']:
+                  if result['avg_response_time'] > 2.0:
+                      alerts.append(f"Slow response time for {result['endpoint']}: {result['avg_response_time']:.3f}s")
+                  if result['success_rate'] < 95:
+                      alerts.append(f"Low success rate for {result['endpoint']}: {result['success_rate']:.1f}%")
+              
+              performance_data['alerts'] = alerts
+              
+              # Save results
+              with open('performance_report.json', 'w') as f:
+                  json.dump(performance_data, f, indent=2)
+              
+              print(json.dumps(performance_data, indent=2))
+              
+              return 1 if alerts else 0
+          
+          if __name__ == "__main__":
+              exit(main())
+          EOF
+
+      - name: Run performance monitoring
+        env:
+          STAGING_SERVER_HOST: ${{ secrets.STAGING_SERVER_HOST }}
+        run: |
+          python performance_monitor.py
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-report-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: performance_report.json
+
+  security-monitoring:
+    name: Security Monitoring
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install security monitoring tools
+        run: |
+          pip install requests nmap-python python-nmap
+
+      - name: Run security checks
+        run: |
+          cat > security_monitor.py << 'EOF'
+          import requests
+          import json
+          import subprocess
+          import os
+          from datetime import datetime, timezone
+          
+          def check_ssl_certificate(domain):
+              """Check SSL certificate status"""
+              try:
+                  result = subprocess.run(
+                      f"echo | openssl s_client -servername {domain} -connect {domain}:443 2>/dev/null | openssl x509 -noout -dates",
+                      shell=True, capture_output=True, text=True, timeout=30
+                  )
+                  
+                  if result.returncode == 0:
+                      lines = result.stdout.strip().split('\n')
+                      return {
+                          'valid': True,
+                          'not_before': lines[0] if len(lines) > 0 else '',
+                          'not_after': lines[1] if len(lines) > 1 else ''
+                      }
+                  else:
+                      return {'valid': False, 'error': result.stderr}
+              except Exception as e:
+                  return {'valid': False, 'error': str(e)}
+          
+          def check_security_headers(base_url):
+              """Check security headers"""
+              try:
+                  response = requests.get(base_url, timeout=10)
+                  headers = response.headers
+                  
+                  security_headers = {
+                      'x-frame-options': headers.get('X-Frame-Options'),
+                      'x-content-type-options': headers.get('X-Content-Type-Options'),
+                      'x-xss-protection': headers.get('X-XSS-Protection'),
+                      'strict-transport-security': headers.get('Strict-Transport-Security'),
+                      'content-security-policy': headers.get('Content-Security-Policy'),
+                      'referrer-policy': headers.get('Referrer-Policy')
+                  }
+                  
+                  missing_headers = [k for k, v in security_headers.items() if v is None]
+                  
+                  return {
+                      'headers': security_headers,
+                      'missing_headers': missing_headers,
+                      'score': (len(security_headers) - len(missing_headers)) / len(security_headers) * 100
+                  }
+              except Exception as e:
+                  return {'error': str(e)}
+          
+          def main():
+              environment = os.getenv('ENVIRONMENT', 'production')
+              
+              if environment == 'production':
+                  domain = os.getenv('PRODUCTION_DOMAIN', 'localhost')
+                  base_url = f"https://{domain}"
+              else:
+                  domain = os.getenv('STAGING_DOMAIN', 'localhost')
+                  base_url = f"http://{domain}"
+              
+              security_data = {
+                  'environment': environment,
+                  'timestamp': datetime.now(timezone.utc).isoformat(),
+                  'domain': domain,
+                  'ssl_check': check_ssl_certificate(domain) if environment == 'production' else {'skipped': True},
+                  'security_headers': check_security_headers(base_url)
+              }
+              
+              # Generate security alerts
+              alerts = []
+              
+              if environment == 'production':
+                  ssl_check = security_data['ssl_check']
+                  if not ssl_check.get('valid', False):
+                      alerts.append("SSL certificate is invalid or expired")
+              
+              headers_check = security_data['security_headers']
+              if 'missing_headers' in headers_check and headers_check['missing_headers']:
+                  alerts.append(f"Missing security headers: {', '.join(headers_check['missing_headers'])}")
+              
+              if 'score' in headers_check and headers_check['score'] < 80:
+                  alerts.append(f"Security headers score is low: {headers_check['score']:.1f}%")
+              
+              security_data['alerts'] = alerts
+              
+              # Save results
+              with open('security_report.json', 'w') as f:
+                  json.dump(security_data, f, indent=2)
+              
+              print(json.dumps(security_data, indent=2))
+              
+              return 1 if alerts else 0
+          
+          if __name__ == "__main__":
+              exit(main())
+          EOF
+          
+          python security_monitor.py
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: security_report.json
+
+  generate-monitoring-summary:
+    name: Generate Monitoring Summary
+    runs-on: ubuntu-latest
+    needs: [infrastructure-health-check, performance-monitoring, security-monitoring]
+    if: always()
+    
+    steps:
+      - name: Download all monitoring reports
+        uses: actions/download-artifact@v4
+        with:
+          path: ./reports
+
+      - name: Generate comprehensive summary
+        run: |
+          cat > generate_summary.py << 'EOF'
+          import json
+          import os
+          from datetime import datetime
+          
+          def load_report(path):
+              try:
+                  with open(path, 'r') as f:
+                      return json.load(f)
+              except:
+                  return {}
+          
+          # Find all report files
+          reports = {}
+          for root, dirs, files in os.walk('./reports'):
+              for file in files:
+                  if file.endswith('.json'):
+                      report_type = file.replace('_report.json', '')
+                      reports[report_type] = load_report(os.path.join(root, file))
+          
+          # Generate summary
+          summary = {
+              'timestamp': datetime.utcnow().isoformat(),
+              'environment': os.getenv('ENVIRONMENT', 'production'),
+              'overall_status': 'healthy',
+              'summary': {
+                  'total_alerts': 0,
+                  'critical_alerts': 0,
+                  'warning_alerts': 0
+              },
+              'reports': reports
+          }
+          
+          # Count alerts
+          for report_name, report_data in reports.items():
+              if 'alerts' in report_data:
+                  alerts = report_data['alerts']
+                  summary['summary']['total_alerts'] += len(alerts)
+                  for alert in alerts:
+                      if isinstance(alert, dict) and alert.get('severity') == 'critical':
+                          summary['summary']['critical_alerts'] += 1
+                      else:
+                          summary['summary']['warning_alerts'] += 1
+          
+          # Determine overall status
+          if summary['summary']['critical_alerts'] > 0:
+              summary['overall_status'] = 'critical'
+          elif summary['summary']['warning_alerts'] > 0:
+              summary['overall_status'] = 'warning'
+          
+          # Save summary
+          with open('monitoring_summary.json', 'w') as f:
+              json.dump(summary, f, indent=2)
+          
+          print(json.dumps(summary, indent=2))
+          EOF
+          
+          python generate_summary.py
+
+      - name: Upload monitoring summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-summary-${{ env.ENVIRONMENT }}-${{ github.run_number }}
+          path: monitoring_summary.json
+
+      - name: Send summary notification
+        run: |
+          if [ -f monitoring_summary.json ]; then
+            STATUS=$(cat monitoring_summary.json | jq -r '.overall_status')
+            TOTAL_ALERTS=$(cat monitoring_summary.json | jq -r '.summary.total_alerts')
+            CRITICAL_ALERTS=$(cat monitoring_summary.json | jq -r '.summary.critical_alerts')
+            WARNING_ALERTS=$(cat monitoring_summary.json | jq -r '.summary.warning_alerts')
+            
+            if [ "$STATUS" = "critical" ]; then
+              EMOJI="🚨"
+              COLOR="danger"
+            elif [ "$STATUS" = "warning" ]; then
+              EMOJI="⚠️"
+              COLOR="warning"
+            else
+              EMOJI="✅"
+              COLOR="good"
+            fi
+            
+            if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ] && [ "$TOTAL_ALERTS" -gt "0" ]; then
+              curl -X POST -H 'Content-type: application/json' \
+                --data "{
+                  \"text\": \"$EMOJI Infrastructure Monitoring Summary - ${{ env.ENVIRONMENT }}\",
+                  \"attachments\": [
+                    {
+                      \"color\": \"$COLOR\",
+                      \"fields\": [
+                        {
+                          \"title\": \"Overall Status\",
+                          \"value\": \"$STATUS\",
+                          \"short\": true
+                        },
+                        {
+                          \"title\": \"Environment\",
+                          \"value\": \"${{ env.ENVIRONMENT }}\",
+                          \"short\": true
+                        },
+                        {
+                          \"title\": \"Critical Alerts\",
+                          \"value\": \"$CRITICAL_ALERTS\",
+                          \"short\": true
+                        },
+                        {
+                          \"title\": \"Warning Alerts\",
+                          \"value\": \"$WARNING_ALERTS\",
+                          \"short\": true
+                        }
+                      ]
+                    }
+                  ]
+                }" \
+                ${{ secrets.SLACK_WEBHOOK_URL }}
+            fi
+          fi
