@@ -20,8 +20,10 @@ export default defineConfig({
         drop_debugger: true,
         // Security: Remove unused code
         dead_code: true,
+      },
+      mangle: {
         // Security: Obfuscate variable names
-        mangle: true,
+        toplevel: true,
       },
       format: {
         // Security: Remove comments
@@ -31,6 +33,7 @@ export default defineConfig({
     
     // Security: Configure chunk splitting for better caching
     rollupOptions: {
+      external: [],
       output: {
         // Security: Hash filenames for cache busting
         entryFileNames: 'assets/[name].[hash].js',
@@ -38,11 +41,22 @@ export default defineConfig({
         assetFileNames: 'assets/[name].[hash].[ext]',
         
         // Security: Separate vendor chunks
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          router: ['react-router-dom'],
-          ui: ['primereact', 'primeicons'],
-          utils: ['axios', 'date-fns']
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor';
+            }
+            if (id.includes('react-router-dom')) {
+              return 'router';
+            }
+            if (id.includes('primereact') || id.includes('primeicons')) {
+              return 'ui';
+            }
+            if (id.includes('axios') || id.includes('date-fns')) {
+              return 'utils';
+            }
+            return 'vendor';
+          }
         },
       },
     },
@@ -152,6 +166,7 @@ export default defineConfig({
       'react-dom',
       'react-router-dom',
       'primereact',
+      'primeicons',
       'axios',
       'dompurify', // For HTML sanitization
     ],

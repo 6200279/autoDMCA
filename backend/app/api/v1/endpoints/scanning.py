@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
 import logging
+import aiohttp
+from urllib.parse import urlparse
+import ipaddress
 
 from app.api.deps.auth import get_current_user
 from app.db.session import get_db
@@ -23,6 +26,64 @@ router = APIRouter()
 scheduler = ScanningScheduler()
 crawler = WebCrawler()
 content_matcher = ContentMatcher()
+
+
+def validate_url_for_ssrf(url: str) -> bool:
+    """
+    Validate URL to prevent SSRF attacks.
+    Returns True if URL is safe, False otherwise.
+    """
+    try:
+        parsed = urlparse(url)
+        
+        # Only allow HTTP and HTTPS schemes
+        if parsed.scheme not in ['http', 'https']:
+            return False
+            
+        # Ensure hostname is present
+        if not parsed.hostname:
+            return False
+            
+        # Resolve hostname to IP
+        import socket
+        try:
+            ip = socket.gethostbyname(parsed.hostname)
+        except socket.gaierror:
+            return False
+            
+        # Block private/internal IP ranges
+        ip_obj = ipaddress.ip_address(ip)
+        
+        # Block private networks
+        if ip_obj.is_private:
+            return False
+            
+        # Block loopback addresses
+        if ip_obj.is_loopback:
+            return False
+            
+        # Block link-local addresses
+        if ip_obj.is_link_local:
+            return False
+            
+        # Block multicast addresses
+        if ip_obj.is_multicast:
+            return False
+            
+        # Block reserved addresses
+        if ip_obj.is_reserved:
+            return False
+            
+        # Additional checks for common internal ranges
+        if ip_obj.version == 4:
+            # Block metadata service (AWS, GCP, Azure)
+            if str(ip_obj).startswith('169.254.'):
+                return False
+                
+        return True
+        
+    except Exception:
+        return False
 
 
 @router.post("/scan/manual",
@@ -271,6 +332,14 @@ async def generate_profile_signatures(
     PRD: "stores reference biometric or visual data for each protected creator"
     """
     try:
+        # Validate URLs to prevent SSRF attacks
+        for url in image_urls[:10]:
+            if not validate_url_for_ssrf(url):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid or unsafe URL provided: {url}"
+                )
+        
         # Download images
         images = []
         async with aiohttp.ClientSession() as session:

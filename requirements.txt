@@ -28,8 +28,8 @@ numpy>=1.24.3
 # Machine learning for content matching
 scikit-image>=0.22.0
 tensorflow>=2.15.0
-torch>=2.1.0
-torchvision>=0.16.0
+torch>=2.6.0
+torchvision>=0.21.0
 
 # Task queue and scheduling
 celery>=5.3.4
