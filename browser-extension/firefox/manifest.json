@@ -1,0 +1,61 @@
+{
+  "manifest_version": 2,
+  "name": "Content Protection Assistant",
+  "version": "1.0.0",
+  "description": "Quickly report content infringements and submit takedown requests",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "contextMenus",
+    "notifications",
+    "http://localhost:8000/*",
+    "https://api.contentprotection.com/*",
+    "https://*.autodmca.com/*",
+    "<all_urls>"
+  ],
+  
+  "background": {
+    "scripts": ["../shared/firefox-background.js"],
+    "persistent": false
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["../shared/content.js"],
+      "css": ["../shared/content.css"],
+      "run_at": "document_end"
+    }
+  ],
+  
+  "browser_action": {
+    "default_popup": "../shared/popup.html",
+    "default_title": "Content Protection Assistant",
+    "default_icon": {
+      "16": "../icons/icon-16.png",
+      "32": "../icons/icon-32.png",
+      "48": "../icons/icon-48.png",
+      "128": "../icons/icon-128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "../icons/icon-16.png",
+    "32": "../icons/icon-32.png",
+    "48": "../icons/icon-48.png",
+    "128": "../icons/icon-128.png"
+  },
+  
+  "web_accessible_resources": [
+    "../icons/*",
+    "../shared/*"
+  ],
+  
+  "applications": {
+    "gecko": {
+      "id": "content-protection@autodmca.com",
+      "strict_min_version": "91.0"
+    }
+  }
+}

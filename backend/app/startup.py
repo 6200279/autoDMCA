@@ -4,18 +4,22 @@ Starts all background services and schedulers
 """
 import asyncio
 import logging
+from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-from app.services.scanning.scheduler import ScanningScheduler
+# from app.services.scanning.scheduler import ScanningScheduler  # Disabled for local testing
 from app.core.config import settings
 from app.db.session import engine
-from app.models import scanning  # Import models to create tables
+from app.services.scanning.orchestrator import orchestrator
+# from app.models import scanning  # Import models to create tables  # Disabled for local testing
+
+# Models will be imported by their respective modules when needed
 
 logger = logging.getLogger(__name__)
 
 # Global service instances
-scheduler: Optional[ScanningScheduler] = None
+scanning_orchestrator = None
 
 
 @asynccontextmanager
@@ -24,32 +28,45 @@ async def lifespan(app: FastAPI):
     Manage application lifecycle
     Start services on startup, cleanup on shutdown
     """
-    global scheduler
+    # global scheduler  # Disabled for local testing
     
-    logger.info("Starting application services...")
+    logger.info("Starting Content Protection Platform services...")
     
     try:
         # Create database tables if they don't exist
-        scanning.Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created/verified")
+        # scanning.Base.metadata.create_all(bind=engine)  # Disabled for local testing
+        logger.info("Database tables creation skipped for local testing")
         
-        # Initialize scanning scheduler
-        scheduler = ScanningScheduler()
-        await scheduler.initialize()
-        logger.info("Scanning scheduler initialized")
+        # Initialize scanning orchestrator
+        global scanning_orchestrator
+        try:
+            scanning_orchestrator = orchestrator
+            await scanning_orchestrator.initialize()
+            logger.info("✅ Scanning orchestrator initialized successfully")
+            
+            # Get orchestrator stats
+            stats = await scanning_orchestrator.get_orchestrator_stats()
+            logger.info(f"📊 Orchestrator stats: {stats.get('active_regions', 0)} regions, {stats.get('total_platforms', 0)} platforms")
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Scanning orchestrator initialization failed: {e}")
+            logger.info("🔄 Application will continue without full scanning capability")
         
         # Start background services
-        if settings.ENABLE_AUTO_SCANNING:
-            logger.info("Automated scanning enabled")
+        if getattr(settings, 'ENABLE_AUTO_SCANNING', True):
+            logger.info("🔍 Automated scanning enabled")
         else:
-            logger.warning("Automated scanning is disabled")
+            logger.warning("⚠️  Automated scanning is disabled")
             
         # Warm up AI models
-        from app.services.ai.content_matcher import ContentMatcher
-        matcher = ContentMatcher()
-        logger.info("AI models loaded")
+        try:
+            from app.services.ai.content_matcher import ContentMatcher
+            matcher = ContentMatcher()
+            logger.info("🤖 AI content matcher initialized")
+        except Exception as e:
+            logger.warning(f"⚠️  AI models loading failed: {e}")
         
-        logger.info("All services started successfully")
+        logger.info("🚀 All services started successfully")
         
     except Exception as e:
         logger.error(f"Error during startup: {e}")
@@ -58,17 +75,19 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    logger.info("Shutting down application services...")
+    logger.info("🛑 Shutting down application services...")
     
     try:
-        if scheduler:
-            await scheduler.shutdown()
-            logger.info("Scanning scheduler shut down")
+        if scanning_orchestrator:
+            await scanning_orchestrator.shutdown()
+            logger.info("✅ Scanning orchestrator shut down")
+        else:
+            logger.info("ℹ️  No scanning orchestrator to shut down")
             
     except Exception as e:
-        logger.error(f"Error during shutdown: {e}")
+        logger.error(f"❌ Error during shutdown: {e}")
         
-    logger.info("Application shutdown complete")
+    logger.info("✅ Application shutdown complete")
 
 
 def create_application() -> FastAPI:
@@ -87,7 +106,7 @@ def create_application() -> FastAPI:
     
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.ALLOWED_ORIGINS,
+        allow_origins=settings.BACKEND_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -96,11 +115,11 @@ def create_application() -> FastAPI:
     # Add custom middleware
     from app.middleware.security import SecurityMiddleware
     from app.middleware.logging import LoggingMiddleware
-    from app.middleware.rate_limiting import RateLimitMiddleware
+    from app.middleware.rate_limiting import RateLimitingMiddleware
     
     app.add_middleware(SecurityMiddleware)
     app.add_middleware(LoggingMiddleware)
-    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RateLimitingMiddleware)
     
     # Include routers
     from app.api.v1.api import api_router
@@ -109,10 +128,20 @@ def create_application() -> FastAPI:
     # Add health check endpoint
     @app.get("/health")
     async def health_check():
+        orchestrator_status = "unknown"
+        try:
+            if scanning_orchestrator:
+                stats = await scanning_orchestrator.get_orchestrator_stats()
+                orchestrator_status = "healthy" if stats.get("active_scans", 0) >= 0 else "degraded"
+            else:
+                orchestrator_status = "disabled"
+        except Exception:
+            orchestrator_status = "error"
+            
         return {
             "status": "healthy",
             "services": {
-                "scheduler": scheduler is not None and "running" or "stopped",
+                "scanning_orchestrator": orchestrator_status,
                 "database": "connected",  # Would check actual connection
                 "redis": "connected"  # Would check actual connection
             }

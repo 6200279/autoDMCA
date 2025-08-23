@@ -19,6 +19,12 @@ export interface NavigationItem {
   className?: string;
   /** Tooltip text */
   tooltip?: string;
+  /** Feature development status */
+  status?: 'functional' | 'partial' | 'coming-soon' | 'disabled';
+  /** Expected release date for non-functional features */
+  expectedDate?: string;
+  /** Feature description for tooltips */
+  description?: string;
 }
 
 export interface BreadcrumbItem {

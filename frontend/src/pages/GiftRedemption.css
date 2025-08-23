@@ -1,0 +1,416 @@
+.gift-redemption-container {
+    padding: 2rem;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gift-redemption-container .max-w-3xl {
+    max-width: 48rem;
+    margin: 0 auto;
+}
+
+/* Gift Input Card */
+.gift-input-card {
+    margin-bottom: 2rem;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    background: white;
+}
+
+.gift-input-card .p-card-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #667eea 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.gift-input-card .p-card-content {
+    padding: 2rem;
+}
+
+/* Gift Code Input */
+.gift-code-input {
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.gift-code-input::placeholder {
+    color: #adb5bd;
+    font-weight: normal;
+    letter-spacing: 1px;
+}
+
+/* Gift Details Card */
+.gift-details-card {
+    margin-bottom: 2rem;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    background: white;
+}
+
+.gift-details-card .p-card-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    padding: 1.5rem;
+}
+
+.gift-details-card .p-card-content {
+    padding: 2rem;
+}
+
+/* Gift Details Grid */
+.gift-details-grid {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.detail-item:last-child {
+    border-bottom: none;
+}
+
+.detail-item .label {
+    font-weight: 600;
+    color: #495057;
+    flex: 0 0 120px;
+}
+
+.detail-item .value {
+    color: #212529;
+    text-align: right;
+    flex: 1;
+}
+
+/* Personal Message */
+.personal-message {
+    background: #f8f9fa;
+    border-left: 4px solid var(--primary-color);
+    padding: 1.5rem;
+    border-radius: 0 8px 8px 0;
+    margin-top: 1rem;
+}
+
+.personal-message h4 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.message-content {
+    font-style: italic;
+    color: #495057;
+    line-height: 1.6;
+    padding: 1rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Features Panel */
+.features-panel {
+    height: fit-content;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+}
+
+.features-panel .p-panel-header {
+    background: var(--surface-100);
+    border-bottom: 1px solid var(--surface-300);
+    border-radius: 8px 8px 0 0;
+    padding: 1rem 1.5rem;
+    font-weight: 600;
+}
+
+.features-panel .p-panel-content {
+    padding: 1.5rem;
+}
+
+.plan-features ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.plan-features li {
+    padding: 0.5rem 0;
+    color: #495057;
+    display: flex;
+    align-items: center;
+}
+
+.plan-features li::before {
+    content: '✓';
+    color: #28a745;
+    font-weight: bold;
+    margin-right: 0.5rem;
+    width: 20px;
+}
+
+/* Redeem Button */
+.redeem-button {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border-radius: 50px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+}
+
+.redeem-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(40, 167, 69, 0.4);
+}
+
+.redeem-button:disabled {
+    opacity: 0.7;
+    transform: none;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+}
+
+/* Success Dialog */
+.success-dialog .p-dialog-content {
+    padding: 2rem;
+    text-align: center;
+}
+
+.success-dialog h3 {
+    color: #28a745;
+    margin: 1rem 0;
+    font-size: 1.5rem;
+}
+
+.success-dialog .p-button {
+    margin: 0 0.5rem;
+}
+
+/* Help Section */
+.help-section {
+    margin-top: 3rem;
+}
+
+.help-section .p-card {
+    border: none;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+}
+
+.help-section .p-card-content {
+    padding: 2rem;
+}
+
+.help-section ul {
+    text-align: left;
+    color: #6c757d;
+    line-height: 1.8;
+}
+
+.help-section li {
+    margin-bottom: 0.5rem;
+}
+
+/* Status Badges */
+.p-badge {
+    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+}
+
+.p-badge.p-badge-success {
+    background: #28a745;
+    color: white;
+}
+
+.p-badge.p-badge-info {
+    background: #17a2b8;
+    color: white;
+}
+
+.p-badge.p-badge-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.p-badge.p-badge-warning {
+    background: #ffc107;
+    color: #212529;
+}
+
+/* Form Field Styling */
+.field {
+    margin-bottom: 1.5rem;
+}
+
+.field label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.field .p-inputtext {
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.field .p-inputtext:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb), 0.25);
+}
+
+/* Button Styling */
+.p-button {
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.p-button:hover {
+    transform: translateY(-1px);
+}
+
+.p-button.p-button-secondary {
+    background: #6c757d;
+    border-color: #6c757d;
+}
+
+.p-button.p-button-secondary:hover {
+    background: #5a6268;
+    border-color: #545b62;
+}
+
+/* Loading States */
+.p-button .pi-spinner {
+    margin-right: 0.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .gift-redemption-container {
+        padding: 1rem;
+    }
+    
+    .gift-input-card .p-card-content,
+    .gift-details-card .p-card-content {
+        padding: 1rem;
+    }
+    
+    .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+    
+    .detail-item .label {
+        margin-bottom: 0.25rem;
+        flex: none;
+    }
+    
+    .detail-item .value {
+        text-align: left;
+    }
+    
+    .gift-code-input {
+        font-size: 1rem;
+        letter-spacing: 1px;
+    }
+    
+    .redeem-button {
+        padding: 0.875rem 2rem;
+        font-size: 1rem;
+    }
+    
+    .success-dialog .p-button {
+        margin: 0.25rem 0;
+        width: 100%;
+    }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.gift-details-card {
+    animation: fadeInUp 0.5s ease;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.redeem-button:not(:disabled):hover {
+    animation: pulse 0.6s ease-in-out;
+}
+
+/* Input Validation States */
+.p-inputtext.p-invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.p-inputtext.p-valid {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* Card Hover Effects */
+.gift-input-card,
+.gift-details-card {
+    transition: all 0.3s ease;
+}
+
+.gift-input-card:hover,
+.gift-details-card:hover {
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+/* Divider Customization */
+.p-divider.p-divider-horizontal {
+    margin: 1.5rem 0;
+}
+
+.p-divider .p-divider-content {
+    background: white;
+    padding: 0 1rem;
+}
+
+/* Panel Customization */
+.p-panel .p-panel-content {
+    padding: 1.5rem;
+}
+
+.p-panel .p-panel-header .p-panel-title {
+    font-weight: 600;
+    color: var(--text-color);
+}

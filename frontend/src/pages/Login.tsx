@@ -58,6 +58,8 @@ const Login: React.FC = () => {
     formState: { errors, isValid },
     reset,
     watch,
+    setValue,
+    trigger,
   } = useForm<LoginFormData>({
     resolver: yupResolver(loginSchema),
     mode: 'onChange',
@@ -158,6 +160,53 @@ const Login: React.FC = () => {
                   text={error}
                   className="w-full"
                 />
+              </div>
+            )}
+
+            {/* Mock Credentials for Local Testing */}
+            {(import.meta.env.DEV || import.meta.env.VITE_LOCAL_TESTING === 'true') && (
+              <div className="mb-4 p-3" style={{ 
+                background: 'var(--surface-100)', 
+                borderRadius: '8px',
+                border: '1px solid var(--surface-200)'
+              }}>
+                <h4 className="text-sm font-semibold mb-2 text-color">
+                  🧪 Local Testing Credentials
+                </h4>
+                <div className="text-xs text-color-secondary">
+                  <strong>Email:</strong> admin@autodmca.com<br/>
+                  <strong>Password:</strong> admin123
+                  <br/><br/>
+                  <strong>User:</strong> user@example.com<br/>
+                  <strong>Password:</strong> user1234
+                </div>
+                <div className="mt-2">
+                  <Button
+                    type="button"
+                    label="Fill Admin"
+                    size="small"
+                    className="mr-2"
+                    outlined
+                    onClick={async () => {
+                      setValue('email', 'admin@autodmca.com');
+                      setValue('password', 'admin123');
+                      // Trigger validation to enable the submit button
+                      await trigger(['email', 'password']);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    label="Fill User"
+                    size="small"
+                    outlined
+                    onClick={async () => {
+                      setValue('email', 'user@example.com');
+                      setValue('password', 'user1234');
+                      // Trigger validation to enable the submit button
+                      await trigger(['email', 'password']);
+                    }}
+                  />
+                </div>
               </div>
             )}
 

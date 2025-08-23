@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 380px;
+      min-height: 450px;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      overflow-x: hidden;
+    }
+    
+    .header {
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.1);
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .header .subtitle {
+      margin: 4px 0 0 0;
+      font-size: 12px;
+      opacity: 0.8;
+      font-weight: 400;
+    }
+    
+    .content {
+      padding: 20px;
+    }
+    
+    .url-info {
+      background: rgba(255,255,255,0.1);
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      word-break: break-all;
+      font-size: 12px;
+      border-left: 3px solid #4CAF50;
+    }
+    
+    .url-info strong {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    
+    .url-info .url-text {
+      opacity: 0.9;
+      font-family: monospace;
+      background: rgba(0,0,0,0.2);
+      padding: 4px 6px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+    
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 14px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    
+    .btn:active {
+      transform: translateY(0);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #4CAF50, #45a049);
+      border-color: #4CAF50;
+    }
+    
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #45a049, #388e3c);
+    }
+    
+    .btn-danger {
+      background: linear-gradient(135deg, #f44336, #d32f2f);
+      border-color: #f44336;
+    }
+    
+    .btn-danger:hover {
+      background: linear-gradient(135deg, #d32f2f, #c62828);
+    }
+    
+    .btn-info {
+      background: linear-gradient(135deg, #2196F3, #1976D2);
+      border-color: #2196F3;
+    }
+    
+    .btn-info:hover {
+      background: linear-gradient(135deg, #1976D2, #1565C0);
+    }
+    
+    .btn .emoji {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+    
+    .btn .text {
+      flex: 1;
+    }
+    
+    .btn .desc {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
+    
+    .status {
+      padding: 12px;
+      border-radius: 6px;
+      margin: 12px 0;
+      font-size: 13px;
+      text-align: center;
+      font-weight: 500;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    .status.success {
+      background: rgba(76, 175, 80, 0.2);
+      border: 1px solid #4CAF50;
+      color: #4CAF50;
+    }
+    
+    .status.error {
+      background: rgba(244, 67, 54, 0.2);
+      border: 1px solid #f44336;
+      color: #f44336;
+    }
+    
+    .status.loading {
+      background: rgba(255, 193, 7, 0.2);
+      border: 1px solid #FFC107;
+      color: #FFC107;
+      position: relative;
+    }
+    
+    .status.info {
+      background: rgba(33, 150, 243, 0.2);
+      border: 1px solid #2196F3;
+      color: #2196F3;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 13px;
+      box-sizing: border-box;
+      font-family: inherit;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    
+    .form-group input::placeholder,
+    .form-group textarea::placeholder {
+      color: rgba(255,255,255,0.6);
+    }
+    
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    .footer {
+      padding: 16px 20px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      font-size: 11px;
+      text-align: center;
+      opacity: 0.7;
+      background: rgba(0,0,0,0.1);
+    }
+    
+    .footer .links {
+      margin-top: 8px;
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    
+    .footer .links a {
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    
+    .footer .links a:hover {
+      color: white;
+    }
+    
+    .report-form {
+      background: rgba(255,255,255,0.05);
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .report-form h3 {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .stats-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    
+    .stat-card {
+      flex: 1;
+      background: rgba(255,255,255,0.1);
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .stat-card .number {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .stat-card .label {
+      font-size: 11px;
+      opacity: 0.8;
+    }
+    
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .quick-actions .btn {
+      padding: 10px;
+      font-size: 12px;
+      text-align: center;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top: 2px solid #FFC107;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 8px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .auth-prompt {
+      text-align: center;
+      padding: 20px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .auth-prompt .icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+    
+    .keyboard-shortcuts {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 12px;
+      text-align: center;
+      line-height: 1.4;
+    }
+    
+    .platform-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>
+      <span class="emoji">🛡️</span>
+      Content Protection
+      <span class="platform-badge" id="platform-badge">Assistant</span>
+    </h1>
+    <div class="subtitle">Automated DMCA & Content Monitoring</div>
+  </div>
+  
+  <div class="content">
+    <div class="url-info">
+      <strong>Current Page:</strong>
+      <div class="url-text" id="current-url">Loading...</div>
+    </div>
+    
+    <div id="status-message" class="status hidden"></div>
+    
+    <!-- Authentication Prompt -->
+    <div id="auth-prompt" class="auth-prompt hidden">
+      <div class="icon">🔐</div>
+      <div>Please log in to use Content Protection features</div>
+      <button class="btn btn-primary" id="login-button" style="margin-top: 12px;">
+        <span class="emoji">🚀</span>
+        <div class="text">Open Dashboard</div>
+      </button>
+    </div>
+    
+    <!-- Page Stats -->
+    <div id="page-stats" class="stats-row hidden">
+      <div class="stat-card">
+        <div class="number" id="image-count">0</div>
+        <div class="label">Images</div>
+      </div>
+      <div class="stat-card">
+        <div class="number" id="video-count">0</div>
+        <div class="label">Videos</div>
+      </div>
+      <div class="stat-card">
+        <div class="number" id="link-count">0</div>
+        <div class="label">Links</div>
+      </div>
+    </div>
+    
+    <!-- Main Actions -->
+    <div class="actions" id="main-actions">
+      <button class="btn btn-danger" id="report-infringement">
+        <span class="emoji">🚨</span>
+        <div class="text">
+          Report Infringement
+          <div class="desc">Report this page as infringing content</div>
+        </div>
+      </button>
+      
+      <button class="btn btn-primary" id="scan-page">
+        <span class="emoji">🔍</span>
+        <div class="text">
+          Scan This Page
+          <div class="desc">Analyze page for your content</div>
+        </div>
+      </button>
+      
+      <div class="quick-actions">
+        <button class="btn" id="collect-images">
+          <span class="emoji">🖼️</span>
+          <div class="text">Collect Images</div>
+        </button>
+        
+        <button class="btn" id="view-dashboard">
+          <span class="emoji">📊</span>
+          <div class="text">Dashboard</div>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Report Form -->
+    <div class="report-form hidden" id="report-form">
+      <h3>
+        <span class="emoji">🚨</span>
+        Report Infringement
+      </h3>
+      
+      <div class="form-group">
+        <label for="profile-select">Profile:</label>
+        <select id="profile-select">
+          <option value="">Select profile...</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="infringement-url">Infringing URL:</label>
+        <input type="url" id="infringement-url" placeholder="https://example.com/infringing-content">
+      </div>
+      
+      <div class="form-group">
+        <label for="original-url">Your Original Content URL (Optional):</label>
+        <input type="url" id="original-url" placeholder="https://onlyfans.com/your-content">
+      </div>
+      
+      <div class="form-group">
+        <label for="description">Description (Optional):</label>
+        <textarea id="description" rows="3" placeholder="Describe the infringement..."></textarea>
+      </div>
+      
+      <div class="actions">
+        <button class="btn btn-primary" id="submit-report">
+          <span class="emoji">✅</span>
+          <div class="text">Submit Report</div>
+        </button>
+        <button class="btn" id="cancel-report">
+          <span class="emoji">❌</span>
+          <div class="text">Cancel</div>
+        </button>
+      </div>
+    </div>
+    
+    <!-- Keyboard Shortcuts -->
+    <div class="keyboard-shortcuts">
+      <strong>Shortcuts:</strong> Ctrl+Shift+P (Quick Scan) • Ctrl+Shift+R (Report Page) • Ctrl+Shift+I (Collect Images)
+    </div>
+  </div>
+  
+  <div class="footer">
+    <div>Content Protection Assistant v1.0.0</div>
+    <div class="links">
+      <a href="#" id="help-link">Help</a>
+      <a href="#" id="settings-link">Settings</a>
+      <a href="#" id="feedback-link">Feedback</a>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

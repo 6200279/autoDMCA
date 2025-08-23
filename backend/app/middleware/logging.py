@@ -300,3 +300,4 @@ def setup_logging():
     os.makedirs("logs", exist_ok=True)
     
     logging.config.dictConfig(logging_config)
+    

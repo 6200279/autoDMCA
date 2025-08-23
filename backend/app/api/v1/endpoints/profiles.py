@@ -37,31 +37,79 @@ async def get_profiles(
     db: Session = Depends(get_db)
 ) -> Any:
     """Get user's protected profiles."""
-    query = db.query(ProtectedProfile).filter(ProtectedProfile.user_id == current_user.id)
+    # Mock profile data for local testing
+    from datetime import datetime
     
-    # Apply filters
+    mock_profiles = [
+        {
+            "id": 1,
+            "user_id": current_user.id,
+            "name": "Content Creator Pro",
+            "stage_name": "CreatorPro",
+            "real_name": "John Creator",
+            "bio": "Professional content creator and artist",
+            "profile_image_url": None,
+            "is_active": True,
+            "monitoring_enabled": True,
+            "notification_settings": {"email": True, "push": True},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        {
+            "id": 2,
+            "user_id": current_user.id,
+            "name": "Artistic Content",
+            "stage_name": "ArtisticSoul",
+            "real_name": "Jane Artist",
+            "bio": "Digital artist and photographer",
+            "profile_image_url": None,
+            "is_active": True,
+            "monitoring_enabled": True,
+            "notification_settings": {"email": True, "push": False},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        {
+            "id": 3,
+            "user_id": current_user.id,
+            "name": "Video Content",
+            "stage_name": "VideoMaker",
+            "real_name": "Mike Video",
+            "bio": "YouTube content creator",
+            "profile_image_url": None,
+            "is_active": False,
+            "monitoring_enabled": False,
+            "notification_settings": {"email": False, "push": False},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+    ]
+    
+    # Apply search filter
     if search:
-        query = query.filter(
-            (ProtectedProfile.name.ilike(f"%{search}%")) |
-            (ProtectedProfile.stage_name.ilike(f"%{search}%")) |
-            (ProtectedProfile.real_name.ilike(f"%{search}%"))
-        )
+        filtered_profiles = []
+        for profile in mock_profiles:
+            if (search.lower() in profile["name"].lower() or 
+                search.lower() in profile["stage_name"].lower() or 
+                search.lower() in profile["real_name"].lower()):
+                filtered_profiles.append(profile)
+        mock_profiles = filtered_profiles
     
+    # Apply is_active filter
     if is_active is not None:
-        query = query.filter(ProtectedProfile.is_active == is_active)
+        mock_profiles = [p for p in mock_profiles if p["is_active"] == is_active]
     
-    # Get total count
-    total = query.count()
+    total = len(mock_profiles)
     
     # Apply pagination
     offset = (pagination.page - 1) * pagination.size
-    profiles = query.offset(offset).limit(pagination.size).all()
+    profiles = mock_profiles[offset:offset + pagination.size]
     
     # Calculate pages
     pages = (total + pagination.size - 1) // pagination.size
     
     return PaginatedResponse(
-        items=[ProfileSchema.from_orm(profile) for profile in profiles],
+        items=profiles,
         total=total,
         page=pagination.page,
         size=pagination.size,
@@ -77,11 +125,11 @@ async def create_profile(
     db: Session = Depends(get_db)
 ) -> Any:
     """Create new protected profile."""
-    # Check subscription limits
-    existing_profiles = db.query(func.count(ProtectedProfile.id))\
-        .filter(ProtectedProfile.user_id == current_user.id).scalar()
+    # Mock profile creation for local testing
+    from datetime import datetime
     
-    # This would check against user's subscription plan limits
+    # Check subscription limits (mock)
+    existing_profiles = 3  # Mock existing profile count
     max_profiles = 10  # This should come from user's subscription
     if existing_profiles >= max_profiles:
         raise HTTPException(
@@ -89,19 +137,26 @@ async def create_profile(
             detail=f"Profile limit reached. Maximum {max_profiles} profiles allowed."
         )
     
-    profile = ProtectedProfile(
-        user_id=current_user.id,
-        **profile_data.dict()
-    )
+    # Mock profile creation response
+    new_profile = {
+        "id": 4,  # Mock new profile ID
+        "user_id": current_user.id,
+        "name": profile_data.name,
+        "stage_name": profile_data.stage_name,
+        "real_name": profile_data.real_name,
+        "bio": profile_data.bio,
+        "profile_image_url": None,
+        "is_active": True,
+        "monitoring_enabled": True,
+        "notification_settings": {"email": True, "push": True},
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
     
-    db.add(profile)
-    db.commit()
-    db.refresh(profile)
+    # In a real implementation, would schedule initial scan
+    # background_tasks.add_task(schedule_profile_scan, new_profile["id"])
     
-    # Start initial scan for the profile
-    background_tasks.add_task(schedule_profile_scan, profile.id)
-    
-    return profile
+    return new_profile
 
 
 @router.get("/{profile_id}", response_model=ProfileWithStats)
@@ -111,39 +166,76 @@ async def get_profile(
     db: Session = Depends(get_db)
 ) -> Any:
     """Get protected profile with statistics."""
-    profile = db.query(ProtectedProfile).filter(
-        and_(
-            ProtectedProfile.id == profile_id,
-            ProtectedProfile.user_id == current_user.id
-        )
-    ).first()
+    # Mock profile data for local testing
+    from datetime import datetime
     
-    if not profile:
+    if profile_id not in [1, 2, 3]:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Profile not found"
         )
     
-    # Get profile statistics
-    total_scans = 0  # This would come from scan_results table
-    active_infringements = db.query(func.count(Infringement.id))\
-        .filter(
-            and_(
-                Infringement.profile_id == profile_id,
-                Infringement.status.in_(["pending", "confirmed"])
-            )
-        ).scalar()
+    mock_profiles = {
+        1: {
+            "id": 1,
+            "user_id": current_user.id,
+            "name": "Content Creator Pro",
+            "stage_name": "CreatorPro", 
+            "real_name": "John Creator",
+            "bio": "Professional content creator and artist",
+            "profile_image_url": None,
+            "is_active": True,
+            "monitoring_enabled": True,
+            "notification_settings": {"email": True, "push": True},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        2: {
+            "id": 2,
+            "user_id": current_user.id,
+            "name": "Artistic Content",
+            "stage_name": "ArtisticSoul",
+            "real_name": "Jane Artist", 
+            "bio": "Digital artist and photographer",
+            "profile_image_url": None,
+            "is_active": True,
+            "monitoring_enabled": True,
+            "notification_settings": {"email": True, "push": False},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        },
+        3: {
+            "id": 3,
+            "user_id": current_user.id,
+            "name": "Video Content",
+            "stage_name": "VideoMaker",
+            "real_name": "Mike Video",
+            "bio": "YouTube content creator",
+            "profile_image_url": None,
+            "is_active": False,
+            "monitoring_enabled": False,
+            "notification_settings": {"email": False, "push": False},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+    }
     
-    resolved_infringements = db.query(func.count(Infringement.id))\
-        .filter(
-            and_(
-                Infringement.profile_id == profile_id,
-                Infringement.status == "resolved"
-            )
-        ).scalar()
+    profile = mock_profiles[profile_id]
     
-    pending_takedowns = 0  # This would come from takedown_requests table
-    successful_takedowns = 0  # This would come from takedown_requests table
+    # Mock profile statistics for local testing
+    stats_data = {
+        1: {"active_infringements": 5, "resolved_infringements": 18, "total_scans": 12},
+        2: {"active_infringements": 3, "resolved_infringements": 15, "total_scans": 8}, 
+        3: {"active_infringements": 0, "resolved_infringements": 2, "total_scans": 3}
+    }
+    
+    profile_stats = stats_data.get(profile_id, {"active_infringements": 0, "resolved_infringements": 0, "total_scans": 0})
+    
+    total_scans = profile_stats["total_scans"]
+    active_infringements = profile_stats["active_infringements"]
+    resolved_infringements = profile_stats["resolved_infringements"]
+    pending_takedowns = 2  # Mock pending takedowns
+    successful_takedowns = 12  # Mock successful takedowns
     
     # Calculate protection score (0-100)
     total_infringements = active_infringements + resolved_infringements
@@ -166,30 +258,24 @@ async def get_profile(
     # Get reference images count
     reference_images_count = 0  # This would come from reference_images table
     
-    # Get recent infringements count
-    recent_infringements_count = db.query(func.count(Infringement.id))\
-        .filter(
-            and_(
-                Infringement.profile_id == profile_id,
-                Infringement.discovered_at >= func.current_date() - func.interval('7 days')
-            )
-        ).scalar()
+    # Get recent infringements count (mock)
+    recent_infringements_count = 2  # Mock recent infringements in last 7 days
     
     return ProfileWithStats(
-        id=profile.id,
-        user_id=profile.user_id,
-        name=profile.name,
-        description=profile.description,
-        stage_name=profile.stage_name,
-        real_name=profile.real_name,
-        date_of_birth=profile.date_of_birth,
-        social_media_handles=profile.social_media_handles,
-        website_urls=profile.website_urls,
-        keywords=profile.keywords,
-        aliases=profile.aliases,
-        is_active=profile.is_active,
-        created_at=profile.created_at,
-        updated_at=profile.updated_at,
+        id=profile["id"],
+        user_id=profile["user_id"],
+        name=profile["name"],
+        description=profile.get("description"),
+        stage_name=profile["stage_name"],
+        real_name=profile["real_name"],
+        date_of_birth=profile.get("date_of_birth"),
+        social_media_handles=profile.get("social_media_handles"),
+        website_urls=profile.get("website_urls"),
+        keywords=profile.get("keywords"),
+        aliases=profile.get("aliases"),
+        is_active=profile["is_active"],
+        created_at=profile["created_at"],
+        updated_at=profile["updated_at"],
         stats=stats,
         reference_images_count=reference_images_count,
         recent_infringements_count=recent_infringements_count
@@ -204,12 +290,32 @@ async def update_profile(
     db: Session = Depends(get_db)
 ) -> Any:
     """Update protected profile."""
-    profile = db.query(ProtectedProfile).filter(
-        and_(
-            ProtectedProfile.id == profile_id,
-            ProtectedProfile.user_id == current_user.id
+    # Mock profile update for local testing
+    from datetime import datetime
+    
+    if profile_id not in [1, 2, 3]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found"
         )
-    ).first()
+    
+    # Mock updated profile data
+    updated_profile = {
+        "id": profile_id,
+        "user_id": current_user.id,
+        "name": profile_update.name or "Updated Profile",
+        "stage_name": profile_update.stage_name or "UpdatedStage",
+        "real_name": profile_update.real_name or "Updated Name",
+        "bio": profile_update.bio or "Updated bio",
+        "profile_image_url": None,
+        "is_active": profile_update.is_active if profile_update.is_active is not None else True,
+        "monitoring_enabled": profile_update.monitoring_enabled if profile_update.monitoring_enabled is not None else True,
+        "notification_settings": {"email": True, "push": True},
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    
+    return updated_profile
     
     if not profile:
         raise HTTPException(

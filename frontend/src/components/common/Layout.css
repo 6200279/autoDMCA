@@ -296,6 +296,92 @@
   outline-offset: 2px;
 }
 
+/* Custom Sidebar Menu Styles */
+.sidebar-menu {
+  padding: 0.5rem 0;
+}
+
+.sidebar-menu-item {
+  margin: 0.25rem 0.5rem;
+}
+
+.sidebar-menu-link {
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  color: var(--text-color);
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+
+.sidebar-menu-link:hover {
+  background: var(--surface-hover) !important;
+  color: var(--primary-color) !important;
+  text-decoration: none;
+}
+
+.sidebar-menu-link.bg-primary {
+  background: var(--primary-color) !important;
+  color: white !important;
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 4px rgba(var(--primary-color-rgb), 0.3);
+}
+
+.sidebar-menu-label {
+  font-weight: 500;
+}
+
+.sidebar-submenu {
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--surface-border);
+}
+
+.sidebar-submenu .sidebar-menu-link {
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.9rem;
+}
+
+.sidebar-menu-badge {
+  font-size: 0.7rem;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Feature Status Badge Styles */
+.feature-status-badge {
+  margin-left: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+}
+
+.feature-status-badge.p-tag-sm {
+  font-size: 0.6rem;
+  padding: 0.15rem 0.35rem;
+}
+
+/* Status-specific styling */
+.feature-status-badge .p-tag-warning {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ff6f00;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.feature-status-badge .p-tag-info {
+  background: rgba(33, 150, 243, 0.15);
+  color: #1976d2;
+  border: 1px solid rgba(33, 150, 243, 0.3);
+}
+
+.feature-status-badge .p-tag-danger {
+  background: rgba(244, 67, 54, 0.15);
+  color: #d32f2f;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
 .layout-wrapper button:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;

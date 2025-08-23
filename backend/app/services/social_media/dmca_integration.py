@@ -23,9 +23,9 @@ from app.db.session import get_db
 from .monitoring_service import MonitoringResult
 from .reporting import ReportSubmission, AutomatedReportingService
 from .config import MonitoringConfig
-from ..dmca.dmca_service import DMCAService
-from src.autodmca.services.email_service import EmailService
-from src.autodmca.templates.template_renderer import TemplateRenderer
+from ..dmca.takedown_processor import DMCATakedownProcessor as DMCAService
+# from src.autodmca.services.email_service import EmailService  # Disabled for local testing
+# from src.autodmca.templates.template_renderer import TemplateRenderer  # Disabled for local testing
 
 
 logger = structlog.get_logger(__name__)
@@ -53,8 +53,10 @@ class SocialMediaDMCABridge:
     def __init__(self, config: MonitoringConfig, dmca_service: DMCAService):
         self.config = config
         self.dmca_service = dmca_service
-        self.email_service = EmailService()
-        self.template_renderer = TemplateRenderer()
+        # self.email_service = EmailService()  # Disabled for local testing
+        # self.template_renderer = TemplateRenderer()  # Disabled for local testing
+        self.email_service = None
+        self.template_renderer = None
         self.logger = logger.bind(service="social_media_dmca_bridge")
         
     async def process_monitoring_results(self, profile_id: int, results: Dict[str, MonitoringResult]) -> Dict[str, Any]:

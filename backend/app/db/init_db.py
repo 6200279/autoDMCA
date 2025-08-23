@@ -10,7 +10,7 @@ async def init_db() -> None:
     """Initialize database with tables."""
     try:
         # Import all models to ensure they are registered
-        from app.db.models import user, subscription, profile, infringement, takedown  # noqa
+        from app.db.models import user, subscription, profile, infringement, takedown, gift_subscription  # noqa
         
         logger.info("Database initialization completed successfully")
     except Exception as e:

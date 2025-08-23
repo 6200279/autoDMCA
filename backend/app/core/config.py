@@ -14,6 +14,7 @@ class Settings:
         self.VERSION = os.getenv("VERSION", "1.0.0")
         self.DESCRIPTION = os.getenv("DESCRIPTION", "AI-powered content protection and DMCA takedown service")
         self.API_V1_STR = os.getenv("API_V1_STR", "/api/v1")
+        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
         
         # Security
         self.SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")

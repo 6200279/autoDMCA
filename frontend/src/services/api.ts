@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:18000/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,12 +22,13 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token refresh
+// Response interceptor to handle token refresh and API errors
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     
+    // Handle authentication errors
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
@@ -47,7 +48,33 @@ api.interceptors.response.use(
         // Refresh failed, redirect to login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/auth/login';
+        window.location.href = '/login';
+      }
+    }
+    
+    // Add helpful context for unimplemented features
+    if (error.response?.status === 404 && error.config?.url) {
+      const url = error.config.url;
+      const featureMap: Record<string, string> = {
+        '/admin': 'Admin Panel',
+        '/ai': 'AI Content Matching',
+        '/extensions': 'Browser Extensions',
+        '/social-media': 'Social Media Protection',
+        '/reports': 'Advanced Reports',
+        '/dmca-templates': 'DMCA Templates',
+        '/search-engine-delisting': 'Search Engine Delisting',
+        '/content-watermarking': 'Content Watermarking',
+        '/submissions': 'Content Submissions',
+        '/billing/payment-methods': 'Payment Methods',
+        '/billing/invoices': 'Invoice History'
+      };
+      
+      for (const [pattern, featureName] of Object.entries(featureMap)) {
+        if (url.includes(pattern)) {
+          error.featureName = featureName;
+          error.isUnimplemented = true;
+          break;
+        }
       }
     }
     
@@ -108,6 +135,31 @@ export const userApi = {
   updateUser: (data: any) => api.put('/users/me', data),
   changePassword: (data: any) => api.post('/users/me/change-password', data),
   deleteAccount: () => api.delete('/users/me'),
+  
+  // Settings and preferences
+  getUserSettings: () => api.get('/users/me/settings'),
+  updateUserSettings: (data: any) => api.put('/users/me/settings', data),
+  
+  // Activity and audit logs
+  getUserActivity: (params?: any) => api.get('/users/me/activity', { params }),
+  
+  // Avatar management
+  uploadAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/users/me/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  deleteAvatar: () => api.delete('/users/me/avatar'),
+  
+  // API Keys management
+  getApiKeys: () => api.get('/users/me/api-keys'),
+  createApiKey: (data: any) => api.post('/users/me/api-keys', data),
+  revokeApiKey: (keyId: string) => api.delete(`/users/me/api-keys/${keyId}`),
+  updateApiKey: (keyId: string, data: any) => api.put(`/users/me/api-keys/${keyId}`, data),
 };
 
 // Profile API endpoints
@@ -131,11 +183,25 @@ export const profileApi = {
 // Infringement API endpoints
 export const infringementApi = {
   getInfringements: (params?: any) => api.get('/infringements', { params }),
-  getInfringement: (id: number) => api.get(`/infringements/${id}`),
+  getInfringement: (id: number | string) => api.get(`/infringements/${id}`),
   createInfringement: (data: any) => api.post('/infringements', data),
-  updateInfringement: (id: number, data: any) => api.put(`/infringements/${id}`, data),
-  deleteInfringement: (id: number) => api.delete(`/infringements/${id}`),
+  updateInfringement: (id: number | string, data: any) => api.put(`/infringements/${id}`, data),
+  deleteInfringement: (id: number | string) => api.delete(`/infringements/${id}`),
   bulkAction: (data: any) => api.post('/infringements/bulk-action', data),
+  
+  // Create takedown from infringement
+  createTakedownFromInfringement: (infringementId: number | string) => 
+    api.post(`/infringements/${infringementId}/create-takedown`),
+  
+  // Infringement statistics
+  getInfringementStats: (params?: any) => api.get('/infringements/stats', { params }),
+  
+  // Mark infringement actions
+  markAsFalsePositive: (id: number | string) => 
+    api.put(`/infringements/${id}`, { status: 'false_positive' }),
+  
+  markAsResolved: (id: number | string) => 
+    api.put(`/infringements/${id}`, { status: 'removed' }),
 };
 
 // Takedown API endpoints

@@ -47,6 +47,9 @@ const DMCATemplates = lazy(() => import('./pages/DMCATemplates'));
 const SearchEngineDelisting = lazy(() => import('./pages/SearchEngineDelisting'));
 const ContentWatermarking = lazy(() => import('./pages/ContentWatermarking'));
 const BrowserExtension = lazy(() => import('./pages/BrowserExtension'));
+const GiftSubscription = lazy(() => import('./pages/GiftSubscription'));
+const GiftRedemption = lazy(() => import('./pages/GiftRedemption'));
+const AddonServices = lazy(() => import('./pages/AddonServices'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,11 +75,20 @@ const LazyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 function AppContent() {
+  return (
+    <Router>
+      <LayoutProvider>
+        <AppRoutes />
+      </LayoutProvider>
+    </Router>
+  );
+}
+
+function AppRoutes() {
   const { user } = useAuth();
 
   return (
-    <Router>
-      <Routes>
+    <Routes>
         {/* Public routes */}
         <Route 
           path="/login" 
@@ -281,13 +293,46 @@ function AppContent() {
         <Route path="/watermarking" element={<Navigate to="/protection/watermarking" replace />} />
         <Route path="/browser-extension" element={<Navigate to="/protection/browser-extension" replace />} />
         
+        {/* Gift Subscription Routes */}
+        <Route 
+          path="/gift/purchase" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <LazyRoute>
+                  <GiftSubscription />
+                </LazyRoute>
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/gift/redeem" 
+          element={
+            <LazyRoute>
+              <GiftRedemption />
+            </LazyRoute>
+          } 
+        />
+        <Route 
+          path="/billing/addons" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <LazyRoute>
+                  <AddonServices />
+                </LazyRoute>
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        
         {/* Redirect root to dashboard */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         
         {/* 404 Not Found */}
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </Router>
   );
 }
 
@@ -319,9 +364,7 @@ function App() {
             maxReconnectAttempts={10}
             debug={process.env.NODE_ENV === 'development'}
           >
-            <LayoutProvider>
-              <AppContent />
-            </LayoutProvider>
+            <AppContent />
           </WebSocketProvider>
         </AuthProvider>
       </QueryClientProvider>

@@ -1,0 +1,32 @@
+{
+  "name": "content-protection-extension",
+  "version": "1.0.0",
+  "description": "Browser extension for AutoDMCA content protection and reporting",
+  "main": "build.js",
+  "scripts": {
+    "build": "node build.js",
+    "clean": "node build.js --clean",
+    "help": "node build.js --help"
+  },
+  "keywords": [
+    "browser-extension",
+    "chrome-extension",
+    "firefox-addon",
+    "dmca",
+    "content-protection",
+    "copyright"
+  ],
+  "author": "AutoDMCA",
+  "license": "PROPRIETARY",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/6200279/autoDMCA.git",
+    "directory": "browser-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/6200279/autoDMCA/issues"
+  }
+}

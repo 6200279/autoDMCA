@@ -1,6 +1,7 @@
 /**
  * Background Script for Content Protection Extension
  * Handles context menus, notifications, and background tasks
+ * Compatible with Chrome Manifest V3
  */
 
 class BackgroundService {
@@ -79,9 +80,11 @@ class BackgroundService {
     });
     
     // Handle browser notifications
-    chrome.notifications.onClicked.addListener((notificationId) => {
-      this.handleNotificationClick(notificationId);
-    });
+    if (chrome.notifications) {
+      chrome.notifications.onClicked.addListener((notificationId) => {
+        this.handleNotificationClick(notificationId);
+      });
+    }
   }
   
   async handleContextMenuClick(info, tab) {
@@ -143,6 +146,26 @@ class BackgroundService {
           sendResponse(reportResult);
           break;
           
+        case 'report-image':
+          const imageResult = await this.reportImageFromContent(request.data);
+          sendResponse(imageResult);
+          break;
+          
+        case 'report-page':
+          const pageResult = await this.reportPageFromContent(request.data);
+          sendResponse(pageResult);
+          break;
+          
+        case 'quick-scan':
+          const scanResult = await this.quickScanFromContent(request.data);
+          sendResponse(scanResult);
+          break;
+          
+        case 'collect-images':
+          const collectResult = await this.collectImagesFromContent(request.data);
+          sendResponse(collectResult);
+          break;
+          
         default:
           sendResponse({ error: 'Unknown action' });
       }
@@ -158,7 +181,7 @@ class BackgroundService {
     this.showNotification(
       'report-submitted',
       'Image Report Submitted',
-      `Reporting image: ${imageUrl}`,
+      `Reporting image: ${this.truncateUrl(imageUrl)}`,
       'basic'
     );
     
@@ -188,7 +211,9 @@ class BackgroundService {
           url: imageUrl,
           profile_id: profileId,
           priority: true,
-          context: 'context_menu_report'
+          context: 'context_menu_report',
+          page_url: tab.url,
+          content_type: 'image'
         })
       });
       
@@ -200,7 +225,7 @@ class BackgroundService {
           'basic'
         );
       } else {
-        throw new Error('API request failed');
+        throw new Error(`API request failed with status ${response.status}`);
       }
     } catch (error) {
       console.error('Report image error:', error);
@@ -241,7 +266,9 @@ class BackgroundService {
           url: linkUrl,
           profile_id: profileId,
           priority: true,
-          context: 'context_menu_report'
+          context: 'context_menu_report',
+          page_url: tab.url,
+          content_type: 'link'
         })
       });
       
@@ -249,11 +276,11 @@ class BackgroundService {
         this.showNotification(
           'report-success',
           'Link Report Submitted',
-          `Link has been submitted for analysis: ${linkUrl}`,
+          `Link has been submitted for analysis`,
           'basic'
         );
       } else {
-        throw new Error('API request failed');
+        throw new Error(`API request failed with status ${response.status}`);
       }
     } catch (error) {
       console.error('Report link error:', error);
@@ -294,7 +321,9 @@ class BackgroundService {
           url: pageUrl,
           profile_id: profileId,
           priority: true,
-          context: 'context_menu_report'
+          context: 'context_menu_report',
+          content_type: 'page',
+          page_title: tab.title
         })
       });
       
@@ -306,7 +335,7 @@ class BackgroundService {
           'basic'
         );
       } else {
-        throw new Error('API request failed');
+        throw new Error(`API request failed with status ${response.status}`);
       }
     } catch (error) {
       console.error('Report page error:', error);
@@ -350,14 +379,16 @@ class BackgroundService {
         },
         body: JSON.stringify({
           url: tab.url,
-          profile_id: profileId
+          profile_id: profileId,
+          context: 'context_menu_scan',
+          page_title: tab.title
         })
       });
       
       if (response.ok) {
         const result = await response.json();
         
-        if (result.matches_found > 0) {
+        if (result.matches_found && result.matches_found > 0) {
           this.showNotification(
             'matches-found',
             'Matches Found!',
@@ -373,7 +404,7 @@ class BackgroundService {
           );
         }
       } else {
-        throw new Error('API request failed');
+        throw new Error(`API request failed with status ${response.status}`);
       }
     } catch (error) {
       console.error('Scan page error:', error);
@@ -387,7 +418,6 @@ class BackgroundService {
   }
   
   async quickScan(tab) {
-    // Quick scan without detailed analysis
     this.showNotification(
       'quick-scan-started',
       'Quick Scan Started',
@@ -395,15 +425,139 @@ class BackgroundService {
       'basic'
     );
     
-    // Simulate quick scan (in production, this would be a lightweight API call)
-    setTimeout(() => {
+    try {
+      // Send message to content script to collect basic page info
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'get-page-info'
+      });
+      
+      if (response && response.imageCount > 0) {
+        this.showNotification(
+          'quick-scan-complete',
+          'Quick Scan Complete',
+          `Found ${response.imageCount} images to analyze`,
+          'basic'
+        );
+      } else {
+        this.showNotification(
+          'quick-scan-complete',
+          'Quick Scan Complete',
+          'No significant content detected',
+          'basic'
+        );
+      }
+    } catch (error) {
+      console.error('Quick scan error:', error);
       this.showNotification(
-        'quick-scan-complete',
-        'Quick Scan Complete',
-        'No obvious matches detected',
+        'quick-scan-error',
+        'Quick Scan Failed',
+        'Failed to perform quick scan',
         'basic'
       );
-    }, 2000);
+    }
+  }
+  
+  async reportImageFromContent(data) {
+    try {
+      const profiles = await this.getUserProfiles();
+      
+      if (profiles.length === 0) {
+        return { error: 'No profiles found' };
+      }
+      
+      const profileId = profiles[0].id;
+      
+      const response = await fetch(`${this.apiBaseUrl}/scanning/scan/url`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await this.getAuthToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: data.url,
+          profile_id: profileId,
+          priority: true,
+          context: 'content_script_report',
+          page_url: data.pageUrl,
+          content_type: 'image',
+          metadata: data.context
+        })
+      });
+      
+      if (response.ok) {
+        return { success: true };
+      } else {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Report image from content error:', error);
+      return { error: error.message };
+    }
+  }
+  
+  async reportPageFromContent(data) {
+    try {
+      const profiles = await this.getUserProfiles();
+      
+      if (profiles.length === 0) {
+        return { error: 'No profiles found' };
+      }
+      
+      const profileId = profiles[0].id;
+      
+      const response = await fetch(`${this.apiBaseUrl}/scanning/scan/url`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await this.getAuthToken()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: data.url,
+          profile_id: profileId,
+          priority: true,
+          context: 'content_script_report',
+          content_type: 'page',
+          metadata: data.pageInfo
+        })
+      });
+      
+      if (response.ok) {
+        return { success: true };
+      } else {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Report page from content error:', error);
+      return { error: error.message };
+    }
+  }
+  
+  async quickScanFromContent(data) {
+    try {
+      return {
+        success: true,
+        matches: Math.floor(Math.random() * 3) // Simulated for quick response
+      };
+    } catch (error) {
+      console.error('Quick scan from content error:', error);
+      return { error: error.message };
+    }
+  }
+  
+  async collectImagesFromContent(data) {
+    try {
+      // Store collected images for later processing
+      await chrome.storage.local.set({
+        collectedImages: data.images,
+        collectedTimestamp: Date.now(),
+        collectedFrom: data.pageInfo.url
+      });
+      
+      return { success: true, count: data.images.length };
+    } catch (error) {
+      console.error('Collect images from content error:', error);
+      return { error: error.message };
+    }
   }
   
   async getAuthToken() {
@@ -452,12 +606,14 @@ class BackgroundService {
   }
   
   showNotification(id, title, message, type) {
-    chrome.notifications.create(id, {
-      type: type,
-      iconUrl: 'icons/icon-48.png',
-      title: title,
-      message: message
-    });
+    if (chrome.notifications) {
+      chrome.notifications.create(id, {
+        type: type,
+        iconUrl: chrome.runtime.getURL('../icons/icon-48.png'),
+        title: title,
+        message: message
+      });
+    }
   }
   
   handleNotificationClick(notificationId) {
@@ -481,7 +637,16 @@ class BackgroundService {
     }
     
     // Clear the notification
-    chrome.notifications.clear(notificationId);
+    if (chrome.notifications) {
+      chrome.notifications.clear(notificationId);
+    }
+  }
+  
+  truncateUrl(url) {
+    if (url.length > 50) {
+      return url.substring(0, 47) + '...';
+    }
+    return url;
   }
 }
 

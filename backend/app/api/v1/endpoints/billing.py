@@ -33,6 +33,8 @@ from app.services.billing.subscription_service import subscription_service
 from app.services.billing.stripe_service import stripe_service, SUBSCRIPTION_PLANS
 from app.services.billing.usage_service import usage_service
 from app.services.billing.webhook_service import webhook_service
+from app.services.billing.gift_subscription_service import gift_subscription_service
+from app.schemas.gift_subscription import GiftListResponse, GiftListItem, AdminGiftListRequest, AdminGiftListResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -612,4 +614,155 @@ async def handle_stripe_webhook(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process webhook"
+        )
+
+
+# Gift Subscription Management
+
+@router.get("/gifts/received", response_model=GiftListResponse)
+async def get_received_gifts(
+    page: int = 1,
+    page_size: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get gifts received by the current user (integrated with billing)."""
+    try:
+        if page < 1:
+            page = 1
+        if page_size < 1 or page_size > 100:
+            page_size = 20
+        
+        gifts = gift_subscription_service.get_user_gifts_received(
+            db=db,
+            user_id=current_user.id,
+            page=page,
+            page_size=page_size
+        )
+        
+        # Convert to response format with gift code masking
+        from app.services.billing.gift_code_service import gift_code_service
+        gift_items = []
+        for gift in gifts:
+            gift_items.append(GiftListItem(
+                id=gift.id,
+                recipient_email=gift.recipient_email,
+                recipient_name=gift.recipient_name,
+                plan=gift.plan,
+                billing_interval=gift.billing_interval,
+                amount=gift.amount,
+                status=gift.status,
+                gift_code_masked=gift_code_service.mask_gift_code(gift.gift_code),
+                expires_at=gift.expires_at,
+                redeemed_at=gift.redeemed_at,
+                created_at=gift.created_at
+            ))
+        
+        # Get total count for pagination
+        from app.db.models.gift_subscription import GiftSubscription
+        total_count = db.query(GiftSubscription).filter(
+            GiftSubscription.recipient_user_id == current_user.id
+        ).count()
+        
+        return GiftListResponse(
+            success=True,
+            gifts=gift_items,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+            has_more=(page * page_size) < total_count
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting received gifts for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve received gifts"
+        )
+
+
+@router.get("/gifts/given", response_model=GiftListResponse)
+async def get_given_gifts(
+    page: int = 1,
+    page_size: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get gifts given by the current user (integrated with billing)."""
+    try:
+        if page < 1:
+            page = 1
+        if page_size < 1 or page_size > 100:
+            page_size = 20
+        
+        gifts = gift_subscription_service.get_user_gifts_given(
+            db=db,
+            user_id=current_user.id,
+            page=page,
+            page_size=page_size
+        )
+        
+        # Convert to response format with gift code masking
+        from app.services.billing.gift_code_service import gift_code_service
+        gift_items = []
+        for gift in gifts:
+            gift_items.append(GiftListItem(
+                id=gift.id,
+                recipient_email=gift.recipient_email,
+                recipient_name=gift.recipient_name,
+                plan=gift.plan,
+                billing_interval=gift.billing_interval,
+                amount=gift.amount,
+                status=gift.status,
+                gift_code_masked=gift_code_service.mask_gift_code(gift.gift_code),
+                expires_at=gift.expires_at,
+                redeemed_at=gift.redeemed_at,
+                created_at=gift.created_at
+            ))
+        
+        # Get total count for pagination
+        from app.db.models.gift_subscription import GiftSubscription
+        total_count = db.query(GiftSubscription).filter(
+            GiftSubscription.giver_user_id == current_user.id
+        ).count()
+        
+        return GiftListResponse(
+            success=True,
+            gifts=gift_items,
+            total_count=total_count,
+            page=page,
+            page_size=page_size,
+            has_more=(page * page_size) < total_count
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting given gifts for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve given gifts"
+        )
+
+
+@router.get("/gifts/pricing")
+async def get_gift_pricing(
+    plan: SubscriptionPlan,
+    interval: BillingInterval
+):
+    """Get pricing information for a gift subscription."""
+    try:
+        price_info = stripe_service.calculate_gift_price(plan, interval)
+        return {
+            "success": True,
+            "pricing": price_info,
+            "plan_name": plan.value.title(),
+            "interval_name": interval.value.title(),
+            "currency": "USD",
+            "stripe_price_id": SUBSCRIPTION_PLANS[plan][interval.value]["stripe_price_id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting gift pricing: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get gift pricing"
         )

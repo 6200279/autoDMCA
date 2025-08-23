@@ -46,100 +46,182 @@ async def get_infringements(
     db: Session = Depends(get_db)
 ) -> Any:
     """Get user's infringements with filtering."""
-    # Base query - only infringements for user's profiles
-    query = db.query(Infringement)\
-        .join(ProtectedProfile)\
-        .filter(ProtectedProfile.user_id == current_user.id)\
-        .options(joinedload(Infringement.profile))
-    
-    # Apply filters
-    if profile_id:
-        # Verify user owns the profile
-        profile = db.query(ProtectedProfile).filter(
-            and_(
-                ProtectedProfile.id == profile_id,
-                ProtectedProfile.user_id == current_user.id
-            )
-        ).first()
-        if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Profile not found"
-            )
-        query = query.filter(Infringement.profile_id == profile_id)
-    
-    if platform:
-        query = query.filter(Infringement.platform.ilike(f"%{platform}%"))
-    
-    if status:
-        query = query.filter(Infringement.status == status)
-    
-    if severity:
-        query = query.filter(Infringement.severity == severity)
-    
-    if infringement_type:
-        query = query.filter(Infringement.infringement_type == infringement_type)
-    
-    if date_from:
-        query = query.filter(Infringement.discovered_at >= date_from)
-    
-    if date_to:
-        query = query.filter(Infringement.discovered_at <= date_to)
-    
-    if min_confidence is not None:
-        query = query.filter(Infringement.confidence_score >= min_confidence)
-    
-    if search:
-        query = query.filter(
-            or_(
-                Infringement.url.ilike(f"%{search}%"),
-                Infringement.description.ilike(f"%{search}%")
-            )
+    # Mock data for local development
+    from app.core.config import settings
+    if settings.ENVIRONMENT == "local":
+        from datetime import datetime, timedelta
+        import random
+        
+        # Generate mock infringements
+        mock_infringements = []
+        platforms = ["Twitter", "Instagram", "TikTok", "YouTube", "Reddit", "OnlyFans"]
+        types = ["IMAGE", "VIDEO", "TEXT", "PROFILE"]
+        statuses = ["PENDING", "SUBMITTED", "RESOLVED", "DISMISSED", "FAILED"]
+        severities = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+        
+        for i in range(50):  # Generate 50 mock infringements
+            mock_infringements.append({
+                "id": i + 1,
+                "profile_id": (i % 3) + 1,
+                "profile_name": f"Profile {(i % 3) + 1}",
+                "reporter_id": None,
+                "url": f"https://{random.choice(platforms).lower()}.com/content/{i+1000}",
+                "platform": random.choice(platforms),
+                "infringement_type": random.choice(types),
+                "status": random.choice(statuses),
+                "severity": random.choice(severities),
+                "confidence_score": round(random.uniform(0.6, 0.99), 2),
+                "description": f"Unauthorized use of copyrighted content - Item #{i+1}",
+                "evidence_urls": [f"https://evidence.autodmca.com/{i+1}"],
+                "metadata": {
+                    "views": random.randint(100, 100000),
+                    "likes": random.randint(10, 10000),
+                    "shares": random.randint(1, 1000)
+                },
+                "notes": f"Detected by automated scanner",
+                "discovered_at": datetime.utcnow() - timedelta(days=random.randint(0, 30)),
+                "updated_at": datetime.utcnow()
+            })
+        
+        # Apply filters
+        filtered = mock_infringements
+        
+        if profile_id:
+            filtered = [i for i in filtered if i["profile_id"] == profile_id]
+        
+        if platform:
+            filtered = [i for i in filtered if platform.lower() in i["platform"].lower()]
+        
+        if status:
+            filtered = [i for i in filtered if i["status"] == status]
+        
+        if severity:
+            filtered = [i for i in filtered if i["severity"] == severity]
+        
+        if infringement_type:
+            filtered = [i for i in filtered if i["infringement_type"] == infringement_type]
+        
+        if search:
+            filtered = [i for i in filtered if 
+                       search.lower() in i["url"].lower() or 
+                       search.lower() in i["description"].lower()]
+        
+        # Sort by discovered_at (newest first)
+        filtered.sort(key=lambda x: x["discovered_at"], reverse=True)
+        
+        total = len(filtered)
+        
+        # Apply pagination
+        offset = (pagination.page - 1) * pagination.size
+        paginated_items = filtered[offset:offset + pagination.size]
+        
+        # Calculate pages
+        pages = (total + pagination.size - 1) // pagination.size if pagination.size > 0 else 0
+        
+        return PaginatedResponse(
+            items=paginated_items,
+            total=total,
+            page=pagination.page,
+            size=pagination.size,
+            pages=pages
         )
     
-    # Order by discovery date (newest first)
-    query = query.order_by(desc(Infringement.discovered_at))
+    # Original database query code (for production)
+    else:
+        # Base query - only infringements for user's profiles
+        query = db.query(Infringement)\
+            .join(ProtectedProfile)\
+            .filter(ProtectedProfile.user_id == current_user.id)\
+            .options(joinedload(Infringement.profile))
     
-    # Get total count
-    total = query.count()
-    
-    # Apply pagination
-    offset = (pagination.page - 1) * pagination.size
-    infringements = query.offset(offset).limit(pagination.size).all()
-    
-    # Calculate pages
-    pages = (total + pagination.size - 1) // pagination.size
-    
-    # Transform to response format
-    items = []
-    for infringement in infringements:
-        item = InfringementSchema(
-            id=infringement.id,
-            profile_id=infringement.profile_id,
-            profile_name=infringement.profile.name,
-            reporter_id=infringement.reporter_id,
-            url=infringement.url,
-            platform=infringement.platform,
-            infringement_type=infringement.infringement_type,
-            status=infringement.status,
-            severity=infringement.severity,
-            confidence_score=infringement.confidence_score,
-            description=infringement.description,
-            evidence_urls=infringement.evidence_urls,
-            metadata=infringement.metadata,
-            notes=infringement.notes,
-            discovered_at=infringement.discovered_at,
-            updated_at=infringement.updated_at
+        # Apply filters
+        if profile_id:
+            # Verify user owns the profile
+            profile = db.query(ProtectedProfile).filter(
+                and_(
+                    ProtectedProfile.id == profile_id,
+                    ProtectedProfile.user_id == current_user.id
+                )
+            ).first()
+            if not profile:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Profile not found"
+                )
+            query = query.filter(Infringement.profile_id == profile_id)
+        
+        if platform:
+            query = query.filter(Infringement.platform.ilike(f"%{platform}%"))
+        
+        if status:
+            query = query.filter(Infringement.status == status)
+        
+        if severity:
+            query = query.filter(Infringement.severity == severity)
+        
+        if infringement_type:
+            query = query.filter(Infringement.infringement_type == infringement_type)
+        
+        if date_from:
+            query = query.filter(Infringement.discovered_at >= date_from)
+        
+        if date_to:
+            query = query.filter(Infringement.discovered_at <= date_to)
+        
+        if min_confidence is not None:
+            query = query.filter(Infringement.confidence_score >= min_confidence)
+        
+        if search:
+            query = query.filter(
+                or_(
+                    Infringement.url.ilike(f"%{search}%"),
+                    Infringement.description.ilike(f"%{search}%")
+                )
+            )
+        
+        # Order by discovery date (newest first)
+        query = query.order_by(desc(Infringement.discovered_at))
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        offset = (pagination.page - 1) * pagination.size
+        infringements = query.offset(offset).limit(pagination.size).all()
+        
+        # Calculate pages
+        pages = (total + pagination.size - 1) // pagination.size
+        
+        # Transform to response format
+        items = []
+        for infringement in infringements:
+            item = InfringementSchema(
+                id=infringement.id,
+                profile_id=infringement.profile_id,
+                profile_name=infringement.profile.name,
+                reporter_id=infringement.reporter_id,
+                url=infringement.url,
+                platform=infringement.platform,
+                infringement_type=infringement.infringement_type,
+                status=infringement.status,
+                severity=infringement.severity,
+                confidence_score=infringement.confidence_score,
+                description=infringement.description,
+                evidence_urls=infringement.evidence_urls,
+                metadata=infringement.metadata,
+                notes=infringement.notes,
+                discovered_at=infringement.discovered_at,
+                updated_at=infringement.updated_at
+            )
+            items.append(item)
+        
+        return PaginatedResponse(
+            items=items,
+            total=total,
+            page=pagination.page,
+            size=pagination.size,
+            pages=pages
         )
-        items.append(item)
-    
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=pagination.page,
-        size=pagination.size,
-        pages=pages
-    )
 
 
 @router.get("/stats", response_model=InfringementStats)
@@ -150,6 +232,42 @@ async def get_infringement_stats(
     db: Session = Depends(get_db)
 ) -> Any:
     """Get infringement statistics."""
+    # Mock data for local development
+    from app.core.config import settings
+    if settings.ENVIRONMENT == "local":
+        from datetime import datetime, timedelta
+        
+        # Return mock statistics
+        return InfringementStats(
+            total_infringements=127,
+            pending_infringements=43,
+            resolved_infringements=67,
+            dismissed_infringements=17,
+            total_takedowns_sent=82,
+            successful_takedowns=61,
+            pending_takedowns=15,
+            failed_takedowns=6,
+            average_resolution_time=72.5,
+            infringements_by_platform={
+                "Twitter": 35,
+                "Instagram": 28,
+                "TikTok": 24,
+                "YouTube": 18,
+                "Reddit": 12,
+                "OnlyFans": 10
+            },
+            infringements_by_type={
+                "IMAGE": 58,
+                "VIDEO": 42,
+                "TEXT": 18,
+                "PROFILE": 9
+            },
+            recent_infringements_count=23,
+            resolution_rate=0.76,
+            false_positive_rate=0.13
+        )
+    
+    # Original database query code (for production)
     # Base query for user's infringements
     base_query = db.query(Infringement)\
         .join(ProtectedProfile)\

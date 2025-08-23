@@ -7,7 +7,7 @@ import { Tag } from 'primereact/tag';
 import { Image } from 'primereact/image';
 import { Toolbar } from 'primereact/toolbar';
 import { Toast } from 'primereact/toast';
-import { OverlayPanel } from 'primereact/overlayPanel';
+import { OverlayPanel } from 'primereact/overlaypanel';
 import { Timeline } from 'primereact/timeline';
 import { InputText } from 'primereact/inputtext';
 import { Calendar } from 'primereact/calendar';
@@ -23,6 +23,8 @@ import { ProgressBar } from 'primereact/progressbar';
 import { ConfirmDialog, confirmDialog } from 'primereact/confirmdialog';
 import { FilterMatchMode, FilterOperator } from 'primereact/api';
 import { useAuth } from '../contexts/AuthContext';
+import { infringementApi } from '../services/api';
+import { useProfileRealtime, useNotificationsRealtime } from '../contexts/WebSocketContext';
 
 // TypeScript interfaces
 interface Infringement {
@@ -69,6 +71,10 @@ const Infringements: React.FC = () => {
   const { user } = useAuth();
   const toast = useRef<Toast>(null);
   const detailsOverlay = useRef<OverlayPanel>(null);
+  
+  // WebSocket real-time updates
+  const { profileActivities } = useProfileRealtime();
+  const { notifications } = useNotificationsRealtime();
 
   // State management
   const [infringements, setInfringements] = useState<Infringement[]>([]);
@@ -276,35 +282,197 @@ const Infringements: React.FC = () => {
 
   // Initialize data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setInfringements(mockInfringements);
-      
-      // Calculate stats
-      const total = mockInfringements.length;
-      const pending = mockInfringements.filter(i => i.status === 'pending').length;
-      const underReview = mockInfringements.filter(i => i.status === 'under_review').length;
-      const takedownSent = mockInfringements.filter(i => i.status === 'takedown_sent').length;
-      const removed = mockInfringements.filter(i => i.status === 'removed').length;
-      const rejected = mockInfringements.filter(i => i.status === 'rejected').length;
-      const falsePositive = mockInfringements.filter(i => i.status === 'false_positive').length;
-      
-      setStats({
-        total,
-        pending,
-        underReview,
-        takedownSent,
-        removed,
-        rejected,
-        falsePositive,
-        avgResponseTime: 24, // hours
-        successRate: Math.round((removed / (removed + rejected + falsePositive)) * 100) || 0
-      });
-      
-      setLoading(false);
-    }, 1200);
+    const loadInfringements = async () => {
+      try {
+        setLoading(true);
+        
+        // Load infringements from backend
+        const response = await infringementApi.getInfringements({
+          page: 1,
+          limit: 100,
+          include_stats: true
+        });
+        
+        if (response.data) {
+          const infringementsData = response.data.items || response.data;
+          const statsData = response.data.stats;
+          
+          // Map backend data to frontend format
+          const mappedInfringements = infringementsData.map((item: any) => ({
+            ...item,
+            detectedAt: new Date(item.detected_at || item.created_at),
+            lastUpdated: new Date(item.updated_at),
+            profileId: item.profile_id,
+            profileName: item.profile_name || 'Unknown Profile',
+            originalContent: item.original_content_url || item.original_url,
+            reportedBy: item.reported_by || 'system',
+            tags: item.tags || [],
+            metadata: {
+              contentType: item.content_type || 'image',
+              uploader: item.uploader,
+              viewCount: item.view_count,
+              likeCount: item.like_count,
+              commentCount: item.comment_count,
+              duration: item.duration
+            }
+          }));
+          
+          setInfringements(mappedInfringements);
+          
+          // Use backend stats if available, otherwise calculate from data
+          if (statsData) {
+            setStats({
+              total: statsData.total || mappedInfringements.length,
+              pending: statsData.pending || 0,
+              underReview: statsData.under_review || 0,
+              takedownSent: statsData.takedown_sent || 0,
+              removed: statsData.removed || 0,
+              rejected: statsData.rejected || 0,
+              falsePositive: statsData.false_positive || 0,
+              avgResponseTime: statsData.avg_response_time || 24,
+              successRate: statsData.success_rate || 0
+            });
+          } else {
+            // Calculate stats from data
+            const total = mappedInfringements.length;
+            const pending = mappedInfringements.filter((i: any) => i.status === 'pending').length;
+            const underReview = mappedInfringements.filter((i: any) => i.status === 'under_review').length;
+            const takedownSent = mappedInfringements.filter((i: any) => i.status === 'takedown_sent').length;
+            const removed = mappedInfringements.filter((i: any) => i.status === 'removed').length;
+            const rejected = mappedInfringements.filter((i: any) => i.status === 'rejected').length;
+            const falsePositive = mappedInfringements.filter((i: any) => i.status === 'false_positive').length;
+            
+            setStats({
+              total,
+              pending,
+              underReview,
+              takedownSent,
+              removed,
+              rejected,
+              falsePositive,
+              avgResponseTime: 24,
+              successRate: Math.round((removed / (removed + rejected + falsePositive)) * 100) || 0
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load infringements:', error);
+        // Fallback to mock data if API fails
+        setInfringements(mockInfringements);
+        
+        const total = mockInfringements.length;
+        const pending = mockInfringements.filter(i => i.status === 'pending').length;
+        const underReview = mockInfringements.filter(i => i.status === 'under_review').length;
+        const takedownSent = mockInfringements.filter(i => i.status === 'takedown_sent').length;
+        const removed = mockInfringements.filter(i => i.status === 'removed').length;
+        const rejected = mockInfringements.filter(i => i.status === 'rejected').length;
+        const falsePositive = mockInfringements.filter(i => i.status === 'false_positive').length;
+        
+        setStats({
+          total,
+          pending,
+          underReview,
+          takedownSent,
+          removed,
+          rejected,
+          falsePositive,
+          avgResponseTime: 24,
+          successRate: Math.round((removed / (removed + rejected + falsePositive)) * 100) || 0
+        });
+        
+        toast.current?.show({
+          severity: 'warn',
+          summary: 'API Error',
+          detail: 'Failed to load live data, showing sample data instead',
+          life: 5000
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => clearTimeout(timer);
+    loadInfringements();
   }, []);
+  
+  // Handle real-time profile activities
+  useEffect(() => {
+    profileActivities.forEach(activity => {
+      if (activity.type === 'infringement_detected') {
+        // Add new infringement to the list
+        const newInfringement: Infringement = {
+          id: activity.infringement_id,
+          title: activity.title,
+          description: activity.description,
+          url: activity.url,
+          platform: activity.platform,
+          status: activity.status || 'pending',
+          confidence: activity.confidence || 0,
+          similarity: activity.similarity || 0,
+          profileId: activity.profile_id,
+          profileName: activity.profile_name || 'Unknown Profile',
+          thumbnail: activity.thumbnail || '',
+          originalContent: activity.original_content || '',
+          detectedAt: new Date(activity.timestamp),
+          lastUpdated: new Date(activity.timestamp),
+          reportedBy: 'system',
+          tags: activity.tags || [],
+          metadata: {
+            contentType: activity.content_type || 'image',
+            uploader: activity.uploader,
+            viewCount: activity.view_count,
+            likeCount: activity.like_count,
+            commentCount: activity.comment_count,
+            duration: activity.duration
+          }
+        };
+        
+        setInfringements(prev => {
+          // Check if infringement already exists
+          if (prev.find(inf => inf.id === newInfringement.id)) {
+            return prev;
+          }
+          return [newInfringement, ...prev];
+        });
+        
+        // Update stats
+        setStats(prev => ({
+          ...prev,
+          total: prev.total + 1,
+          pending: prev.pending + 1
+        }));
+        
+        // Show notification
+        toast.current?.show({
+          severity: 'info',
+          summary: 'New Infringement Detected',
+          detail: `Found new infringement: ${activity.title}`,
+          life: 5000
+        });
+      } else if (activity.type === 'infringement_updated') {
+        // Update existing infringement
+        setInfringements(prev => prev.map(inf => 
+          inf.id === activity.infringement_id 
+            ? { ...inf, status: activity.status, lastUpdated: new Date(activity.timestamp) }
+            : inf
+        ));
+      }
+    });
+  }, [profileActivities]);
+  
+  // Handle real-time notifications
+  useEffect(() => {
+    notifications.forEach(notification => {
+      if (notification.category === 'infringement') {
+        toast.current?.show({
+          severity: notification.type === 'success' ? 'success' : 
+                   notification.type === 'error' ? 'error' : 'info',
+          summary: notification.title,
+          detail: notification.message,
+          life: 4000
+        });
+      }
+    });
+  }, [notifications]);
 
   // Helper functions
   const getStatusSeverity = (status: string) => {
@@ -351,46 +519,76 @@ const Infringements: React.FC = () => {
   };
 
   // Action handlers
-  const sendTakedown = (infringement: Infringement) => {
-    const updatedInfringement = { 
-      ...infringement, 
-      status: 'takedown_sent' as Infringement['status'],
-      takedownRequestId: `TKD-${Date.now()}`,
-      lastUpdated: new Date()
-    };
-    
-    setInfringements(infringements.map(i => 
-      i.id === infringement.id ? updatedInfringement : i
-    ));
-    
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Takedown Sent',
-      detail: `Takedown request sent for ${infringement.title}`,
-      life: 3000
-    });
+  const sendTakedown = async (infringement: Infringement) => {
+    try {
+      // Create takedown request via API
+      const response = await infringementApi.createTakedownFromInfringement(infringement.id);
+      
+      const updatedInfringement = { 
+        ...infringement, 
+        status: 'takedown_sent' as Infringement['status'],
+        takedownRequestId: response.data.id,
+        lastUpdated: new Date()
+      };
+      
+      setInfringements(infringements.map(i => 
+        i.id === infringement.id ? updatedInfringement : i
+      ));
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Takedown Sent',
+        detail: `Takedown request sent for ${infringement.title}`,
+        life: 3000
+      });
+    } catch (error: any) {
+      console.error('Takedown send error:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to send takedown request';
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Takedown Failed',
+        detail: errorMessage,
+        life: 5000
+      });
+    }
   };
 
-  const markAsFalsePositive = (infringement: Infringement) => {
-    const updatedInfringement = { 
-      ...infringement, 
-      status: 'false_positive' as Infringement['status'],
-      lastUpdated: new Date()
-    };
-    
-    setInfringements(infringements.map(i => 
-      i.id === infringement.id ? updatedInfringement : i
-    ));
-    
-    toast.current?.show({
-      severity: 'info',
-      summary: 'Marked as False Positive',
-      detail: 'Infringement marked as false positive',
-      life: 3000
-    });
+  const markAsFalsePositive = async (infringement: Infringement) => {
+    try {
+      // Update infringement status via API
+      await infringementApi.updateInfringement(infringement.id, {
+        status: 'false_positive'
+      });
+      
+      const updatedInfringement = { 
+        ...infringement, 
+        status: 'false_positive' as Infringement['status'],
+        lastUpdated: new Date()
+      };
+      
+      setInfringements(infringements.map(i => 
+        i.id === infringement.id ? updatedInfringement : i
+      ));
+      
+      toast.current?.show({
+        severity: 'info',
+        summary: 'Marked as False Positive',
+        detail: 'Infringement marked as false positive',
+        life: 3000
+      });
+    } catch (error: any) {
+      console.error('False positive marking error:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to mark as false positive';
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Update Failed',
+        detail: errorMessage,
+        life: 5000
+      });
+    }
   };
 
-  const bulkSendTakedowns = () => {
+  const bulkSendTakedowns = async () => {
     const eligibleInfringements = selectedInfringements.filter(
       i => ['pending', 'under_review'].includes(i.status)
     );
@@ -405,15 +603,39 @@ const Infringements: React.FC = () => {
       return;
     }
     
-    eligibleInfringements.forEach(infringement => sendTakedown(infringement));
-    setSelectedInfringements([]);
-    
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Bulk Takedowns Sent',
-      detail: `${eligibleInfringements.length} takedown requests sent`,
-      life: 3000
-    });
+    try {
+      // Use bulk action API
+      const response = await infringementApi.bulkAction({
+        action: 'send_takedown',
+        infringement_ids: eligibleInfringements.map(i => i.id)
+      });
+      
+      // Update local state for successful takedowns
+      const successfulIds = response.data.successful || eligibleInfringements.map(i => i.id);
+      setInfringements(infringements.map(i => 
+        successfulIds.includes(i.id) 
+          ? { ...i, status: 'takedown_sent' as Infringement['status'], lastUpdated: new Date() }
+          : i
+      ));
+      
+      setSelectedInfringements([]);
+      
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Bulk Takedowns Sent',
+        detail: `${successfulIds.length} takedown requests sent successfully`,
+        life: 3000
+      });
+    } catch (error: any) {
+      console.error('Bulk takedown error:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to send bulk takedowns';
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Bulk Operation Failed',
+        detail: errorMessage,
+        life: 5000
+      });
+    }
   };
 
   const showDetails = (infringement: Infringement, event: any) => {

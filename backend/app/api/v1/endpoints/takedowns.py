@@ -42,86 +42,165 @@ async def get_takedown_requests(
     db: Session = Depends(get_db)
 ) -> Any:
     """Get user's takedown requests with filtering."""
-    # Base query - only takedown requests for user
-    query = db.query(TakedownRequest)\
-        .filter(TakedownRequest.user_id == current_user.id)\
-        .options(joinedload(TakedownRequest.infringement))
+    # Mock data for local development
+    from app.core.config import settings
+    if settings.ENVIRONMENT == "local":
+        import random
+        
+        # Generate mock takedown requests
+        mock_takedowns = []
+        platforms = ["Twitter", "Instagram", "TikTok", "YouTube", "Reddit", "OnlyFans"]
+        statuses = ["DRAFT", "SENT", "PENDING", "ACCEPTED", "REJECTED", "ESCALATED"]
+        methods = ["EMAIL", "FORM", "API", "MANUAL"]
+        
+        for i in range(30):  # Generate 30 mock takedown requests
+            platform = random.choice(platforms)
+            status = random.choice(statuses)
+            method = random.choice(methods)
+            
+            mock_takedowns.append({
+                "id": i + 1,
+                "user_id": current_user.id,
+                "infringement_id": i + 1,
+                "infringement_url": f"https://{platform.lower()}.com/content/{i+2000}",
+                "platform": platform,
+                "status": status,
+                "method": method,
+                "recipient_email": f"legal@{platform.lower()}.com",
+                "recipient_name": f"{platform} Legal Team",
+                "subject": f"DMCA Takedown Notice - Content ID {i+2000}",
+                "body": f"This is a formal DMCA takedown notice for unauthorized content...",
+                "sent_at": datetime.utcnow() - timedelta(days=random.randint(0, 15)) if status != "DRAFT" else None,
+                "response_received_at": datetime.utcnow() - timedelta(days=random.randint(0, 5)) if status in ["ACCEPTED", "REJECTED"] else None,
+                "response_body": "Content has been removed" if status == "ACCEPTED" else None,
+                "attachments": [],
+                "metadata": {
+                    "tracking_id": f"DMCA-{i+1000}",
+                    "priority": random.choice(["low", "medium", "high"])
+                },
+                "created_at": datetime.utcnow() - timedelta(days=random.randint(0, 20)),
+                "updated_at": datetime.utcnow()
+            })
+        
+        # Apply filters
+        filtered = mock_takedowns
+        
+        if status_filter:
+            filtered = [t for t in filtered if t["status"] == status_filter]
+        
+        if platform:
+            filtered = [t for t in filtered if platform.lower() in t["platform"].lower()]
+        
+        if method:
+            filtered = [t for t in filtered if t["method"] == method]
+        
+        if search:
+            filtered = [t for t in filtered if 
+                       search.lower() in t["subject"].lower() or 
+                       search.lower() in t["recipient_email"].lower()]
+        
+        # Sort by created_at (newest first)
+        filtered.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        total = len(filtered)
+        
+        # Apply pagination
+        offset = (pagination.page - 1) * pagination.size
+        paginated_items = filtered[offset:offset + pagination.size]
+        
+        # Calculate pages
+        pages = (total + pagination.size - 1) // pagination.size if pagination.size > 0 else 0
+        
+        return PaginatedResponse(
+            items=paginated_items,
+            total=total,
+            page=pagination.page,
+            size=pagination.size,
+            pages=pages
+        )
     
-    # Apply filters
-    if status_filter:
-        query = query.filter(TakedownRequest.status == status_filter)
-    
-    if platform:
-        query = query.join(Infringement)\
-            .filter(Infringement.platform.ilike(f"%{platform}%"))
-    
-    if method:
-        query = query.filter(TakedownRequest.method == method)
-    
-    if date_from:
-        query = query.filter(TakedownRequest.created_at >= date_from)
-    
-    if date_to:
-        query = query.filter(TakedownRequest.created_at <= date_to)
-    
-    if search:
-        query = query.filter(
-            or_(
-                TakedownRequest.subject.ilike(f"%{search}%"),
-                TakedownRequest.recipient_email.ilike(f"%{search}%"),
-                TakedownRequest.recipient_name.ilike(f"%{search}%")
+    # Original database query code (for production)
+    else:
+        # Base query - only takedown requests for user
+        query = db.query(TakedownRequest)\
+            .filter(TakedownRequest.user_id == current_user.id)\
+            .options(joinedload(TakedownRequest.infringement))
+        
+        # Apply filters
+        if status_filter:
+            query = query.filter(TakedownRequest.status == status_filter)
+        
+        if platform:
+            query = query.join(Infringement)\
+                .filter(Infringement.platform.ilike(f"%{platform}%"))
+        
+        if method:
+            query = query.filter(TakedownRequest.method == method)
+        
+        if date_from:
+            query = query.filter(TakedownRequest.created_at >= date_from)
+        
+        if date_to:
+            query = query.filter(TakedownRequest.created_at <= date_to)
+        
+        if search:
+            query = query.filter(
+                or_(
+                    TakedownRequest.subject.ilike(f"%{search}%"),
+                    TakedownRequest.recipient_email.ilike(f"%{search}%"),
+                    TakedownRequest.recipient_name.ilike(f"%{search}%")
+                )
             )
+        
+        # Order by creation date (newest first)
+        query = query.order_by(desc(TakedownRequest.created_at))
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        offset = (pagination.page - 1) * pagination.size
+        takedowns = query.offset(offset).limit(pagination.size).all()
+        
+        # Calculate pages
+        pages = (total + pagination.size - 1) // pagination.size
+        
+        # Transform to response format
+        items = []
+        for takedown in takedowns:
+            item = TakedownSchema(
+                id=takedown.id,
+                user_id=takedown.user_id,
+                infringement_id=takedown.infringement_id,
+                infringement_url=takedown.infringement.url if takedown.infringement else "",
+                platform=takedown.infringement.platform if takedown.infringement else "",
+                status=takedown.status,
+                method=takedown.method,
+                recipient_email=takedown.recipient_email,
+                recipient_name=takedown.recipient_name,
+                subject=takedown.subject,
+                body=takedown.body,
+                legal_basis=takedown.legal_basis,
+                copyright_statement=takedown.copyright_statement,
+                good_faith_statement=takedown.good_faith_statement,
+                accuracy_statement=takedown.accuracy_statement,
+                notes=takedown.notes,
+                sent_at=takedown.sent_at,
+                acknowledged_at=takedown.acknowledged_at,
+                resolved_at=takedown.resolved_at,
+                expires_at=takedown.expires_at,
+                created_at=takedown.created_at,
+                updated_at=takedown.updated_at
+            )
+            items.append(item)
+        
+        return PaginatedResponse(
+            items=items,
+            total=total,
+            page=pagination.page,
+            size=pagination.size,
+            pages=pages
         )
-    
-    # Order by creation date (newest first)
-    query = query.order_by(desc(TakedownRequest.created_at))
-    
-    # Get total count
-    total = query.count()
-    
-    # Apply pagination
-    offset = (pagination.page - 1) * pagination.size
-    takedowns = query.offset(offset).limit(pagination.size).all()
-    
-    # Calculate pages
-    pages = (total + pagination.size - 1) // pagination.size
-    
-    # Transform to response format
-    items = []
-    for takedown in takedowns:
-        item = TakedownSchema(
-            id=takedown.id,
-            user_id=takedown.user_id,
-            infringement_id=takedown.infringement_id,
-            infringement_url=takedown.infringement.url if takedown.infringement else "",
-            platform=takedown.infringement.platform if takedown.infringement else "",
-            status=takedown.status,
-            method=takedown.method,
-            recipient_email=takedown.recipient_email,
-            recipient_name=takedown.recipient_name,
-            subject=takedown.subject,
-            body=takedown.body,
-            legal_basis=takedown.legal_basis,
-            copyright_statement=takedown.copyright_statement,
-            good_faith_statement=takedown.good_faith_statement,
-            accuracy_statement=takedown.accuracy_statement,
-            notes=takedown.notes,
-            sent_at=takedown.sent_at,
-            acknowledged_at=takedown.acknowledged_at,
-            resolved_at=takedown.resolved_at,
-            expires_at=takedown.expires_at,
-            created_at=takedown.created_at,
-            updated_at=takedown.updated_at
-        )
-        items.append(item)
-    
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=pagination.page,
-        size=pagination.size,
-        pages=pages
-    )
 
 
 @router.get("/stats", response_model=TakedownStats)

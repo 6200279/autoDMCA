@@ -23,8 +23,24 @@
       "Bash(pip install:*)",
       "mcp__serena__think_about_whether_you_are_done",
       "Bash(chmod:*)",
-      "WebFetch(domain:docs.dokploy.com)"
+      "WebFetch(domain:docs.dokploy.com)",
+      "WebSearch",
+      "Bash(docker-compose:*)",
+      "WebFetch(domain:www.hetzner.com)",
+      "WebFetch(domain:docs.hetzner.com)",
+      "Bash(docker logs:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker restart:*)",
+      "Bash(docker stop:*)",
+      "mcp__serena__think_about_collected_information",
+      "mcp__serena__think_about_task_adherence",
+      "Bash(mkdir:*)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\stijn\\autoDMCA"
+    ]
   }
 }

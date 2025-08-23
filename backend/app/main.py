@@ -124,6 +124,35 @@ app = FastAPI(
 
 # Security middleware stack (order matters - most restrictive first)
 
+# CORS MUST be added FIRST to handle preflight requests
+if settings.BACKEND_CORS_ORIGINS:
+    logger.info(f"Adding CORS middleware with origins: {settings.BACKEND_CORS_ORIGINS}")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+else:
+    # Fallback for local development - allow specific origins
+    logger.warning("No CORS origins configured - using local development CORS")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:13000", 
+            "http://localhost:3000", 
+            "http://127.0.0.1:13000", 
+            "http://127.0.0.1:3000",
+            "http://frontend:8080"
+        ],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+
 # 1. Input validation middleware (first line of defense)
 app.add_middleware(
     InputValidationMiddleware,
@@ -174,15 +203,7 @@ app.add_middleware(
     log_response_body=False
 )
 
-# Set all CORS enabled origins
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# CORS middleware already added at the beginning of the stack
 
 # Add trusted host middleware
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)

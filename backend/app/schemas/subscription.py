@@ -52,7 +52,7 @@ class PaymentStatus(str, Enum):
 class SubscriptionBase(BaseModel):
     """Base subscription schema."""
     plan: SubscriptionPlan
-    billing_interval: BillingInterval = BillingInterval.MONTHLY
+    billing_interval: BillingInterval = BillingInterval.MONTH
 
 
 class SubscriptionCreate(SubscriptionBase):

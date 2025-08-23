@@ -1,14 +1,26 @@
 # Multi-stage build for production
-FROM node:18-alpine as builder
+FROM node:18-slim as builder
 
 # Set working directory
 WORKDIR /app
 
+# Accept build-time arguments
+ARG VITE_API_BASE_URL
+ARG VITE_WS_URL
+ARG VITE_LOCAL_TESTING
+ARG VITE_ENVIRONMENT
+
+# Set environment variables for build
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+ENV VITE_LOCAL_TESTING=$VITE_LOCAL_TESTING
+ENV VITE_ENVIRONMENT=$VITE_ENVIRONMENT
+
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (including dev dependencies for build)
+RUN npm ci
 
 # Copy source code
 COPY . .

@@ -412,6 +412,217 @@ class StripeService:
         except stripe.error.SignatureVerificationError as e:
             logger.error(f"Invalid webhook signature: {str(e)}")
             raise
+    
+    # ========== GIFT SUBSCRIPTION METHODS ==========
+    
+    async def create_gift_payment_intent(
+        self,
+        customer_id: str,
+        amount: int,
+        currency: str = "usd",
+        gift_code: str = None,
+        recipient_email: str = None,
+        metadata: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """Create a payment intent for a gift subscription purchase."""
+        try:
+            payment_intent_metadata = {
+                "type": "gift_subscription",
+                "gift_code": gift_code or "",
+                "recipient_email": recipient_email or "",
+                **(metadata or {})
+            }
+            
+            payment_intent = stripe.PaymentIntent.create(
+                amount=amount,
+                currency=currency,
+                customer=customer_id,
+                payment_method_types=["card"],
+                capture_method="automatic",
+                confirmation_method="automatic",
+                metadata=payment_intent_metadata,
+                receipt_email=None,  # We'll handle gift notifications separately
+                description=f"Gift subscription for {recipient_email}",
+                idempotency_key=f"gift_{gift_code}_{customer_id}"
+            )
+            
+            logger.info(f"Created gift payment intent: {payment_intent.id} for amount: {amount}")
+            return payment_intent
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to create gift payment intent: {str(e)}")
+            raise
+    
+    async def confirm_gift_payment_intent(
+        self,
+        payment_intent_id: str,
+        payment_method_id: str
+    ) -> Dict[str, Any]:
+        """Confirm a gift subscription payment intent."""
+        try:
+            payment_intent = stripe.PaymentIntent.confirm(
+                payment_intent_id,
+                payment_method=payment_method_id,
+                return_url=f"{settings.FRONTEND_URL}/gift/success"
+            )
+            
+            logger.info(f"Confirmed gift payment intent: {payment_intent_id}")
+            return payment_intent
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to confirm gift payment intent {payment_intent_id}: {str(e)}")
+            raise
+    
+    async def get_gift_payment_intent(self, payment_intent_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a gift payment intent."""
+        try:
+            payment_intent = stripe.PaymentIntent.retrieve(
+                payment_intent_id,
+                expand=["latest_charge", "payment_method"]
+            )
+            return payment_intent
+        except stripe.error.InvalidRequestError:
+            logger.warning(f"Gift payment intent not found: {payment_intent_id}")
+            return None
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to retrieve gift payment intent {payment_intent_id}: {str(e)}")
+            raise
+    
+    async def refund_gift_payment(
+        self,
+        charge_id: str,
+        amount: Optional[int] = None,
+        reason: str = "requested_by_customer",
+        metadata: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """Refund a gift subscription payment."""
+        try:
+            refund_data = {
+                "charge": charge_id,
+                "reason": reason,
+                "metadata": {
+                    "type": "gift_refund",
+                    **(metadata or {})
+                }
+            }
+            
+            if amount:
+                refund_data["amount"] = amount
+            
+            refund = stripe.Refund.create(**refund_data)
+            logger.info(f"Created gift refund: {refund.id} for charge: {charge_id}")
+            return refund
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to refund gift payment {charge_id}: {str(e)}")
+            raise
+    
+    async def create_gift_checkout_session(
+        self,
+        customer_id: str,
+        plan: SubscriptionPlan,
+        interval: BillingInterval,
+        gift_code: str,
+        recipient_email: str,
+        success_url: str,
+        cancel_url: str,
+        metadata: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """Create a Stripe Checkout session for gift subscription purchase."""
+        try:
+            plan_config = self.get_plan_config(plan, interval)
+            
+            checkout_metadata = {
+                "type": "gift_subscription",
+                "gift_code": gift_code,
+                "recipient_email": recipient_email,
+                "plan": plan.value,
+                "interval": interval.value,
+                **(metadata or {})
+            }
+            
+            session = stripe.checkout.Session.create(
+                customer=customer_id,
+                payment_method_types=["card"],
+                mode="payment",
+                line_items=[{
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {
+                            "name": f"Gift Subscription - {plan.value.title()} Plan ({interval.value.title()})",
+                            "description": f"Gift subscription for {recipient_email}",
+                            "images": [],  # Add product images if available
+                        },
+                        "unit_amount": plan_config["price"],
+                    },
+                    "quantity": 1,
+                }],
+                success_url=success_url,
+                cancel_url=cancel_url,
+                metadata=checkout_metadata,
+                customer_creation="always",
+                invoice_creation={
+                    "enabled": True,
+                    "invoice_data": {
+                        "description": f"Gift subscription purchase",
+                        "metadata": checkout_metadata,
+                        "custom_fields": [
+                            {
+                                "name": "Gift Recipient",
+                                "value": recipient_email
+                            }
+                        ]
+                    }
+                }
+            )
+            
+            logger.info(f"Created gift checkout session: {session.id}")
+            return session
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to create gift checkout session: {str(e)}")
+            raise
+    
+    async def get_checkout_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a checkout session."""
+        try:
+            session = stripe.checkout.Session.retrieve(
+                session_id,
+                expand=["payment_intent", "customer"]
+            )
+            return session
+        except stripe.error.InvalidRequestError:
+            logger.warning(f"Checkout session not found: {session_id}")
+            return None
+        except stripe.error.StripeError as e:
+            logger.error(f"Failed to retrieve checkout session {session_id}: {str(e)}")
+            raise
+    
+    def calculate_gift_price(
+        self, 
+        plan: SubscriptionPlan, 
+        interval: BillingInterval,
+        discount_percentage: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Calculate the price for a gift subscription with optional discount."""
+        plan_config = self.get_plan_config(plan, interval)
+        base_price = plan_config["price"]
+        
+        if discount_percentage and 0 < discount_percentage <= 100:
+            discount_amount = int(base_price * (discount_percentage / 100))
+            final_price = base_price - discount_amount
+        else:
+            discount_amount = 0
+            final_price = base_price
+        
+        return {
+            "base_price": base_price,
+            "discount_amount": discount_amount,
+            "final_price": final_price,
+            "currency": "USD",
+            "plan": plan.value,
+            "interval": interval.value
+        }
 
 
 # Create singleton instance

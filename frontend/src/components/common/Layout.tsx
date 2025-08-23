@@ -15,6 +15,8 @@ import { MenuItem } from 'primereact/menuitem';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLayout, useLayoutTheme, useLayoutSidebar, useLayoutNotifications } from '../../contexts/LayoutContext';
 import { NavigationItem, BreadcrumbItem, LayoutProps, NotificationItem } from '../../types/layout';
+import FeatureStatusBadge from './FeatureStatusBadge';
+import SidebarMenu from './SidebarMenu';
 import './Layout.css';
 
 // Re-export types for convenience (they're now imported from types/layout.ts)
@@ -25,65 +27,94 @@ const navigationItems: NavigationItem[] = [
   {
     label: 'Dashboard',
     icon: 'pi pi-home',
-    path: '/dashboard'
+    path: '/dashboard',
+    status: 'functional',
+    description: 'Real-time analytics and overview of your content protection'
   },
   {
     label: 'Content Protection',
     icon: 'pi pi-shield',
     path: '/protection',
+    status: 'partial',
+    description: 'Manage protected profiles and monitor infringements',
     children: [
       {
         label: 'Profiles',
         icon: 'pi pi-user',
-        path: '/protection/profiles'
+        path: '/protection/profiles',
+        status: 'functional',
+        description: 'Manage your protected content profiles'
       },
       {
         label: 'Infringements',
         icon: 'pi pi-exclamation-triangle',
-        path: '/protection/infringements'
+        path: '/protection/infringements',
+        status: 'partial',
+        description: 'View detected infringements (currently showing mock data)'
       },
       {
         label: 'Takedown Requests',
         icon: 'pi pi-file',
-        path: '/protection/takedowns'
+        path: '/protection/takedowns',
+        status: 'partial', 
+        description: 'Manage DMCA takedown requests (display only)'
       },
       {
         label: 'Submissions',
         icon: 'pi pi-upload',
-        path: '/protection/submissions'
+        path: '/protection/submissions',
+        status: 'coming-soon',
+        expectedDate: 'Q2 2024',
+        description: 'Bulk content upload and submission system'
       },
       {
         label: 'DMCA Templates',
         icon: 'pi pi-book',
-        path: '/protection/templates'
+        path: '/protection/templates',
+        status: 'coming-soon',
+        expectedDate: 'Q2 2024',
+        description: 'Professional DMCA takedown notice templates'
       },
       {
         label: 'Search Engine Delisting',
         icon: 'pi pi-search-minus',
-        path: '/protection/search-delisting'
+        path: '/protection/search-delisting',
+        status: 'coming-soon',
+        expectedDate: 'Q4 2024',
+        description: 'Automated search engine delisting requests'
       }
     ]
   },
   {
     label: 'Analytics & Reports',
     icon: 'pi pi-chart-bar',
-    path: '/reports'
+    path: '/reports',
+    status: 'coming-soon',
+    expectedDate: 'Q3 2024',
+    description: 'Comprehensive reporting and analytics dashboard'
   },
   {
     label: 'Billing & Account',
     icon: 'pi pi-credit-card',
-    path: '/billing'
+    path: '/billing',
+    status: 'partial',
+    description: 'Subscription management (payment processing coming soon)'
   },
   {
     label: 'Settings',
     icon: 'pi pi-cog',
-    path: '/settings'
+    path: '/settings',
+    status: 'partial',
+    description: 'User preferences and account settings (saving coming soon)'
   },
   {
     label: 'Admin Panel',
     icon: 'pi pi-users',
     path: '/admin',
-    adminOnly: true
+    adminOnly: true,
+    status: 'coming-soon',
+    expectedDate: 'Q2 2024',
+    description: 'Administrative interface for user and system management'
   }
 ];
 
@@ -202,17 +233,6 @@ export const Layout: React.FC<LayoutProps> = ({
     });
   };
 
-  // Generate sidebar menu items
-  const generateSidebarItems = (items: NavigationItem[]): MenuItem[] => {
-    return items.map(item => ({
-      label: item.label,
-      icon: item.icon,
-      badge: item.badge,
-      className: isActiveRoute(item.path) ? 'active-menu-item' : '',
-      command: () => handleNavigation(item.path),
-      items: item.children ? generateSidebarItems(item.children) : undefined
-    }));
-  };
 
   // User menu items
   const userMenuItems: MenuItem[] = [
@@ -440,8 +460,10 @@ export const Layout: React.FC<LayoutProps> = ({
               <p className="text-color-secondary m-0">Content Protection</p>
             </div>
             <Divider className="my-2" />
-            <Menu
-              model={generateSidebarItems(getFilteredNavigationItems())}
+            <SidebarMenu
+              items={getFilteredNavigationItems()}
+              onNavigate={handleNavigation}
+              isActiveRoute={isActiveRoute}
               className="sidebar-menu"
             />
           </div>
@@ -457,8 +479,10 @@ export const Layout: React.FC<LayoutProps> = ({
               <p className="text-color-secondary m-0">Content Protection</p>
             </div>
             <Divider className="my-2" />
-            <Menu
-              model={generateSidebarItems(getFilteredNavigationItems())}
+            <SidebarMenu
+              items={getFilteredNavigationItems()}
+              onNavigate={handleNavigation}
+              isActiveRoute={isActiveRoute}
               className="sidebar-menu"
             />
           </div>

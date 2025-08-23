@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Protection Platform - Local Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .loading { background: #fff3cd; border: 1px solid #ffeaa7; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .log { background: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Content Protection Platform</h1>
+            <h2>Local Testing Dashboard</h2>
+        </div>
+
+        <div class="test-section">
+            <h3>🔗 Service Connectivity Tests</h3>
+            <div id="connectivity-status" class="status loading">Testing connectivity...</div>
+            <button onclick="testConnectivity()" id="test-connectivity-btn">Test API Connection</button>
+            <button onclick="testDatabase()" id="test-database-btn">Test Database</button>
+            <button onclick="testRedis()" id="test-redis-btn">Test Redis</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🚀 Quick Tests</h3>
+            <button onclick="testHealthEndpoint()">Health Check</button>
+            <button onclick="testAuthEndpoint()">Authentication Test</button>
+            <button onclick="runFullValidation()">Full Validation</button>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Service Status</h3>
+            <div id="service-status">
+                <div>Backend API: <span id="backend-status">❓ Unknown</span></div>
+                <div>Database: <span id="database-status">❓ Unknown</span></div>
+                <div>Redis: <span id="redis-status">❓ Unknown</span></div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 Test Log</h3>
+            <div id="test-log" class="log">Local testing dashboard loaded successfully.
+Ready to test Content Protection Platform services...
+</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 Useful Commands</h3>
+            <code>docker-compose -f docker-compose.simple.yml ps</code><br>
+            <code>docker-compose -f docker-compose.simple.yml logs backend-dev</code><br>
+            <code>curl http://localhost:8000/health</code><br>
+            <code>curl http://localhost:8000/docs</code>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        const log = document.getElementById('test-log');
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            log.textContent += `\n[${timestamp}] ${prefix} ${message}`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateStatus(elementId, status, isSuccess) {
+            const element = document.getElementById(elementId);
+            element.textContent = isSuccess ? `✅ ${status}` : `❌ ${status}`;
+        }
+
+        async function testConnectivity() {
+            addLog('Testing API connectivity...');
+            try {
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addLog(`API connectivity successful: ${JSON.stringify(data)}`, 'success');
+                    updateStatus('backend-status', 'Connected', true);
+                } else {
+                    addLog(`API returned status: ${response.status}`, 'error');
+                    updateStatus('backend-status', 'Error', false);
+                }
+            } catch (error) {
+                addLog(`API connectivity failed: ${error.message}`, 'error');
+                updateStatus('backend-status', 'Disconnected', false);
+            }
+        }
+
+        async function testHealthEndpoint() {
+            addLog('Testing health endpoint...');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                addLog(`Health check result: ${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                addLog(`Health check failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuthEndpoint() {
+            addLog('Testing authentication endpoint...');
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@local.com',
+                        password: 'testpass123',
+                        full_name: 'Test User'
+                    })
+                });
+                
+                if (response.status === 201 || response.status === 400) {
+                    addLog('Authentication endpoint is responding correctly', 'success');
+                } else {
+                    addLog(`Authentication endpoint returned: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                addLog(`Authentication test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testDatabase() {
+            addLog('Testing database connectivity through API...');
+            // This would need a dedicated endpoint in the backend
+            addLog('Database test requires backend API to be running', 'info');
+        }
+
+        async function testRedis() {
+            addLog('Testing Redis connectivity through API...');
+            // This would need a dedicated endpoint in the backend
+            addLog('Redis test requires backend API to be running', 'info');
+        }
+
+        async function runFullValidation() {
+            addLog('=== Running Full Validation ===');
+            await testConnectivity();
+            await testHealthEndpoint();
+            await testAuthEndpoint();
+            addLog('=== Full Validation Complete ===', 'success');
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            setTimeout(testConnectivity, 2000);
+        });
+    </script>
+</body>
+</html>

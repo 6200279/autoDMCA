@@ -40,6 +40,7 @@ import {
   QuickActionsData,
   ApiResponse 
 } from '../types/api';
+import { useDashboardRealtime, useNotificationsRealtime } from '../contexts/WebSocketContext';
 
 // Register Chart.js components
 ChartJS.register(
@@ -79,6 +80,10 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const toast = useRef<Toast>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // WebSocket real-time updates
+  const { dashboardStats: realtimeStats } = useDashboardRealtime();
+  const { notifications } = useNotificationsRealtime();
   
   const [dateRange, setDateRange] = useState<Date[]>([
     new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -298,6 +303,32 @@ const Dashboard: React.FC = () => {
       };
     }
   }, [preferences, refreshAllData]);
+  
+  // Handle real-time dashboard stats updates
+  useEffect(() => {
+    if (realtimeStats) {
+      setStats(prevStats => ({
+        ...prevStats,
+        ...realtimeStats
+      }));
+    }
+  }, [realtimeStats]);
+  
+  // Handle real-time notifications
+  useEffect(() => {
+    notifications.forEach(notification => {
+      if (notification.category === 'dashboard' || notification.category === 'system') {
+        toast.current?.show({
+          severity: notification.type === 'success' ? 'success' : 
+                   notification.type === 'error' ? 'error' : 
+                   notification.type === 'warning' ? 'warn' : 'info',
+          summary: notification.title,
+          detail: notification.message,
+          life: 5000
+        });
+      }
+    });
+  }, [notifications]);
 
   // Chart data - using real analytics data with fallbacks
   const monthlyTrendsData = analyticsData?.monthlyTrends || {

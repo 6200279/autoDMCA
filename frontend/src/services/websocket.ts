@@ -26,6 +26,12 @@ class SimpleEventEmitter {
       this.listeners = {};
     }
   }
+
+  setMaxListeners(n: number) {
+    // Browser implementation - just a no-op for compatibility
+    // In browser environment we don't have the same memory pressure concerns as Node.js
+    return this;
+  }
 }
 
 // WebSocket connection states

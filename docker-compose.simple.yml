@@ -1,0 +1,86 @@
+# Simplified Docker Compose for Local Testing
+# Focuses on core database services and basic connectivity tests
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: content-protection-db-simple
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=contentprotection
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=localtest123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_simple:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    networks:
+      - content-protection
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: content-protection-redis-simple
+    restart: unless-stopped
+    command: redis-server --requirepass localredis123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_simple:/data
+    networks:
+      - content-protection
+
+  # Simple Backend API (using Python directly)
+  backend-dev:
+    image: python:3.11-slim
+    container_name: content-protection-api-simple
+    working_dir: /app
+    environment:
+      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - REDIS_URL=redis://:localredis123@redis:6379/0
+      - ENVIRONMENT=local
+      - SECRET_KEY=local-secret-key-for-testing-only
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - content-protection
+    command: >
+      bash -c "
+        pip install -r requirements.txt &&
+        python -c 'import time; time.sleep(10)' &&
+        echo 'Backend development server ready' &&
+        python -m uvicorn app.startup:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  # Nginx for static file serving (simulates frontend)
+  frontend-simple:
+    image: nginx:alpine
+    container_name: content-protection-frontend-simple
+    ports:
+      - "3000:80"
+    volumes:
+      - ./test-frontend:/usr/share/nginx/html
+    depends_on:
+      - backend-dev
+    networks:
+      - content-protection
+
+volumes:
+  postgres_data_simple:
+    driver: local
+  redis_data_simple:
+    driver: local
+
+networks:
+  content-protection:
+    driver: bridge

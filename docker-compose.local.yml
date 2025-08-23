@@ -1,0 +1,176 @@
+# Docker Compose for Local Development - Real Frontend & Lightweight Backend
+# Uses lightweight backend for fast builds and real frontend with full UI
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: content-protection-db-local
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=contentprotection
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=localtest123
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+      - ./database:/docker-entrypoint-initdb.d
+    networks:
+      - content-protection
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d contentprotection"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: content-protection-redis-local
+    restart: unless-stopped
+    command: redis-server --requirepass localredis123
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_data_local:/data
+    networks:
+      - content-protection
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "localredis123", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API - Lightweight Local Build
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.local
+    container_name: content-protection-api-local
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - REDIS_URL=redis://:localredis123@redis:6379/0
+      - ENVIRONMENT=local
+      - SECRET_KEY=local-secret-key-for-testing-only-never-use-in-production
+      - FRONTEND_URL=http://localhost:13000
+      - API_URL=http://localhost:18000
+      - BACKEND_CORS_ORIGINS=http://localhost:13000,http://127.0.0.1:13000,http://frontend:8080
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend,0.0.0.0
+      - LOG_LEVEL=DEBUG
+      - ENABLE_EXTERNAL_APIS=false
+      - SMTP_SERVER=localhost
+      - SMTP_USERNAME=test
+      - SMTP_PASSWORD=test
+      # Disable AI features for local development
+      - DISABLE_AI_PROCESSING=true
+      - DISABLE_IMAGE_RECOGNITION=true
+    ports:
+      - "18000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./backend/.env.local:/app/.env.local:ro
+    networks:
+      - content-protection
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend - Full Production Build
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+      args:
+        VITE_API_BASE_URL: http://localhost:18000/api/v1
+        VITE_WS_URL: ws://localhost:18000/ws
+        VITE_LOCAL_TESTING: true
+        VITE_ENVIRONMENT: local
+    container_name: content-protection-frontend-local
+    restart: unless-stopped
+    ports:
+      - "13000:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - content-protection
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker - Background Tasks (Lightweight)
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.local
+    container_name: content-protection-worker-local
+    restart: unless-stopped
+    command: celery -A app.celery worker --loglevel=debug --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - REDIS_URL=redis://:localredis123@redis:6379/0
+      - ENVIRONMENT=local
+      - SECRET_KEY=local-secret-key-for-testing-only-never-use-in-production
+      - LOG_LEVEL=DEBUG
+      # Disable AI features for local development
+      - DISABLE_AI_PROCESSING=true
+      - DISABLE_IMAGE_RECOGNITION=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    networks:
+      - content-protection
+
+  # Celery Beat - Scheduled Tasks (Optional)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.local
+    container_name: content-protection-scheduler-local
+    restart: unless-stopped
+    command: celery -A app.celery beat --loglevel=debug
+    environment:
+      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - REDIS_URL=redis://:localredis123@redis:6379/0
+      - ENVIRONMENT=local
+      - SECRET_KEY=local-secret-key-for-testing-only-never-use-in-production
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - content-protection
+
+volumes:
+  postgres_data_local:
+    driver: local
+  redis_data_local:
+    driver: local
+
+networks:
+  content-protection:
+    driver: bridge
+    name: content-protection-local

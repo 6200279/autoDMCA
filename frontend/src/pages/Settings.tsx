@@ -24,6 +24,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
 import { useAuth } from '../contexts/AuthContext';
+import { userApi } from '../services/api';
 
 // TypeScript interfaces
 interface UserSettings {
@@ -265,15 +266,55 @@ const Settings: React.FC = () => {
 
   // Initialize data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setActivityLogs(mockActivityLogs);
-      if (user?.avatar) {
-        setAvatarPreview(user.avatar);
+    const loadUserData = async () => {
+      if (!user) return;
+      
+      try {
+        // Load user settings from backend
+        const [settingsResponse, activityResponse, apiKeysResponse] = await Promise.all([
+          userApi.getUserSettings(),
+          userApi.getUserActivity(),
+          userApi.getApiKeys()
+        ]);
+        
+        if (settingsResponse.data) {
+          setSettings({
+            ...settings,
+            ...settingsResponse.data,
+            profile: {
+              ...settings.profile,
+              firstName: user.first_name || '',
+              lastName: user.last_name || '',
+              email: user.email || '',
+              avatar: user.avatar || ''
+            },
+            api: {
+              ...settings.api,
+              keys: apiKeysResponse?.data || settings.api.keys
+            }
+          });
+        }
+        
+        if (activityResponse.data) {
+          setActivityLogs(activityResponse.data.slice(0, 20)); // Last 20 activities
+        }
+        
+        if (user.avatar) {
+          setAvatarPreview(user.avatar);
+        }
+      } catch (error) {
+        console.error('Failed to load user data:', error);
+        // Fallback to mock data if API fails
+        setActivityLogs(mockActivityLogs);
+        if (user.avatar) {
+          setAvatarPreview(user.avatar);
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, 1000);
+    };
 
-    return () => clearTimeout(timer);
+    loadUserData();
   }, [user]);
 
   // Helper functions
@@ -295,11 +336,29 @@ const Settings: React.FC = () => {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Update user profile
+      await userApi.updateUser({
+        first_name: settings.profile.firstName,
+        last_name: settings.profile.lastName,
+        phone: settings.profile.phone,
+        timezone: settings.profile.timezone,
+        language: settings.profile.language,
+        date_format: settings.profile.dateFormat
+      });
+      
+      // Update user settings
+      await userApi.updateUserSettings({
+        notifications: settings.notifications,
+        privacy: settings.privacy,
+        security: settings.security,
+        api: settings.api
+      });
+      
       showToast('success', 'Settings Saved', 'Your settings have been updated successfully');
-    } catch (error) {
-      showToast('error', 'Save Failed', 'Unable to save settings. Please try again.');
+    } catch (error: any) {
+      console.error('Settings save error:', error);
+      const errorMessage = error.response?.data?.detail || 'Unable to save settings. Please try again.';
+      showToast('error', 'Save Failed', errorMessage);
     } finally {
       setSaving(false);
     }
@@ -317,57 +376,73 @@ const Settings: React.FC = () => {
     }
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await userApi.changePassword({
+        current_password: passwordForm.currentPassword,
+        new_password: passwordForm.newPassword
+      });
+      
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       showToast('success', 'Password Changed', 'Your password has been updated successfully');
-    } catch (error) {
-      showToast('error', 'Change Failed', 'Unable to change password. Please try again.');
+    } catch (error: any) {
+      console.error('Password change error:', error);
+      const errorMessage = error.response?.data?.detail || 'Unable to change password. Please try again.';
+      showToast('error', 'Change Failed', errorMessage);
     }
   };
 
-  const onAvatarUpload = (event: any) => {
+  const onAvatarUpload = async (event: any) => {
     const file = event.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setAvatarPreview(e.target?.result as string);
+      try {
+        const response = await userApi.uploadAvatar(file);
+        const avatarUrl = response.data.avatar_url;
+        
+        setAvatarPreview(avatarUrl);
         setSettings({
           ...settings,
-          profile: { ...settings.profile, avatar: e.target?.result as string }
+          profile: { ...settings.profile, avatar: avatarUrl }
         });
-      };
-      reader.readAsDataURL(file);
+        
+        showToast('success', 'Avatar Updated', 'Your profile picture has been updated successfully');
+      } catch (error: any) {
+        console.error('Avatar upload error:', error);
+        const errorMessage = error.response?.data?.detail || 'Unable to upload avatar. Please try again.';
+        showToast('error', 'Upload Failed', errorMessage);
+      }
     }
   };
 
-  const createApiKey = () => {
+  const createApiKey = async () => {
     if (!newApiKeyName.trim()) {
       showToast('error', 'Missing Name', 'Please provide a name for the API key');
       return;
     }
 
-    const newKey: ApiKey = {
-      id: Date.now().toString(),
-      name: newApiKeyName,
-      key: `ak_${Date.now()}_${'x'.repeat(20)}`,
-      permissions: selectedPermissions,
-      createdAt: new Date(),
-      isActive: true
-    };
+    try {
+      const response = await userApi.createApiKey({
+        name: newApiKeyName,
+        permissions: selectedPermissions
+      });
+      
+      const newKey = response.data;
+      
+      setSettings({
+        ...settings,
+        api: {
+          ...settings.api,
+          keys: [...settings.api.keys, newKey]
+        }
+      });
 
-    setSettings({
-      ...settings,
-      api: {
-        ...settings.api,
-        keys: [...settings.api.keys, newKey]
-      }
-    });
-
-    setApiKeyDialog(false);
-    setNewApiKeyName('');
-    setSelectedPermissions([]);
-    showToast('success', 'API Key Created', 'New API key has been generated');
+      setApiKeyDialog(false);
+      setNewApiKeyName('');
+      setSelectedPermissions([]);
+      showToast('success', 'API Key Created', 'New API key has been generated');
+    } catch (error: any) {
+      console.error('API key creation error:', error);
+      const errorMessage = error.response?.data?.detail || 'Unable to create API key. Please try again.';
+      showToast('error', 'Creation Failed', errorMessage);
+    }
   };
 
   const revokeApiKey = (keyId: string) => {
@@ -375,15 +450,23 @@ const Settings: React.FC = () => {
       message: 'Are you sure you want to revoke this API key? This action cannot be undone.',
       header: 'Revoke API Key',
       icon: 'pi pi-exclamation-triangle',
-      accept: () => {
-        setSettings({
-          ...settings,
-          api: {
-            ...settings.api,
-            keys: settings.api.keys.filter(k => k.id !== keyId)
-          }
-        });
-        showToast('success', 'API Key Revoked', 'The API key has been revoked');
+      accept: async () => {
+        try {
+          await userApi.revokeApiKey(keyId);
+          
+          setSettings({
+            ...settings,
+            api: {
+              ...settings.api,
+              keys: settings.api.keys.filter(k => k.id !== keyId)
+            }
+          });
+          showToast('success', 'API Key Revoked', 'The API key has been revoked');
+        } catch (error: any) {
+          console.error('API key revocation error:', error);
+          const errorMessage = error.response?.data?.detail || 'Unable to revoke API key. Please try again.';
+          showToast('error', 'Revocation Failed', errorMessage);
+        }
       }
     });
   };

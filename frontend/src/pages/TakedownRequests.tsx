@@ -25,6 +25,8 @@ import { OverlayPanel } from 'primereact/overlaypanel';
 import { Steps } from 'primereact/steps';
 import { FilterMatchMode } from 'primereact/api';
 import { useAuth } from '../contexts/AuthContext';
+import { takedownApi } from '../services/api';
+import { useNotificationsRealtime } from '../contexts/WebSocketContext';
 
 // TypeScript interfaces
 interface TakedownRequest {
@@ -85,6 +87,9 @@ const TakedownRequests: React.FC = () => {
   const { user } = useAuth();
   const toast = useRef<Toast>(null);
   const timelineOverlay = useRef<OverlayPanel>(null);
+  
+  // WebSocket real-time updates
+  const { notifications } = useNotificationsRealtime();
 
   // State management
   const [takedownRequests, setTakedownRequests] = useState<TakedownRequest[]>([]);
@@ -407,44 +412,177 @@ const TakedownRequests: React.FC = () => {
 
   // Initialize data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setTakedownRequests(mockTakedownRequests);
-      
-      // Calculate stats
-      const total = mockTakedownRequests.length;
-      const submitted = mockTakedownRequests.filter(r => r.status === 'submitted').length;
-      const underReview = mockTakedownRequests.filter(r => r.status === 'under_review').length;
-      const accepted = mockTakedownRequests.filter(r => r.status === 'accepted').length;
-      const rejected = mockTakedownRequests.filter(r => r.status === 'rejected').length;
-      const completed = mockTakedownRequests.filter(r => r.status === 'completed').length;
-      const counterNoticed = mockTakedownRequests.filter(r => r.status === 'counter_noticed').length;
-      
-      const successful = accepted + completed;
-      const resolved = successful + rejected;
-      const successRate = resolved > 0 ? Math.round((successful / resolved) * 100) : 0;
-      
-      const avgResponseTime = mockTakedownRequests
-        .filter(r => r.responseTime)
-        .reduce((sum, r) => sum + (r.responseTime || 0), 0) / 
-        mockTakedownRequests.filter(r => r.responseTime).length;
-      
-      setStats({
-        total,
-        submitted,
-        underReview,
-        accepted,
-        rejected,
-        completed,
-        counterNoticed,
-        successRate,
-        avgResponseTime: Math.round(avgResponseTime)
-      });
-      
-      setLoading(false);
-    }, 1000);
+    const loadTakedownRequests = async () => {
+      try {
+        setLoading(true);
+        
+        // Load takedown requests from backend
+        const response = await takedownApi.getTakedowns({
+          page: 1,
+          limit: 100,
+          include_stats: true
+        });
+        
+        if (response.data) {
+          const requestsData = response.data.items || response.data;
+          const statsData = response.data.stats;
+          
+          // Map backend data to frontend format
+          const mappedRequests = requestsData.map((item: any) => ({
+            requestId: item.id,
+            title: item.title,
+            platform: item.platform,
+            targetUrl: item.target_url,
+            status: item.status,
+            priority: item.priority || 'medium',
+            infringementId: item.infringement_id,
+            profileId: item.profile_id,
+            profileName: item.profile_name || 'Unknown Profile',
+            submittedAt: new Date(item.submitted_at || item.created_at),
+            lastUpdated: new Date(item.updated_at),
+            responseTime: item.response_time_hours,
+            legalBasis: item.legal_basis,
+            copyrightOwner: item.copyright_owner,
+            contactEmail: item.contact_email,
+            swornStatement: item.sworn_statement,
+            documents: item.documents || [],
+            communications: item.communications || [],
+            notes: item.notes
+          }));
+          
+          setTakedownRequests(mappedRequests);
+          
+          // Use backend stats if available, otherwise calculate from data
+          if (statsData) {
+            setStats({
+              total: statsData.total || mappedRequests.length,
+              submitted: statsData.submitted || 0,
+              underReview: statsData.under_review || 0,
+              accepted: statsData.accepted || 0,
+              rejected: statsData.rejected || 0,
+              completed: statsData.completed || 0,
+              counterNoticed: statsData.counter_noticed || 0,
+              successRate: statsData.success_rate || 0,
+              avgResponseTime: statsData.avg_response_time || 0
+            });
+          } else {
+            // Calculate stats from data
+            const total = mappedRequests.length;
+            const submitted = mappedRequests.filter((r: any) => r.status === 'submitted').length;
+            const underReview = mappedRequests.filter((r: any) => r.status === 'under_review').length;
+            const accepted = mappedRequests.filter((r: any) => r.status === 'accepted').length;
+            const rejected = mappedRequests.filter((r: any) => r.status === 'rejected').length;
+            const completed = mappedRequests.filter((r: any) => r.status === 'completed').length;
+            const counterNoticed = mappedRequests.filter((r: any) => r.status === 'counter_noticed').length;
+            
+            const successful = accepted + completed;
+            const resolved = successful + rejected;
+            const successRate = resolved > 0 ? Math.round((successful / resolved) * 100) : 0;
+            
+            const avgResponseTime = mappedRequests
+              .filter((r: any) => r.responseTime)
+              .reduce((sum: number, r: any) => sum + (r.responseTime || 0), 0) / 
+              mappedRequests.filter((r: any) => r.responseTime).length;
+            
+            setStats({
+              total,
+              submitted,
+              underReview,
+              accepted,
+              rejected,
+              completed,
+              counterNoticed,
+              successRate,
+              avgResponseTime: Math.round(avgResponseTime)
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load takedown requests:', error);
+        // Fallback to mock data if API fails
+        setTakedownRequests(mockTakedownRequests);
+        
+        const total = mockTakedownRequests.length;
+        const submitted = mockTakedownRequests.filter(r => r.status === 'submitted').length;
+        const underReview = mockTakedownRequests.filter(r => r.status === 'under_review').length;
+        const accepted = mockTakedownRequests.filter(r => r.status === 'accepted').length;
+        const rejected = mockTakedownRequests.filter(r => r.status === 'rejected').length;
+        const completed = mockTakedownRequests.filter(r => r.status === 'completed').length;
+        const counterNoticed = mockTakedownRequests.filter(r => r.status === 'counter_noticed').length;
+        
+        const successful = accepted + completed;
+        const resolved = successful + rejected;
+        const successRate = resolved > 0 ? Math.round((successful / resolved) * 100) : 0;
+        
+        const avgResponseTime = mockTakedownRequests
+          .filter(r => r.responseTime)
+          .reduce((sum, r) => sum + (r.responseTime || 0), 0) / 
+          mockTakedownRequests.filter(r => r.responseTime).length;
+        
+        setStats({
+          total,
+          submitted,
+          underReview,
+          accepted,
+          rejected,
+          completed,
+          counterNoticed,
+          successRate,
+          avgResponseTime: Math.round(avgResponseTime)
+        });
+        
+        toast.current?.show({
+          severity: 'warn',
+          summary: 'API Error',
+          detail: 'Failed to load live data, showing sample data instead',
+          life: 5000
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => clearTimeout(timer);
+    loadTakedownRequests();
   }, []);
+  
+  // Handle real-time notifications for takedown updates
+  useEffect(() => {
+    notifications.forEach(notification => {
+      if (notification.category === 'takedown') {
+        // Update takedown request status if notification contains update
+        if (notification.data?.requestId && notification.data?.status) {
+          setTakedownRequests(prev => prev.map(request => 
+            request.requestId === notification.data.requestId
+              ? { 
+                  ...request, 
+                  status: notification.data.status,
+                  lastUpdated: new Date(notification.timestamp),
+                  communications: [
+                    ...request.communications,
+                    {
+                      id: Date.now().toString(),
+                      type: 'update' as Communication['type'],
+                      message: notification.message,
+                      sender: 'Platform Response',
+                      timestamp: new Date(notification.timestamp)
+                    }
+                  ]
+                }
+              : request
+          ));
+        }
+        
+        // Show toast notification
+        toast.current?.show({
+          severity: notification.type === 'success' ? 'success' : 
+                   notification.type === 'error' ? 'error' : 'info',
+          summary: notification.title,
+          detail: notification.message,
+          life: 5000
+        });
+      }
+    });
+  }, [notifications]);
 
   // Helper functions
   const getStatusSeverity = (status: string) => {
@@ -553,33 +691,47 @@ const TakedownRequests: React.FC = () => {
     });
   };
 
-  const submitRequest = (request: TakedownRequest) => {
-    const updatedRequest = {
-      ...request,
-      status: 'submitted' as TakedownRequest['status'],
-      lastUpdated: new Date(),
-      communications: [
-        ...request.communications,
-        {
-          id: Date.now().toString(),
-          type: 'submission' as Communication['type'],
-          message: 'Request has been submitted to the platform.',
-          sender: 'AutoDMCA System',
-          timestamp: new Date()
-        }
-      ]
-    };
+  const submitRequest = async (request: TakedownRequest) => {
+    try {
+      // Submit takedown request via API
+      const response = await takedownApi.sendTakedown(request.requestId);
+      
+      const updatedRequest = {
+        ...request,
+        status: 'submitted' as TakedownRequest['status'],
+        lastUpdated: new Date(),
+        communications: [
+          ...request.communications,
+          {
+            id: Date.now().toString(),
+            type: 'submission' as Communication['type'],
+            message: 'Request has been submitted to the platform.',
+            sender: 'AutoDMCA System',
+            timestamp: new Date()
+          }
+        ]
+      };
 
-    setTakedownRequests(takedownRequests.map(r => 
-      r.id === request.id ? updatedRequest : r
-    ));
+      setTakedownRequests(takedownRequests.map(r => 
+        r.requestId === request.requestId ? updatedRequest : r
+      ));
 
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Request Submitted',
-      detail: `${request.requestId} has been submitted`,
-      life: 3000
-    });
+      toast.current?.show({
+        severity: 'success',
+        summary: 'Request Submitted',
+        detail: `${request.requestId} has been submitted`,
+        life: 3000
+      });
+    } catch (error: any) {
+      console.error('Submit request error:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to submit takedown request';
+      toast.current?.show({
+        severity: 'error',
+        summary: 'Submission Failed',
+        detail: errorMessage,
+        life: 5000
+      });
+    }
   };
 
   const showTimeline = (request: TakedownRequest, event: any) => {

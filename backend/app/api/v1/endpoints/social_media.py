@@ -26,7 +26,7 @@ from app.services.social_media.config import MonitoringConfig, SocialMediaSettin
 from app.services.social_media.monitoring_service import SocialMediaMonitoringService
 from app.services.social_media.scheduler import MonitoringScheduler, TaskPriority
 from app.services.social_media.dmca_integration import SocialMediaDMCABridge
-from app.services.dmca.dmca_service import DMCAService
+from app.services.dmca.takedown_processor import DMCATakedownProcessor as DMCAService
 
 
 router = APIRouter()

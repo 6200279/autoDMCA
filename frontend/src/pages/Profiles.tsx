@@ -532,7 +532,9 @@ const Profiles: React.FC = () => {
     try {
       setLoading(true);
       const response = await profileApi.getProfiles();
-      setProfiles(response.data);
+      // Extract items from paginated response
+      const profilesData = response.data?.items || response.data || [];
+      setProfiles(profilesData);
     } catch (error) {
       toast.current?.show({
         severity: 'error',
@@ -1079,10 +1081,10 @@ const Profiles: React.FC = () => {
 
   const analyticsTemplate = (rowData: Profile) => (
     <div className="text-center">
-      <div className="text-900 font-medium">{formatNumber(rowData.analytics.totalContentProtected)}</div>
+      <div className="text-900 font-medium">{formatNumber(rowData.analytics?.totalContentProtected || 0)}</div>
       <div className="text-600 text-xs">content items</div>
       <div className="text-xs text-500 mt-1">
-        {rowData.analytics.averageResponseTime}h avg response
+        {rowData.analytics?.averageResponseTime || 0}h avg response
       </div>
     </div>
   );
@@ -1393,7 +1395,7 @@ const Profiles: React.FC = () => {
             <Card className="text-center h-full">
               <div className="text-600 text-sm mb-2">Total Content Protected</div>
               <div className="text-blue-600 font-bold text-2xl mb-2">
-                {formatNumber(profiles.reduce((sum, p) => sum + p.analytics.totalContentProtected, 0))}
+                {formatNumber(profiles.reduce((sum, p) => sum + (p.analytics?.totalContentProtected || 0), 0))}
               </div>
               <div className="text-xs text-500">
                 {profiles.reduce((sum, p) => sum + p.totalScans, 0)} scans performed
@@ -2313,7 +2315,7 @@ const Profiles: React.FC = () => {
                         <Card className="text-center h-full">
                           <h6 className="text-600 m-0 mb-2">Content Protected</h6>
                           <div className="text-3xl font-bold text-green-600 mb-2">
-                            {formatNumber(selectedProfile.analytics.totalContentProtected)}
+                            {formatNumber(selectedProfile.analytics?.totalContentProtected || 0)}
                           </div>
                           <div className="text-sm text-500">items monitored</div>
                         </Card>

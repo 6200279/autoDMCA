@@ -1,0 +1,325 @@
+.gift-subscription-container {
+    padding: 2rem;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gift-subscription-container .max-w-4xl {
+    max-width: 64rem;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* Step Indicator */
+.step-indicator {
+    margin-bottom: 2rem;
+}
+
+.step {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.step.active {
+    background: var(--primary-color);
+    color: white;
+    transform: scale(1.1);
+}
+
+.step-connector {
+    width: 80px;
+    height: 2px;
+    background: #e9ecef;
+    margin: 0 1rem;
+}
+
+.step-labels {
+    display: flex;
+    gap: 4.5rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.step-labels span.active {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Step Cards */
+.gift-step-card {
+    margin-bottom: 2rem;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+}
+
+.gift-step-card .p-card-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #667eea 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    padding: 1.5rem;
+}
+
+.gift-step-card .p-card-content {
+    padding: 2rem;
+}
+
+/* Plan Cards */
+.plan-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    height: 100%;
+}
+
+.plan-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.plan-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 8px 30px rgba(var(--primary-color-rgb), 0.3);
+}
+
+.plan-card .pricing {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.plan-card .features ul {
+    margin: 0;
+    padding: 0;
+}
+
+.plan-card .features li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.plan-card .features li:last-child {
+    border-bottom: none;
+}
+
+/* Billing Interval Options */
+.interval-option {
+    flex: 1;
+    padding: 1rem 1.5rem;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.interval-option:hover {
+    border-color: var(--primary-color);
+    background: rgba(var(--primary-color-rgb), 0.05);
+}
+
+.interval-option.selected {
+    border-color: var(--primary-color);
+    background: rgba(var(--primary-color-rgb), 0.1);
+    color: var(--primary-color);
+}
+
+/* Order Summary */
+.order-summary {
+    position: sticky;
+    top: 2rem;
+}
+
+.order-summary .p-panel-content {
+    padding: 1.5rem;
+}
+
+.order-summary .p-divider {
+    margin: 1rem 0;
+}
+
+/* Gift Purchase Button */
+.gift-purchase-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 0.875rem 2rem;
+    font-size: 1.1rem;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.gift-purchase-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+/* Success Dialog */
+.gift-success-dialog .p-dialog-content {
+    padding: 2rem;
+    text-align: center;
+}
+
+.gift-success-dialog h3 {
+    color: #28a745;
+    margin: 1rem 0;
+}
+
+/* Form Fields */
+.field {
+    margin-bottom: 1.5rem;
+}
+
+.field label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.field .p-inputtext,
+.field .p-inputtextarea,
+.field .p-dropdown {
+    width: 100%;
+    border-radius: 8px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.field .p-inputtext:focus,
+.field .p-inputtextarea:focus,
+.field .p-dropdown:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb), 0.25);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .gift-subscription-container {
+        padding: 1rem;
+    }
+    
+    .gift-subscription-container .max-w-4xl {
+        padding: 1rem;
+    }
+    
+    .step-labels {
+        gap: 2rem;
+        font-size: 0.75rem;
+    }
+    
+    .step-connector {
+        width: 40px;
+        margin: 0 0.5rem;
+    }
+    
+    .plan-card {
+        margin-bottom: 1rem;
+    }
+    
+    .interval-option {
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.step-content {
+    animation: fadeInUp 0.5s ease;
+}
+
+/* Gift Code Display */
+.gift-code-display {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+    font-size: 1.25rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    margin: 1rem 0;
+}
+
+/* Message Preview */
+.message-preview {
+    background: #f8f9fa;
+    border-left: 4px solid var(--primary-color);
+    padding: 1rem;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    margin-top: 1rem;
+}
+
+/* Feature Icons */
+.feature-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 0.5rem;
+    color: var(--primary-color);
+}
+
+/* Loading States */
+.p-button .pi-spinner {
+    margin-right: 0.5rem;
+}
+
+/* Badge Customization */
+.p-badge.p-badge-info {
+    background: #17a2b8;
+}
+
+.p-badge.p-badge-success {
+    background: #28a745;
+}
+
+/* Panel Customization */
+.p-panel .p-panel-header {
+    background: var(--surface-100);
+    border-bottom: 1px solid var(--surface-300);
+    border-radius: 8px 8px 0 0;
+    padding: 1rem 1.5rem;
+    font-weight: 600;
+}
+
+/* Input Focus States */
+.p-inputtext:enabled:focus,
+.p-inputtextarea:enabled:focus {
+    outline: 0 none;
+    outline-offset: 0;
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb), 0.2);
+    border-color: var(--primary-color);
+}
+
+/* Dropdown Customization */
+.p-dropdown:not(.p-disabled):hover {
+    border-color: var(--primary-color);
+}
+
+.p-dropdown:not(.p-disabled).p-focus {
+    outline: 0 none;
+    outline-offset: 0;
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb), 0.2);
+    border-color: var(--primary-color);
+}

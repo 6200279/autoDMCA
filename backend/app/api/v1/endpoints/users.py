@@ -23,13 +23,69 @@ from app.api.deps.common import get_pagination_params, PaginationParams
 router = APIRouter()
 
 
+@router.get("/me-mock", response_model=UserProfile)
+async def get_mock_user_profile() -> Any:
+    """Get mock user profile for local testing (bypasses authentication)."""
+    from app.core.config import settings
+    from datetime import datetime
+    
+    if settings.ENVIRONMENT != "local":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Mock endpoint only available in local environment"
+        )
+    
+    return UserProfile(
+        id=1,
+        email="admin@autodmca.com",
+        full_name="Admin User",
+        company="AutoDMCA",
+        phone="+1234567890",
+        bio="System Administrator",
+        avatar_url=None,
+        is_active=True,
+        is_verified=True,
+        created_at=datetime.utcnow(),
+        last_login=datetime.utcnow(),
+        subscription_plan="Premium",
+        subscription_status="active",
+        profiles_count=5,
+        infringements_count=12,
+        takedowns_count=8
+    )
+
+
 @router.get("/me", response_model=UserProfile)
 async def get_current_user_profile(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ) -> Any:
     """Get current user profile with statistics."""
-    # Get user statistics
+    from app.core.config import settings
+    
+    # Handle mock users for local development
+    if settings.ENVIRONMENT == "local" and hasattr(current_user, '__class__') and current_user.__class__.__name__ == 'MockUser':
+        # Return mock statistics for local testing
+        return UserProfile(
+            id=current_user.id,
+            email=current_user.email,
+            full_name=current_user.full_name,
+            company=current_user.company,
+            phone=current_user.phone,
+            bio=current_user.bio,
+            avatar_url=current_user.avatar_url,
+            is_active=current_user.is_active,
+            is_verified=current_user.is_verified,
+            created_at=current_user.created_at,
+            last_login=current_user.last_login,
+            subscription_plan="Premium" if current_user.is_superuser else "Basic",
+            subscription_status="active",
+            profiles_count=5 if current_user.is_superuser else 2,
+            infringements_count=12 if current_user.is_superuser else 3,
+            takedowns_count=8 if current_user.is_superuser else 1
+        )
+    
+    # Get user statistics from database
     profiles_count = db.query(func.count(ProtectedProfile.id))\
         .filter(ProtectedProfile.user_id == current_user.id).scalar()
     

@@ -9,7 +9,12 @@ from pathlib import Path
 from enum import Enum
 
 import structlog
-from pydantic import BaseSettings, validator
+try:
+    from pydantic_settings import BaseSettings
+    from pydantic import validator
+except ImportError:
+    # Fallback for older pydantic versions
+    from pydantic import BaseSettings, validator
 
 from app.db.models.social_media import SocialMediaPlatform
 

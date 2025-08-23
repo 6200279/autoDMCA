@@ -1,36 +1,26 @@
 import React from 'react';
-import { Container, Box, Typography, Breadcrumbs, Link } from '@mui/material';
-import { Home, AccountBalance } from '@mui/icons-material';
+import { BreadCrumb } from 'primereact/breadcrumb';
 
 import BillingDashboard from '../../components/billing/BillingDashboard';
 
 const BillingPage: React.FC = () => {
-  return (
-    <Container maxWidth="xl">
-      <Box sx={{ py: 3 }}>
-        {/* Breadcrumbs */}
-        <Breadcrumbs sx={{ mb: 3 }}>
-          <Link
-            color="inherit"
-            href="/dashboard"
-            sx={{ display: 'flex', alignItems: 'center' }}
-          >
-            <Home sx={{ mr: 0.5 }} fontSize="inherit" />
-            Dashboard
-          </Link>
-          <Typography
-            color="text.primary"
-            sx={{ display: 'flex', alignItems: 'center' }}
-          >
-            <AccountBalance sx={{ mr: 0.5 }} fontSize="inherit" />
-            Billing
-          </Typography>
-        </Breadcrumbs>
+  const items = [
+    { label: 'Dashboard', url: '/dashboard' },
+    { label: 'Billing' }
+  ];
 
-        {/* Main Content */}
-        <BillingDashboard />
-      </Box>
-    </Container>
+  return (
+    <div className="p-4">
+      {/* Breadcrumbs */}
+      <BreadCrumb 
+        model={items} 
+        home={{ icon: 'pi pi-home', url: '/dashboard' }}
+        className="mb-4" 
+      />
+
+      {/* Main Content */}
+      <BillingDashboard />
+    </div>
   );
 };
 

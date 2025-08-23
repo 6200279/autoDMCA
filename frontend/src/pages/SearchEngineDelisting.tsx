@@ -1,1835 +1,813 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+/**
+ * Search Engine Delisting Dashboard
+ * Provides comprehensive interface for managing search engine delisting requests
+ * PRD: "Dashboard integration for user visibility", "Real-time status tracking and reporting"
+ */
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from 'primereact/card';
-import { TabView, TabPanel } from 'primereact/tabview';
+import { Button } from 'primereact/button';
+import { InputText } from 'primereact/inputtext';
+import { Tag } from 'primereact/tag';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
-import { Chart } from 'primereact/chart';
-import { Calendar } from 'primereact/calendar';
-import { Dropdown } from 'primereact/dropdown';
-import { MultiSelect } from 'primereact/multiselect';
-import { Button } from 'primereact/button';
 import { ProgressBar } from 'primereact/progressbar';
-import { Panel } from 'primereact/panel';
-import { Tag } from 'primereact/tag';
-import { Badge } from 'primereact/badge';
-import { InputSwitch } from 'primereact/inputswitch';
-import { Divider } from 'primereact/divider';
-import { Toast } from 'primereact/toast';
 import { Dialog } from 'primereact/dialog';
-import { InputText } from 'primereact/inputtext';
-import { InputTextarea } from 'primereact/inputtextarea';
-import { Skeleton } from 'primereact/skeleton';
-import { Toolbar } from 'primereact/toolbar';
-import { SplitButton } from 'primereact/splitbutton';
-import { Timeline } from 'primereact/timeline';
-import { Slider } from 'primereact/slider';
-import { Checkbox } from 'primereact/checkbox';
-import { SelectButton } from 'primereact/selectbutton';
-import { FileUpload } from 'primereact/fileupload';
-import { RadioButton } from 'primereact/radiobutton';
-import { Chips } from 'primereact/chips';
-import { ConfirmDialog } from 'primereact/confirmdialog';
-import { Steps } from 'primereact/steps';
-import { 
-  Chart as ChartJS, 
-  CategoryScale, 
-  LinearScale, 
-  PointElement, 
-  LineElement, 
-  BarElement,
-  Title, 
-  Tooltip, 
+import { Dropdown } from 'primereact/dropdown';
+import { Message } from 'primereact/message';
+import { TabView, TabPanel } from 'primereact/tabview';
+import { Toast } from 'primereact/toast';
+import { ProgressSpinner } from 'primereact/progressspinner';
+import { Chart } from 'primereact/chart';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip as ChartTooltip,
   Legend,
   ArcElement,
-  Filler
+  BarElement,
 } from 'chart.js';
-import { useAuth } from '../contexts/AuthContext';
-import { searchEngineDelistingApi } from '../services/api';
-import { SearchEngine, DelistingRequest, DelistingType, DelistingStatus, URLMonitoring, SearchResult, VisibilityMetrics, PriorityLevel, RegionData } from '../types/api';
+import api from '../services/api';
+import ComingSoon from '../components/common/ComingSoon';
+import ApiErrorDisplay from '../components/common/ApiErrorDisplay';
+import ApiLoadingState from '../components/common/ApiLoadingState';
+import FeatureStatusBadge from '../components/common/FeatureStatusBadge';
 
-// Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
-  BarElement,
-  ArcElement,
   Title,
-  Tooltip,
+  ChartTooltip,
   Legend,
-  Filler
+  ArcElement,
+  BarElement
 );
 
-// Additional local interfaces
-interface KeywordTracking {
+interface DelistingRequest {
   id: string;
-  keyword: string;
-  searchEngines: string[];
-  regions: string[];
-  results: SearchResult[];
-  trend: 'up' | 'down' | 'stable';
-  alertThreshold: number;
-  isProtected: boolean;
+  url: string;
+  status: 'pending' | 'submitted' | 'in_progress' | 'approved' | 'removed' | 'rejected' | 'failed';
+  search_engines: string[];
+  submitted_at: string;
+  updated_at?: string;
+  retry_count: number;
+  engine_statuses?: { [key: string]: any };
+  message?: string;
 }
 
-interface RegionData {
-  region: string;
-  country: string;
-  requestCount: number;
-  successRate: number;
-  avgResponseTime: number;
+interface DelistingBatch {
+  id: string;
+  name: string;
+  total_requests: number;
+  completed_requests: number;
+  failed_requests: number;
+  success_rate: number;
+  submitted_at: string;
+  status: 'pending' | 'processing' | 'completed';
+}
+
+interface DelistingStats {
+  time_period: string;
+  total_requests: number;
+  successful_requests: number;
+  failed_requests: number;
+  pending_requests: number;
+  success_rate: number;
+  average_processing_time: number;
+  search_engine_breakdown: { [key: string]: any };
+}
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel({ children, value, index }: TabPanelProps) {
+  return (
+    <div role="tabpanel" hidden={value !== index}>
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+    </div>
+  );
 }
 
 const SearchEngineDelisting: React.FC = () => {
-  const { user } = useAuth();
-  const toast = useRef<Toast>(null);
+  const [tabValue, setTabValue] = useState(0);
+  const [requests, setRequests] = useState<DelistingRequest[]>([]);
+  const [batches, setBatches] = useState<DelistingBatch[]>([]);
+  const [stats, setStats] = useState<DelistingStats | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // Dialog states
-  const [showRequestDialog, setShowRequestDialog] = useState(false);
-  const [showBulkDialog, setShowBulkDialog] = useState(false);
-  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
-  const [showMonitoringDialog, setShowMonitoringDialog] = useState(false);
-  const [showAnalyticsDialog, setShowAnalyticsDialog] = useState(false);
+  const [newRequestDialog, setNewRequestDialog] = useState(false);
+  const [batchDialog, setBatchDialog] = useState(false);
+  const [detailsDialog, setDetailsDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<DelistingRequest | null>(null);
   
   // Form states
-  const [newRequest, setNewRequest] = useState<Partial<DelistingRequest>>({
-    type: DelistingType.URL_REMOVAL,
-    priority: PriorityLevel.MEDIUM,
-    urls: [],
-    keywords: [],
-    metadata: {}
+  const [newRequestForm, setNewRequestForm] = useState({
+    url: '',
+    original_content_url: '',
+    reason: 'Copyright infringement',
+    evidence_url: '',
+    priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
+    search_engines: ['google', 'bing'] as string[]
   });
-  const [bulkUrls, setBulkUrls] = useState<string>('');
-  const [selectedSearchEngines, setSelectedSearchEngines] = useState<string[]>([]);
-  const [selectedRegion, setSelectedRegion] = useState<string>('global');
   
-  // Filter states
-  const [dateRange, setDateRange] = useState<Date[]>([
-    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    new Date()
-  ]);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [engineFilter, setEngineFilter] = useState<string[]>([]);
+  const [batchForm, setBatchForm] = useState({
+    name: '',
+    description: '',
+    urls: '',
+    reason: 'Copyright infringement',
+    priority: 'normal' as 'low' | 'normal' | 'high' | 'urgent',
+    search_engines: ['google', 'bing'] as string[],
+    batch_size: 10
+  });
   
-  // Data states  
-  const [searchEngines, setSearchEngines] = useState<SearchEngine[]>([]);
-  const [delistingRequests, setDelistingRequests] = useState<DelistingRequest[]>([]);
-  const [urlMonitoring, setUrlMonitoring] = useState<URLMonitoring[]>([]);
-  const [visibilityMetrics, setVisibilityMetrics] = useState<VisibilityMetrics[]>([]);
-  const [regionData, setRegionData] = useState<RegionData[]>([]);
-  const [dashboardStats, setDashboardStats] = useState<any>(null);
-  
-  // Mock data as fallback (removed from state initialization)
-  const mockSearchEngines = [
-    {
-      id: 'google',
-      name: 'Google Search',
-      domain: 'google.com',
-      isActive: true,
-      supportsImageSearch: true,
-      supportsCacheRemoval: true,
-      supportsRegionalDelisting: true,
-      avgResponseTime: 72,
-      successRate: 87.3,
-      icon: 'pi pi-google',
-      color: '#4285F4'
-    },
-    {
-      id: 'google-images',
-      name: 'Google Images',
-      domain: 'images.google.com',
-      isActive: true,
-      supportsImageSearch: true,
-      supportsCacheRemoval: true,
-      supportsRegionalDelisting: true,
-      avgResponseTime: 48,
-      successRate: 91.2,
-      icon: 'pi pi-images',
-      color: '#34A853'
-    },
-    {
-      id: 'bing',
-      name: 'Bing Search',
-      domain: 'bing.com',
-      isActive: true,
-      supportsImageSearch: true,
-      supportsCacheRemoval: true,
-      supportsRegionalDelisting: true,
-      avgResponseTime: 96,
-      successRate: 83.7,
-      icon: 'pi pi-microsoft',
-      color: '#0078D4'
-    },
-    {
-      id: 'yahoo',
-      name: 'Yahoo Search',
-      domain: 'search.yahoo.com',
-      isActive: true,
-      supportsImageSearch: true,
-      supportsCacheRemoval: false,
-      supportsRegionalDelisting: true,
-      avgResponseTime: 120,
-      successRate: 79.4,
-      icon: 'pi pi-search',
-      color: '#7B0099'
-    },
-    {
-      id: 'duckduckgo',
-      name: 'DuckDuckGo',
-      domain: 'duckduckgo.com',
-      isActive: true,
-      supportsImageSearch: true,
-      supportsCacheRemoval: false,
-      supportsRegionalDelisting: false,
-      avgResponseTime: 168,
-      successRate: 71.8,
-      icon: 'pi pi-shield',
-      color: '#DE5833'
-    }
-  ];
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('');
+  const [urlFilter, setUrlFilter] = useState('');
 
-  const mockDelistingRequests = [
-    {
-      id: 'req-001',
-      searchEngineId: 'google',
-      searchEngine: 'Google Search',
-      type: DelistingType.URL_REMOVAL,
-      status: DelistingStatus.APPROVED,
-      priority: PriorityLevel.HIGH,
-      urls: ['https://example.com/infringing-content-1', 'https://example.com/infringing-content-2'],
-      keywords: ['brand name', 'copyrighted content'],
-      region: 'US',
-      reason: 'Copyright infringement - unauthorized use of copyrighted material',
-      template: 'Copyright Violation Template',
-      submittedAt: '2024-01-15T10:30:00Z',
-      responseExpected: '2024-01-18T10:30:00Z',
-      responseReceived: '2024-01-17T14:20:00Z',
-      responseContent: 'Request approved. Content removed from search results.',
-      followUpCount: 0,
-      successRate: 100,
-      estimatedImpact: 85,
-      metadata: {
-        cacheRemoval: true,
-        imageSearch: true,
-        safetFiltering: false,
-        sitemapSubmission: false
-      }
-    },
-    {
-      id: 'req-002',
-      searchEngineId: 'bing',
-      searchEngine: 'Bing Search',
-      type: DelistingType.CACHE_REMOVAL,
-      status: DelistingStatus.UNDER_REVIEW,
-      priority: PriorityLevel.MEDIUM,
-      urls: ['https://badsite.com/stolen-images'],
-      keywords: ['model photos', 'exclusive content'],
-      region: 'Global',
-      reason: 'Cached content removal request for previously removed infringing material',
-      template: 'Cache Removal Template',
-      submittedAt: '2024-01-14T09:15:00Z',
-      responseExpected: '2024-01-17T09:15:00Z',
-      followUpCount: 1,
-      nextFollowUp: '2024-01-18T09:15:00Z',
-      successRate: 0,
-      estimatedImpact: 45,
-      metadata: {
-        cacheRemoval: true,
-        imageSearch: false,
-        safetFiltering: false,
-        sitemapSubmission: false
-      }
-    },
-    {
-      id: 'req-003',
-      searchEngineId: 'google-images',
-      searchEngine: 'Google Images',
-      type: DelistingType.IMAGE_SEARCH,
-      status: DelistingStatus.PARTIALLY_APPROVED,
-      priority: PriorityLevel.HIGH,
-      urls: ['https://pirate-site.com/gallery/stolen-photos'],
-      keywords: ['professional photos', 'model portfolio'],
-      region: 'EU',
-      reason: 'Unauthorized distribution of professional photography in image search results',
-      template: 'Image Search Removal Template',
-      submittedAt: '2024-01-12T16:45:00Z',
-      responseExpected: '2024-01-15T16:45:00Z',
-      responseReceived: '2024-01-15T11:30:00Z',
-      responseContent: 'Partial approval. 3 of 5 URLs removed from image search.',
-      followUpCount: 1,
-      nextFollowUp: '2024-01-20T16:45:00Z',
-      successRate: 60,
-      estimatedImpact: 70,
-      metadata: {
-        cacheRemoval: false,
-        imageSearch: true,
-        safetFiltering: true,
-        sitemapSubmission: false
-      }
-    }
-  ];
-
-  const mockUrlMonitoring = [
-    {
-      id: 'monitor-001',
-      url: 'https://example.com/infringing-content',
-      keywords: ['brand name', 'copyrighted material'],
-      searchEngines: ['google', 'bing'],
-      lastCheck: '2024-01-16T12:00:00Z',
-      position: undefined,
-      visibility: 15,
-      alerts: true,
-      autoDelisting: true,
-      status: 'removed'
-    },
-    {
-      id: 'monitor-002',
-      url: 'https://badsite.com/stolen-content',
-      keywords: ['exclusive content', 'premium material'],
-      searchEngines: ['google', 'yahoo'],
-      lastCheck: '2024-01-16T11:30:00Z',
-      position: 3,
-      visibility: 78,
-      alerts: true,
-      autoDelisting: false,
-      status: 'active'
-    }
-  ];
-
-  const mockVisibilityMetrics = [
-    {
-      searchEngine: 'Google Search',
-      totalUrls: 245,
-      visibleUrls: 32,
-      hiddenUrls: 213,
-      visibilityReduction: 87.0,
-      trend: 'improving'
-    },
-    {
-      searchEngine: 'Bing Search',
-      totalUrls: 198,
-      visibleUrls: 41,
-      hiddenUrls: 157,
-      visibilityReduction: 79.3,
-      trend: 'stable'
-    },
-    {
-      searchEngine: 'Yahoo Search',
-      totalUrls: 156,
-      visibleUrls: 38,
-      hiddenUrls: 118,
-      visibilityReduction: 75.6,
-      trend: 'declining'
-    }
-  ];
-
-  const mockRegionData = [
-    { region: 'North America', country: 'US', requestCount: 89, successRate: 91.2, avgResponseTime: 68 },
-    { region: 'Europe', country: 'EU', requestCount: 67, successRate: 87.4, avgResponseTime: 72 },
-    { region: 'Asia Pacific', country: 'AP', requestCount: 34, successRate: 83.1, avgResponseTime: 89 },
-    { region: 'Global', country: 'Global', requestCount: 142, successRate: 85.7, avgResponseTime: 76 }
-  ];
-
-  // Options for dropdowns
-  const delistingTypeOptions = [
-    { label: 'URL Removal', value: DelistingType.URL_REMOVAL },
-    { label: 'Cache Removal', value: DelistingType.CACHE_REMOVAL },
-    { label: 'Image Search Removal', value: DelistingType.IMAGE_SEARCH },
-    { label: 'Keyword Blocking', value: DelistingType.KEYWORD_BLOCKING },
-    { label: 'Safe Search Configuration', value: DelistingType.SAFE_SEARCH },
-    { label: 'Sitemap Update', value: DelistingType.SITEMAP_UPDATE }
-  ];
-
-  const priorityOptions = [
-    { label: 'Low', value: PriorityLevel.LOW },
-    { label: 'Medium', value: PriorityLevel.MEDIUM },
-    { label: 'High', value: PriorityLevel.HIGH },
-    { label: 'Urgent', value: PriorityLevel.URGENT }
-  ];
-
-  const statusOptions = [
-    { label: 'Draft', value: DelistingStatus.DRAFT },
-    { label: 'Submitted', value: DelistingStatus.SUBMITTED },
-    { label: 'Under Review', value: DelistingStatus.UNDER_REVIEW },
-    { label: 'Approved', value: DelistingStatus.APPROVED },
-    { label: 'Partially Approved', value: DelistingStatus.PARTIALLY_APPROVED },
-    { label: 'Denied', value: DelistingStatus.DENIED },
-    { label: 'Expired', value: DelistingStatus.EXPIRED },
-    { label: 'Appealed', value: DelistingStatus.APPEALED }
-  ];
-
-  const regionOptions = [
-    { label: 'Global', value: 'global' },
-    { label: 'United States', value: 'US' },
-    { label: 'European Union', value: 'EU' },
-    { label: 'United Kingdom', value: 'UK' },
-    { label: 'Canada', value: 'CA' },
-    { label: 'Australia', value: 'AU' },
-    { label: 'Asia Pacific', value: 'AP' }
-  ];
-
-  const templateOptions = [
-    { label: 'Copyright Violation Template', value: 'copyright' },
-    { label: 'Cache Removal Template', value: 'cache' },
-    { label: 'Image Search Removal Template', value: 'image' },
-    { label: 'Safe Search Template', value: 'safesearch' },
-    { label: 'Custom Template', value: 'custom' }
-  ];
-
-  // Data fetching functions
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      setError(null);
-      const [statsResponse, enginesResponse] = await Promise.all([
-        searchEngineDelistingApi.getDashboardStats({
-          dateRange: {
-            start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-            end: dateRange[1]?.toISOString() || new Date().toISOString()
-          }
-        }),
-        searchEngineDelistingApi.getSearchEngines()
-      ]);
-      
-      setDashboardStats(statsResponse.data);
-      setSearchEngines(statsResponse.data?.searchEngines || mockSearchEngines);
-    } catch (error: any) {
-      console.warn('Failed to fetch dashboard data, using fallback:', error);
-      setError('Unable to connect to server. Using cached data.');
-      // Use mock data as fallback
-      setSearchEngines(mockSearchEngines);
-      
-      // Show warning toast
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Connection Issue',
-        detail: 'Using cached data. Some features may be limited.',
-        life: 5000
-      });
-    }
-  }, [dateRange]);
-  
-  const fetchDelistingRequests = useCallback(async () => {
-    try {
-      const response = await searchEngineDelistingApi.getDelistingRequests({
-        status: statusFilter,
-        engines: engineFilter,
-        dateRange: {
-          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          end: dateRange[1]?.toISOString() || new Date().toISOString()
-        },
-        page: 1,
-        per_page: 100
-      });
-      
-      setDelistingRequests(response.data?.items || mockDelistingRequests);
-    } catch (error: any) {
-      console.warn('Failed to fetch delisting requests:', error);
-      setDelistingRequests(mockDelistingRequests);
-    }
-  }, [dateRange, statusFilter, engineFilter]);
-  
-  const fetchUrlMonitoring = useCallback(async () => {
-    try {
-      const response = await searchEngineDelistingApi.getUrlMonitoring({
-        page: 1,
-        per_page: 100
-      });
-      
-      setUrlMonitoring(response.data?.items || mockUrlMonitoring);
-    } catch (error: any) {
-      console.warn('Failed to fetch URL monitoring:', error);
-      setUrlMonitoring(mockUrlMonitoring);
-    }
-  }, []);
-  
-  const fetchVisibilityMetrics = useCallback(async () => {
-    try {
-      const response = await searchEngineDelistingApi.getVisibilityMetrics({
-        dateRange: {
-          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          end: dateRange[1]?.toISOString() || new Date().toISOString()
-        }
-      });
-      
-      setVisibilityMetrics(response.data?.visibilityMetrics || mockVisibilityMetrics);
-    } catch (error: any) {
-      console.warn('Failed to fetch visibility metrics:', error);
-      setVisibilityMetrics(mockVisibilityMetrics);
-    }
-  }, [dateRange]);
-  
-  const fetchRegionalAnalytics = useCallback(async () => {
-    try {
-      const response = await searchEngineDelistingApi.getRegionalAnalytics({
-        dateRange: {
-          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          end: dateRange[1]?.toISOString() || new Date().toISOString()
-        }
-      });
-      
-      setRegionData(response.data?.regionalData || mockRegionData);
-    } catch (error: any) {
-      console.warn('Failed to fetch regional analytics:', error);
-      setRegionData(mockRegionData);
-    }
-  }, [dateRange]);
-  
-  const refreshAllData = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([
-        fetchDashboardData(),
-        fetchDelistingRequests(),
-        fetchUrlMonitoring(),
-        fetchVisibilityMetrics(),
-        fetchRegionalAnalytics()
-      ]);
-    } finally {
-      setRefreshing(false);
-    }
-  }, [fetchDashboardData, fetchDelistingRequests, fetchUrlMonitoring, fetchVisibilityMetrics, fetchRegionalAnalytics]);
-  
-  // Initial data loading
+  // Load data on component mount
   useEffect(() => {
-    const loadInitialData = async () => {
-      setLoading(true);
-      try {
-        await fetchDashboardData();
-        // Add small delay for better UX
-        await new Promise(resolve => setTimeout(resolve, 800));
-      } finally {
-        setLoading(false);
-      }
-    };
+    loadData();
     
-    loadInitialData();
-  }, [fetchDashboardData]);
-  
-  // Load additional data when tab changes
-  useEffect(() => {
-    if (!loading) {
-      switch (activeTabIndex) {
-        case 1: // Delisting Requests tab
-          fetchDelistingRequests();
-          break;
-        case 2: // URL Monitoring tab
-          fetchUrlMonitoring();
-          break;
-        case 3: // Analytics tab
-          fetchVisibilityMetrics();
-          fetchRegionalAnalytics();
-          break;
-        default:
-          break;
-      }
+    // Set up periodic refresh for real-time updates
+    const interval = setInterval(() => {
+      loadDashboardData();
+    }, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const [requestsRes, statsRes, dashboardRes] = await Promise.all([
+        api.get('/delisting/requests'),
+        api.get('/delisting/statistics?time_period=24h'),
+        api.get('/delisting/dashboard')
+      ]);
+      
+      setRequests(requestsRes.data);
+      setStats(statsRes.data);
+      setDashboardData(dashboardRes.data);
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to load delisting data');
+    } finally {
+      setLoading(false);
     }
-  }, [activeTabIndex, loading, fetchDelistingRequests, fetchUrlMonitoring, fetchVisibilityMetrics, fetchRegionalAnalytics]);
+  };
 
-  // Chart data
-  const visibilityTrendsData = useMemo(() => ({
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-    datasets: [
-      {
-        label: 'Visibility Reduction (%)',
-        data: [65, 72, 78, 81, 85, 87],
-        borderColor: '#4ECDC4',
-        backgroundColor: 'rgba(78, 205, 196, 0.1)',
-        tension: 0.4,
-        fill: true
-      },
-      {
-        label: 'Success Rate (%)',
-        data: [78, 82, 85, 88, 89, 91],
-        borderColor: '#45B7D1',
-        backgroundColor: 'rgba(69, 183, 209, 0.1)',
-        tension: 0.4,
-        fill: true
-      }
-    ]
-  }), []);
+  const loadDashboardData = async () => {
+    try {
+      const response = await api.get('/delisting/dashboard');
+      setDashboardData(response.data);
+    } catch (err) {
+      console.error('Failed to refresh dashboard data:', err);
+    }
+  };
 
-  const requestsByEngineData = useMemo(() => ({
-    labels: searchEngines.map(e => e.name),
+  const submitNewRequest = async () => {
+    try {
+      const response = await api.post('/delisting/requests', newRequestForm);
+      
+      // Refresh data
+      await loadData();
+      
+      // Reset form and close dialog
+      setNewRequestForm({
+        url: '',
+        original_content_url: '',
+        reason: 'Copyright infringement',
+        evidence_url: '',
+        priority: 'normal',
+        search_engines: ['google', 'bing']
+      });
+      setNewRequestDialog(false);
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit delisting request');
+    }
+  };
+
+  const submitBatchRequest = async () => {
+    try {
+      const urlList = batchForm.urls.split('\n').filter(url => url.trim());
+      
+      const batchData = {
+        ...batchForm,
+        urls: urlList
+      };
+      
+      const response = await api.post('/delisting/batch', batchData);
+      
+      // Refresh data
+      await loadData();
+      
+      // Reset form and close dialog
+      setBatchForm({
+        name: '',
+        description: '',
+        urls: '',
+        reason: 'Copyright infringement',
+        priority: 'normal',
+        search_engines: ['google', 'bing'],
+        batch_size: 10
+      });
+      setBatchDialog(false);
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to submit batch request');
+    }
+  };
+
+  const cancelRequest = async (requestId: string) => {
+    try {
+      await api.post(`/delisting/requests/${requestId}/cancel`);
+      await loadData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to cancel request');
+    }
+  };
+
+  const retryRequest = async (requestId: string) => {
+    try {
+      await api.post(`/delisting/requests/${requestId}/retry`);
+      await loadData();
+    } catch (err: any) {
+      setError(err.message || 'Failed to retry request');
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'removed': return 'success';
+      case 'approved': return 'success';
+      case 'in_progress': return 'info';
+      case 'submitted': return 'info';
+      case 'pending': return 'warning';
+      case 'rejected': return 'error';
+      case 'failed': return 'error';
+      default: return 'default';
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  // Filter requests based on current filters
+  const filteredRequests = requests.filter(request => {
+    const matchesStatus = !statusFilter || request.status === statusFilter;
+    const matchesUrl = !urlFilter || request.url.toLowerCase().includes(urlFilter.toLowerCase());
+    return matchesStatus && matchesUrl;
+  });
+
+  // Chart configurations
+  const successRateChartData = {
+    labels: ['Successful', 'Failed', 'Pending'],
     datasets: [{
-      data: [145, 89, 67, 34, 23],
-      backgroundColor: searchEngines.map(e => e.color),
-      hoverBackgroundColor: searchEngines.map(e => e.color)
+      data: stats ? [stats.successful_requests, stats.failed_requests, stats.pending_requests] : [0, 0, 0],
+      backgroundColor: ['#4caf50', '#f44336', '#ff9800'],
+      borderWidth: 0
     }]
-  }), [searchEngines]);
+  };
 
-  const responseTimeData = useMemo(() => ({
-    labels: searchEngines.map(e => e.name),
+  const searchEngineChartData = {
+    labels: stats ? Object.keys(stats.search_engine_breakdown) : [],
     datasets: [{
-      label: 'Average Response Time (Hours)',
-      data: searchEngines.map(e => e.avgResponseTime),
-      backgroundColor: 'rgba(255, 159, 64, 0.8)',
-      borderColor: '#FF9F40',
+      label: 'Success Rate',
+      data: stats ? Object.values(stats.search_engine_breakdown).map((engine: any) => engine.success_rate * 100) : [],
+      backgroundColor: 'rgba(54, 162, 235, 0.6)',
+      borderColor: 'rgba(54, 162, 235, 1)',
       borderWidth: 1
     }]
-  }), [searchEngines]);
-
-  // Event handlers
-  const handleSubmitRequest = async () => {
-    if (!newRequest.urls || newRequest.urls.length === 0) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Validation Error',
-        detail: 'Please provide at least one URL'
-      });
-      return;
-    }
-
-    if (selectedSearchEngines.length === 0) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Validation Error',
-        detail: 'Please select at least one search engine'
-      });
-      return;
-    }
-    
-    if (!newRequest.reason?.trim()) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Validation Error',
-        detail: 'Please provide a reason for removal'
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const response = await searchEngineDelistingApi.createDelistingRequest({
-        searchEngineIds: selectedSearchEngines,
-        type: newRequest.type!,
-        priority: newRequest.priority!,
-        urls: newRequest.urls,
-        keywords: newRequest.keywords,
-        region: selectedRegion,
-        reason: newRequest.reason!,
-        template: newRequest.template,
-        metadata: newRequest.metadata
-      });
-      
-      toast.current?.show({
-        severity: 'success',
-        summary: 'Request Submitted',
-        detail: `Delisting request ${response.data.id} has been submitted successfully`
-      });
-      
-      setShowRequestDialog(false);
-      resetForm();
-      
-      // Refresh delisting requests if on that tab
-      if (activeTabIndex === 1) {
-        fetchDelistingRequests();
-      }
-    } catch (error: any) {
-      console.error('Failed to submit delisting request:', error);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Submission Failed',
-        detail: error.response?.data?.detail || 'Failed to submit delisting request. Please try again.'
-      });
-    } finally {
-      setSubmitting(false);
-    }
   };
-
-  const handleBulkSubmit = async () => {
-    const urls = bulkUrls.split('\n').filter(url => url.trim());
-    
-    if (urls.length === 0) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Validation Error',
-        detail: 'Please provide URLs for bulk submission'
-      });
-      return;
-    }
-    
-    if (selectedSearchEngines.length === 0) {
-      toast.current?.show({
-        severity: 'warn',
-        summary: 'Validation Error',
-        detail: 'Please select at least one search engine'
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      // First validate URLs
-      const validationResponse = await searchEngineDelistingApi.validateUrls(urls);
-      const validUrls = validationResponse.data.filter((result: any) => result.is_valid).map((result: any) => result.url);
-      
-      if (validUrls.length === 0) {
-        toast.current?.show({
-          severity: 'warn',
-          summary: 'Validation Failed',
-          detail: 'No valid URLs found. Please check your URLs and try again.'
-        });
-        return;
-      }
-      
-      if (validUrls.length < urls.length) {
-        toast.current?.show({
-          severity: 'warn',
-          summary: 'Some URLs Invalid',
-          detail: `${urls.length - validUrls.length} URLs were invalid and will be skipped.`
-        });
-      }
-      
-      // Submit bulk request
-      const response = await searchEngineDelistingApi.bulkCreateRequests({
-        searchEngineIds: selectedSearchEngines,
-        type: DelistingType.URL_REMOVAL,
-        priority: PriorityLevel.MEDIUM,
-        urls: validUrls,
-        region: selectedRegion,
-        reason: 'Bulk URL removal request',
-        template: 'bulk_removal'
-      });
-      
-      toast.current?.show({
-        severity: 'success',
-        summary: 'Bulk Request Submitted',
-        detail: `${validUrls.length} URLs submitted for delisting across ${selectedSearchEngines.length} search engines`
-      });
-      
-      setShowBulkDialog(false);
-      setBulkUrls('');
-      setSelectedSearchEngines([]);
-      
-      // Refresh delisting requests if on that tab
-      if (activeTabIndex === 1) {
-        fetchDelistingRequests();
-      }
-    } catch (error: any) {
-      console.error('Failed to submit bulk delisting request:', error);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Bulk Submission Failed',
-        detail: error.response?.data?.detail || 'Failed to submit bulk delisting request. Please try again.'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const resetForm = () => {
-    setNewRequest({
-      type: DelistingType.URL_REMOVAL,
-      priority: PriorityLevel.MEDIUM,
-      urls: [],
-      keywords: [],
-      metadata: {}
-    });
-    setSelectedSearchEngines([]);
-    setSelectedRegion('global');
-  };
-  
-  // Additional handlers for real-time features
-  const handleRefreshData = async () => {
-    await refreshAllData();
-    toast.current?.show({
-      severity: 'success',
-      summary: 'Data Refreshed',
-      detail: 'All data has been refreshed successfully'
-    });
-  };
-  
-  const handleAddUrlMonitoring = async (urlData: { url: string; keywords: string[]; searchEngines: string[]; alerts: boolean; autoDelisting: boolean }) => {
-    try {
-      setSubmitting(true);
-      const response = await searchEngineDelistingApi.addUrlMonitoring(urlData);
-      
-      toast.current?.show({
-        severity: 'success',
-        summary: 'URL Monitoring Added',
-        detail: `Now monitoring ${urlData.url} across ${urlData.searchEngines.length} search engines`
-      });
-      
-      setShowMonitoringDialog(false);
-      
-      // Refresh URL monitoring if on that tab
-      if (activeTabIndex === 2) {
-        fetchUrlMonitoring();
-      }
-    } catch (error: any) {
-      console.error('Failed to add URL monitoring:', error);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Failed to Add Monitoring',
-        detail: error.response?.data?.detail || 'Failed to add URL monitoring. Please try again.'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  
-  const handleTestSearchEngineConnection = async (engineId: string) => {
-    try {
-      setSubmitting(true);
-      await searchEngineDelistingApi.testSearchEngineConnection(engineId);
-      
-      toast.current?.show({
-        severity: 'success',
-        summary: 'Connection Test Successful',
-        detail: 'Search engine connection is working properly'
-      });
-    } catch (error: any) {
-      console.error('Connection test failed:', error);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Connection Test Failed',
-        detail: error.response?.data?.detail || 'Failed to connect to search engine'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  
-  const handleExportData = async (format: 'csv' | 'xlsx' | 'pdf') => {
-    try {
-      setSubmitting(true);
-      const response = await searchEngineDelistingApi.exportDelistingData({
-        format,
-        type: 'all',
-        dateRange: {
-          start: dateRange[0]?.toISOString() || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-          end: dateRange[1]?.toISOString() || new Date().toISOString()
-        },
-        includeDetails: true
-      });
-      
-      // Handle file download
-      if (response.data?.downloadUrl) {
-        window.open(response.data.downloadUrl, '_blank');
-      }
-      
-      toast.current?.show({
-        severity: 'success',
-        summary: 'Export Started',
-        detail: `Data export in ${format.toUpperCase()} format has been initiated`
-      });
-    } catch (error: any) {
-      console.error('Export failed:', error);
-      toast.current?.show({
-        severity: 'error',
-        summary: 'Export Failed',
-        detail: error.response?.data?.detail || 'Failed to export data. Please try again.'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const getStatusSeverity = (status: DelistingStatus) => {
-    switch (status) {
-      case DelistingStatus.APPROVED:
-        return 'success';
-      case DelistingStatus.PARTIALLY_APPROVED:
-        return 'info';
-      case DelistingStatus.UNDER_REVIEW:
-        return 'warning';
-      case DelistingStatus.DENIED:
-      case DelistingStatus.EXPIRED:
-        return 'danger';
-      default:
-        return 'secondary';
-    }
-  };
-
-  const getPriorityIcon = (priority: PriorityLevel) => {
-    switch (priority) {
-      case PriorityLevel.URGENT:
-        return 'pi pi-exclamation-circle';
-      case PriorityLevel.HIGH:
-        return 'pi pi-arrow-up';
-      case PriorityLevel.MEDIUM:
-        return 'pi pi-minus';
-      case PriorityLevel.LOW:
-        return 'pi pi-arrow-down';
-      default:
-        return 'pi pi-circle';
-    }
-  };
-
-  const renderKPICard = (title: string, value: string | number, subtitle?: string, icon?: string, color?: string) => (
-    <Card className="h-full kpi-card">
-      <div className="flex justify-content-between align-items-start">
-        <div>
-          <div className="text-500 font-medium text-sm">{title}</div>
-          <div className="text-900 font-bold text-xl mt-1">
-            {loading ? (
-              <Skeleton width="4rem" height="1.5rem" />
-            ) : (
-              value || '---'
-            )}
-          </div>
-          {subtitle && (
-            <div className="text-600 text-sm mt-1">{subtitle}</div>
-          )}
-        </div>
-        {icon && (
-          <div className={`kpi-icon ${color || 'bg-blue-100 text-blue-800'}`}>
-            <i className={`${icon} text-xl`} />
-          </div>
-        )}
-      </div>
-    </Card>
-  );
 
   if (loading) {
-    return (
-      <div className="search-engine-delisting-page">
-        <div className="grid">
-          <div className="col-12">
-            <Skeleton width="100%" height="4rem" className="mb-4" />
-          </div>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="col-12 md:col-6 lg:col-3">
-              <Skeleton width="100%" height="8rem" />
-            </div>
-          ))}
-          <div className="col-12">
-            <Skeleton width="100%" height="30rem" />
-          </div>
-        </div>
-      </div>
-    );
+    return <ApiLoadingState message="Loading delisting dashboard..." />;
+  }
+
+  if (error) {
+    return <ApiErrorDisplay error={error} onRetry={loadData} />;
   }
 
   return (
-    <div className="search-engine-delisting-page">
-      <Toast ref={toast} />
-      <ConfirmDialog />
-      
-      {/* Header */}
-      <div className="grid">
-        <div className="col-12">
-          <div className="flex flex-column lg:flex-row lg:justify-content-between lg:align-items-start gap-4 mb-4">
-            <div>
-              <h2 className="m-0 text-900">Advanced Search Engine Delisting</h2>
-              <p className="text-600 m-0 mt-1">Manage content removal from search engines and monitor visibility</p>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              <Button 
-                label="New Request" 
-                icon="pi pi-plus" 
-                onClick={() => setShowRequestDialog(true)}
-                disabled={submitting}
-              />
-              <Button 
-                label="Bulk Submit" 
-                icon="pi pi-upload" 
-                outlined
-                onClick={() => setShowBulkDialog(true)}
-                disabled={submitting}
-              />
-              <Button 
-                label="Templates" 
-                icon="pi pi-book" 
-                outlined
-                onClick={() => setShowTemplateDialog(true)}
-                disabled={submitting}
-              />
-              <Button 
-                label="Refresh" 
-                icon="pi pi-refresh" 
-                outlined
-                onClick={handleRefreshData}
-                loading={refreshing}
-                disabled={submitting}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
+          Search Engine Delisting
+          <FeatureStatusBadge status="stable" sx={{ ml: 2 }} />
+        </Typography>
+        <Box>
+          <Button
+            startIcon={<AddIcon />}
+            variant="contained"
+            onClick={() => setNewRequestDialog(true)}
+            sx={{ mr: 1 }}
+          >
+            New Request
+          </Button>
+          <Button
+            startIcon={<AddIcon />}
+            variant="outlined"
+            onClick={() => setBatchDialog(true)}
+            sx={{ mr: 1 }}
+          >
+            Batch Request
+          </Button>
+          <IconButton onClick={loadData}>
+            <RefreshIcon />
+          </IconButton>
+        </Box>
+      </Box>
 
-      {/* Error Message */}
-      {error && (
-        <div className="grid mb-4">
-          <div className="col-12">
-            <Message severity="warn" text={error} className="w-full" />
-          </div>
-        </div>
+      {/* Dashboard Overview */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Active Requests
+              </Typography>
+              <Typography variant="h4">
+                {dashboardData?.system_status?.queue_status?.processing_count || 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Success Rate (24h)
+              </Typography>
+              <Typography variant="h4">
+                {stats ? `${(stats.success_rate * 100).toFixed(1)}%` : '0%'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Avg Processing Time
+              </Typography>
+              <Typography variant="h4">
+                {stats ? `${(stats.average_processing_time / 60).toFixed(0)}m` : '0m'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary" gutterBottom>
+                Queue Length
+              </Typography>
+              <Typography variant="h4">
+                {dashboardData?.system_status?.queue_status?.queue_length || 0}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Alert Section */}
+      {dashboardData?.active_alerts && dashboardData.active_alerts.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          {dashboardData.active_alerts.map((alert: any) => (
+            <Alert 
+              key={alert.id} 
+              severity={alert.severity === 'critical' ? 'error' : 'warning'}
+              sx={{ mb: 1 }}
+            >
+              {alert.message}
+            </Alert>
+          ))}
+        </Box>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid mb-4">
-        <div className="col-12 md:col-6 lg:col-3">
-          {renderKPICard(
-            'Total Requests',
-            loading ? '' : (dashboardStats?.totalRequests || delistingRequests.length).toString(),
-            'All time',
-            'pi pi-list',
-            'bg-blue-100 text-blue-800'
-          )}
-        </div>
-        <div className="col-12 md:col-6 lg:col-3">
-          {renderKPICard(
-            'Success Rate',
-            loading ? '' : `${dashboardStats?.successRate || '87.3'}%`,
-            'Average across engines',
-            'pi pi-check-circle',
-            'bg-green-100 text-green-800'
-          )}
-        </div>
-        <div className="col-12 md:col-6 lg:col-3">
-          {renderKPICard(
-            'Visibility Reduction',
-            loading ? '' : `${dashboardStats?.visibilityReduction || '82.4'}%`,
-            'Content hidden',
-            'pi pi-eye-slash',
-            'bg-orange-100 text-orange-800'
-          )}
-        </div>
-        <div className="col-12 md:col-6 lg:col-3">
-          {renderKPICard(
-            'Avg Response Time',
-            loading ? '' : `${dashboardStats?.avgResponseTime || '76'}h`,
-            'Search engine response',
-            'pi pi-clock',
-            'bg-purple-100 text-purple-800'
-          )}
-        </div>
-      </div>
+      {/* Main Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tabValue} onChange={(e, newValue) => setTabValue(newValue)}>
+          <Tab label="Requests" />
+          <Tab label="Analytics" />
+          <Tab label="Verification" />
+        </Tabs>
+      </Box>
 
-      {/* Main Content Tabs */}
-      <TabView activeIndex={activeTabIndex} onTabChange={(e) => setActiveTabIndex(e.index)}>
-        
-        {/* Dashboard Tab */}
-        <TabPanel header="Dashboard" leftIcon="pi pi-chart-line">
-          <div className="grid">
-            {/* Search Engine Status Cards */}
-            <div className="col-12">
-              <Card title="Search Engine Status">
-                <div className="grid">
-                  {searchEngines.map((engine) => (
-                    <div key={engine.id} className="col-12 md:col-6 lg:col-4 xl:col-3">
-                      <Card className={`h-full engine-card border-2 ${engine.isActive ? 'border-green-200' : 'border-gray-200'}`}>
-                        <div className="flex align-items-center gap-3 mb-3">
-                          <div className={`engine-icon`} style={{ backgroundColor: engine.color + '20', color: engine.color }}>
-                            <i className={engine.icon}></i>
-                          </div>
-                          <div>
-                            <h4 className="m-0">{engine.name}</h4>
-                            <div className="text-sm text-600">{engine.domain}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="grid">
-                          <div className="col-6">
-                            <div className="text-sm text-600">Success Rate</div>
-                            <div className="font-bold">{engine.successRate}%</div>
-                          </div>
-                          <div className="col-6">
-                            <div className="text-sm text-600">Response Time</div>
-                            <div className="font-bold">{engine.avgResponseTime}h</div>
-                          </div>
-                        </div>
-                        
-                        <Divider />
-                        
-                        <div className="flex flex-wrap gap-1">
-                          {engine.supportsImageSearch && <Tag value="Images" severity="info" size="small" />}
-                          {engine.supportsCacheRemoval && <Tag value="Cache" severity="success" size="small" />}
-                          {engine.supportsRegionalDelisting && <Tag value="Regional" severity="warning" size="small" />}
-                        </div>
-                      </Card>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
+      {/* Requests Tab */}
+      <TabPanel value={tabValue} index={0}>
+        {/* Filters */}
+        <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={statusFilter}
+              label="Status"
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="pending">Pending</MenuItem>
+              <MenuItem value="submitted">Submitted</MenuItem>
+              <MenuItem value="in_progress">In Progress</MenuItem>
+              <MenuItem value="approved">Approved</MenuItem>
+              <MenuItem value="removed">Removed</MenuItem>
+              <MenuItem value="rejected">Rejected</MenuItem>
+              <MenuItem value="failed">Failed</MenuItem>
+            </Select>
+          </FormControl>
+          
+          <TextField
+            size="small"
+            label="Filter by URL"
+            value={urlFilter}
+            onChange={(e) => setUrlFilter(e.target.value)}
+            sx={{ minWidth: 200 }}
+          />
+        </Box>
 
-            {/* Charts */}
-            <div className="col-12 lg:col-8">
-              <Card title="Visibility Trends" className="h-full">
-                <div style={{ height: '350px' }}>
-                  <Chart
-                    type="line"
-                    data={visibilityTrendsData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'top' as const,
-                        }
-                      },
-                      scales: {
-                        y: {
-                          beginAtZero: false,
-                          min: 60,
-                          max: 100
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </Card>
-            </div>
-
-            <div className="col-12 lg:col-4">
-              <Card title="Requests by Engine" className="h-full">
-                <div style={{ height: '350px' }}>
-                  <Chart
-                    type="doughnut"
-                    data={requestsByEngineData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: {
-                          position: 'bottom' as const,
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-
-        {/* Delisting Requests Tab */}
-        <TabPanel header="Delisting Requests" leftIcon="pi pi-list">
-          <div className="grid">
-            <div className="col-12">
-              <Card>
-                <Toolbar 
-                  start={
-                    <div className="flex gap-2">
-                      <MultiSelect
-                        value={statusFilter}
-                        options={statusOptions}
-                        onChange={(e) => setStatusFilter(e.value)}
-                        placeholder="Filter by Status"
-                        maxSelectedLabels={2}
-                        display="chip"
-                        disabled={loading}
-                      />
-                      <MultiSelect
-                        value={engineFilter}
-                        options={searchEngines.map(e => ({ label: e.name, value: e.id }))}
-                        onChange={(e) => setEngineFilter(e.value)}
-                        placeholder="Filter by Engine"
-                        maxSelectedLabels={2}
-                        display="chip"
-                        disabled={loading}
-                      />
-                    </div>
-                  }
-                  end={
-                    <div className="flex gap-2">
-                      <Button 
-                        label="Refresh" 
-                        icon="pi pi-refresh" 
-                        outlined 
-                        size="small" 
-                        onClick={fetchDelistingRequests}
-                        loading={refreshing}
-                        disabled={submitting}
-                      />
-                      <Button 
-                        label="Export" 
-                        icon="pi pi-download" 
-                        outlined 
-                        size="small" 
-                        onClick={() => handleExportData('xlsx')}
-                        disabled={submitting || loading}
-                      />
-                    </div>
-                  }
-                />
-                
-                <DataTable
-                  value={delistingRequests}
-                  paginator
-                  rows={10}
-                  sortMode="multiple"
-                  selectionMode="multiple"
-                  showGridlines
-                  responsiveLayout="scroll"
-                >
-                  <Column
-                    field="id"
-                    header="Request ID"
-                    sortable
-                    style={{ minWidth: '120px' }}
-                  />
-                  <Column
-                    field="searchEngine"
-                    header="Search Engine"
-                    sortable
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-2">
-                        <i className={searchEngines.find(e => e.id === rowData.searchEngineId)?.icon} 
-                           style={{ color: searchEngines.find(e => e.id === rowData.searchEngineId)?.color }}></i>
-                        {rowData.searchEngine}
-                      </div>
-                    )}
-                  />
-                  <Column
-                    field="type"
-                    header="Type"
-                    sortable
-                    body={(rowData) => (
-                      <Tag 
-                        value={rowData.type.replace('_', ' ')}
-                        severity="info"
-                        style={{ textTransform: 'capitalize' }}
-                      />
-                    )}
-                  />
-                  <Column
-                    field="status"
-                    header="Status"
-                    sortable
-                    body={(rowData) => (
-                      <Tag
-                        value={rowData.status.replace('_', ' ')}
-                        severity={getStatusSeverity(rowData.status)}
-                        style={{ textTransform: 'capitalize' }}
-                      />
-                    )}
-                  />
-                  <Column
-                    field="priority"
-                    header="Priority"
-                    sortable
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-1">
-                        <i className={getPriorityIcon(rowData.priority)}></i>
-                        <span style={{ textTransform: 'capitalize' }}>{rowData.priority}</span>
-                      </div>
-                    )}
-                  />
-                  <Column
-                    field="urls"
-                    header="URLs"
-                    body={(rowData) => (
-                      <Badge value={rowData.urls.length} severity="info" />
-                    )}
-                  />
-                  <Column
-                    field="successRate"
-                    header="Success Rate"
-                    sortable
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-2">
-                        <ProgressBar 
-                          value={rowData.successRate} 
-                          showValue={false} 
-                          style={{ width: '60px', height: '6px' }}
-                        />
-                        <span className="text-sm">{rowData.successRate}%</span>
-                      </div>
-                    )}
-                  />
-                  <Column
-                    field="submittedAt"
-                    header="Submitted"
-                    sortable
-                    body={(rowData) => new Date(rowData.submittedAt).toLocaleDateString()}
-                  />
-                  <Column
-                    body={(rowData) => (
-                      <Button
-                        icon="pi pi-eye"
-                        rounded
-                        outlined
-                        size="small"
-                        onClick={() => setSelectedRequest(rowData)}
-                      />
-                    )}
-                    style={{ width: '4rem' }}
-                  />
-                </DataTable>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-
-        {/* URL Monitoring Tab */}
-        <TabPanel header="URL Monitoring" leftIcon="pi pi-eye">
-          <div className="grid">
-            <div className="col-12">
-              <Card>
-                <Toolbar
-                  start={<h3 className="m-0">Monitored URLs</h3>}
-                  end={
-                    <Button 
-                      label="Add URL" 
-                      icon="pi pi-plus" 
+        {/* Requests Table */}
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>URL</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Search Engines</TableCell>
+                <TableCell>Submitted</TableCell>
+                <TableCell>Retries</TableCell>
+                <TableCell>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredRequests.map((request) => (
+                <TableRow key={request.id}>
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2" sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {request.url}
+                      </Typography>
+                      {request.message && (
+                        <Typography variant="caption" color="textSecondary">
+                          {request.message}
+                        </Typography>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={request.status}
+                      color={getStatusColor(request.status) as any}
                       size="small"
-                      onClick={() => setShowMonitoringDialog(true)}
-                      disabled={submitting}
                     />
-                  }
-                />
-
-                <DataTable
-                  value={urlMonitoring}
-                  paginator
-                  rows={10}
-                  showGridlines
-                  responsiveLayout="scroll"
-                >
-                  <Column field="url" header="URL" style={{ minWidth: '300px' }} />
-                  <Column
-                    field="keywords"
-                    header="Keywords"
-                    body={(rowData) => (
-                      <div className="flex flex-wrap gap-1">
-                        {rowData.keywords.slice(0, 2).map((keyword: string, index: number) => (
-                          <Tag key={index} value={keyword} severity="info" size="small" />
-                        ))}
-                        {rowData.keywords.length > 2 && (
-                          <Tag value={`+${rowData.keywords.length - 2} more`} severity="secondary" size="small" />
-                        )}
-                      </div>
-                    )}
-                  />
-                  <Column
-                    field="visibility"
-                    header="Visibility"
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-2">
-                        <ProgressBar 
-                          value={rowData.visibility} 
-                          showValue={false} 
-                          style={{ width: '80px', height: '8px' }}
-                          color={rowData.visibility < 25 ? '#10B981' : rowData.visibility < 50 ? '#F59E0B' : '#EF4444'}
+                  </TableCell>
+                  <TableCell>
+                    <Box>
+                      {request.search_engines.map(engine => (
+                        <Chip 
+                          key={engine}
+                          label={engine}
+                          size="small"
+                          variant="outlined"
+                          sx={{ mr: 0.5, mb: 0.5 }}
                         />
-                        <span className="text-sm font-medium">{rowData.visibility}%</span>
-                      </div>
-                    )}
-                  />
-                  <Column
-                    field="status"
-                    header="Status"
-                    body={(rowData) => (
-                      <Tag
-                        value={rowData.status}
-                        severity={
-                          rowData.status === 'removed' ? 'success' :
-                          rowData.status === 'monitoring' ? 'warning' : 'danger'
-                        }
-                        style={{ textTransform: 'capitalize' }}
+                      ))}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {formatDateTime(request.submitted_at)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {request.retry_count > 0 && (
+                      <Chip 
+                        label={`${request.retry_count} retries`}
+                        size="small"
+                        color="warning"
                       />
                     )}
-                  />
-                  <Column
-                    field="lastCheck"
-                    header="Last Check"
-                    body={(rowData) => new Date(rowData.lastCheck).toLocaleString()}
-                  />
-                  <Column
-                    field="alerts"
-                    header="Alerts"
-                    body={(rowData) => (
-                      <InputSwitch checked={rowData.alerts} />
-                    )}
-                  />
-                  <Column
-                    body={() => (
-                      <div className="flex gap-1">
-                        <Button 
-                      icon="pi pi-search" 
-                      rounded 
-                      outlined 
-                      size="small" 
-                      tooltip="Search Results"
-                      disabled={submitting}
-                      onClick={() => {
-                        // Handle search results view
-                        toast.current?.show({
-                          severity: 'info',
-                          summary: 'Feature Available',
-                          detail: 'Search results view will open detailed monitoring data'
-                        });
-                      }}
-                    />
-                        <Button 
-                      icon="pi pi-cog" 
-                      rounded 
-                      outlined 
-                      size="small" 
-                      tooltip="Configure"
-                      disabled={submitting}
-                      onClick={() => {
-                        // Handle configuration
-                        toast.current?.show({
-                          severity: 'info',
-                          summary: 'Configuration',
-                          detail: 'Monitor configuration options will be available here'
-                        });
-                      }}
-                    />
-                      </div>
-                    )}
-                  />
-                </DataTable>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
+                  </TableCell>
+                  <TableCell>
+                    <Box>
+                      <Tooltip title="View Details">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setSelectedRequest(request);
+                            setDetailsDialog(true);
+                          }}
+                        >
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Tooltip>
+                      
+                      {(request.status === 'pending' || request.status === 'submitted') && (
+                        <Tooltip title="Cancel">
+                          <IconButton
+                            size="small"
+                            onClick={() => cancelRequest(request.id)}
+                          >
+                            <CancelIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      
+                      {request.status === 'failed' && (
+                        <Tooltip title="Retry">
+                          <IconButton
+                            size="small"
+                            onClick={() => retryRequest(request.id)}
+                          >
+                            <RetryIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
 
-        {/* Analytics Tab */}
-        <TabPanel header="Analytics" leftIcon="pi pi-chart-bar">
-          <div className="grid">
-            {/* Visibility Metrics */}
-            <div className="col-12">
-              <Card title="Visibility Metrics by Search Engine">
-                <div className="grid">
-                  {visibilityMetrics.map((metric) => (
-                    <div key={metric.searchEngine} className="col-12 md:col-6 lg:col-4">
-                      <Card className="h-full border-1 surface-border">
-                        <div className="flex align-items-center justify-content-between mb-3">
-                          <h4 className="m-0">{metric.searchEngine}</h4>
-                          <i className={`pi ${
-                            metric.trend === 'improving' ? 'pi-arrow-up text-green-500' :
-                            metric.trend === 'declining' ? 'pi-arrow-down text-red-500' :
-                            'pi-minus text-yellow-500'
-                          }`}></i>
-                        </div>
-                        
-                        <div className="grid">
-                          <div className="col-6">
-                            <div className="text-sm text-600">Total URLs</div>
-                            <div className="text-lg font-bold">{metric.totalUrls}</div>
-                          </div>
-                          <div className="col-6">
-                            <div className="text-sm text-600">Hidden</div>
-                            <div className="text-lg font-bold text-green-600">{metric.hiddenUrls}</div>
-                          </div>
-                          <div className="col-6">
-                            <div className="text-sm text-600">Visible</div>
-                            <div className="text-lg font-bold text-red-600">{metric.visibleUrls}</div>
-                          </div>
-                          <div className="col-6">
-                            <div className="text-sm text-600">Reduction</div>
-                            <div className="text-lg font-bold">{metric.visibilityReduction}%</div>
-                          </div>
-                        </div>
-                        
-                        <Divider />
-                        
-                        <ProgressBar 
-                          value={metric.visibilityReduction}
-                          showValue={false}
-                          style={{ height: '8px' }}
-                        />
-                      </Card>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
+      {/* Analytics Tab */}
+      <TabPanel value={tabValue} index={1}>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Request Status Distribution
+                </Typography>
+                <Box sx={{ height: 300 }}>
+                  <Doughnut data={successRateChartData} />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Search Engine Success Rates
+                </Typography>
+                <Box sx={{ height: 300 }}>
+                  <Bar data={searchEngineChartData} />
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
 
-            {/* Regional Performance */}
-            <div className="col-12 lg:col-8">
-              <Card title="Regional Performance">
-                <DataTable value={regionData} showGridlines>
-                  <Column field="region" header="Region" />
-                  <Column field="requestCount" header="Requests" />
-                  <Column 
-                    field="successRate" 
-                    header="Success Rate"
-                    body={(rowData) => (
-                      <div className="flex align-items-center gap-2">
-                        <ProgressBar 
-                          value={rowData.successRate} 
-                          showValue={false} 
-                          style={{ width: '80px', height: '6px' }}
-                        />
-                        <span className="text-sm">{rowData.successRate}%</span>
-                      </div>
-                    )}
-                  />
-                  <Column 
-                    field="avgResponseTime" 
-                    header="Avg Response Time"
-                    body={(rowData) => `${rowData.avgResponseTime}h`}
-                  />
-                </DataTable>
-              </Card>
-            </div>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Performance Statistics (Last 24 Hours)
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2">Total Requests</Typography>
+                    <Typography variant="h5">{stats?.total_requests || 0}</Typography>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2">Success Rate</Typography>
+                    <Typography variant="h5">
+                      {stats ? `${(stats.success_rate * 100).toFixed(1)}%` : '0%'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2">Average Time</Typography>
+                    <Typography variant="h5">
+                      {stats ? `${(stats.average_processing_time / 60).toFixed(0)}min` : '0min'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6} md={3}>
+                    <Typography variant="subtitle2">Pending</Typography>
+                    <Typography variant="h5">{stats?.pending_requests || 0}</Typography>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </TabPanel>
 
-            {/* Response Times Chart */}
-            <div className="col-12 lg:col-4">
-              <Card title="Response Times" className="h-full">
-                <div style={{ height: '300px' }}>
-                  <Chart
-                    type="bar"
-                    data={responseTimeData}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      indexAxis: 'y' as const,
-                      plugins: {
-                        legend: {
-                          display: false
-                        }
-                      },
-                      scales: {
-                        x: {
-                          beginAtZero: true,
-                          title: {
-                            display: true,
-                            text: 'Hours'
-                          }
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </Card>
-            </div>
-          </div>
-        </TabPanel>
-      </TabView>
+      {/* Verification Tab */}
+      <TabPanel value={tabValue} index={2}>
+        <ComingSoon 
+          title="Delisting Verification"
+          description="Real-time verification of successful URL removals from search engine indices will be available here."
+          features={[
+            'Automated verification checks',
+            'Search result monitoring',
+            'Removal confirmation reports',
+            'Re-indexing alerts'
+          ]}
+        />
+      </TabPanel>
 
       {/* New Request Dialog */}
-      <Dialog
-        header="Create Delisting Request"
-        visible={showRequestDialog}
-        style={{ width: '800px' }}
-        onHide={() => setShowRequestDialog(false)}
-        footer={
-          <div className="flex gap-2">
-            <Button 
-              label="Cancel" 
-              outlined 
-              onClick={() => setShowRequestDialog(false)}
-              disabled={submitting}
+      <Dialog open={newRequestDialog} onClose={() => setNewRequestDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Submit New Delisting Request</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="URL to Delist"
+              value={newRequestForm.url}
+              onChange={(e) => setNewRequestForm({ ...newRequestForm, url: e.target.value })}
+              required
+              fullWidth
+              helperText="The URL that should be removed from search engines"
             />
-            <Button 
-              label="Submit Request" 
-              onClick={handleSubmitRequest}
-              loading={submitting}
-              disabled={!newRequest.urls?.length || !selectedSearchEngines.length || !newRequest.reason?.trim()}
+            
+            <TextField
+              label="Original Content URL"
+              value={newRequestForm.original_content_url}
+              onChange={(e) => setNewRequestForm({ ...newRequestForm, original_content_url: e.target.value })}
+              fullWidth
+              helperText="URL of the original authorized content (optional)"
             />
-          </div>
-        }
-      >
-        <div className="grid">
-          <div className="col-12 md:col-6">
-            <label className="block font-medium mb-2">Request Type</label>
-            <Dropdown
-              value={newRequest.type}
-              options={delistingTypeOptions}
-              onChange={(e) => setNewRequest(prev => ({ ...prev, type: e.value }))}
-              className="w-full"
+            
+            <TextField
+              label="Reason"
+              value={newRequestForm.reason}
+              onChange={(e) => setNewRequestForm({ ...newRequestForm, reason: e.target.value })}
+              fullWidth
+              multiline
+              rows={2}
             />
-          </div>
-          
-          <div className="col-12 md:col-6">
-            <label className="block font-medium mb-2">Priority</label>
-            <Dropdown
-              value={newRequest.priority}
-              options={priorityOptions}
-              onChange={(e) => setNewRequest(prev => ({ ...prev, priority: e.value }))}
-              className="w-full"
+            
+            <TextField
+              label="Evidence URL"
+              value={newRequestForm.evidence_url}
+              onChange={(e) => setNewRequestForm({ ...newRequestForm, evidence_url: e.target.value })}
+              fullWidth
+              helperText="URL containing evidence of ownership (optional)"
             />
-          </div>
-          
-          <div className="col-12">
-            <label className="block font-medium mb-2">Search Engines</label>
-            <div className="grid">
-              {searchEngines.map(engine => (
-                <div key={engine.id} className="col-12 md:col-6">
-                  <div className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId={engine.id}
-                      checked={selectedSearchEngines.includes(engine.id)}
-                      onChange={() => {
-                        const updated = selectedSearchEngines.includes(engine.id)
-                          ? selectedSearchEngines.filter(id => id !== engine.id)
-                          : [...selectedSearchEngines, engine.id];
-                        setSelectedSearchEngines(updated);
-                      }}
-                    />
-                    <label htmlFor={engine.id} className="flex align-items-center gap-2">
-                      <i className={engine.icon} style={{ color: engine.color }}></i>
-                      {engine.name}
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="col-12">
-            <label className="block font-medium mb-2">URLs (one per line)</label>
-            <InputTextarea
-              value={newRequest.urls?.join('\n') || ''}
-              onChange={(e) => {
-                const urls = e.target.value.split('\n').filter(url => url.trim());
-                setNewRequest(prev => ({ ...prev, urls }));
-              }}
-              rows={4}
-              className="w-full"
-              placeholder="https://example.com/infringing-content&#10;https://badsite.com/stolen-material"
-            />
-          </div>
-          
-          <div className="col-12 md:col-6">
-            <label className="block font-medium mb-2">Region</label>
-            <Dropdown
-              value={selectedRegion}
-              options={regionOptions}
-              onChange={(e) => setSelectedRegion(e.value)}
-              className="w-full"
-            />
-          </div>
-          
-          <div className="col-12 md:col-6">
-            <label className="block font-medium mb-2">Template</label>
-            <Dropdown
-              options={templateOptions}
-              placeholder="Select template"
-              className="w-full"
-            />
-          </div>
-          
-          <div className="col-12">
-            <label className="block font-medium mb-2">Keywords (optional)</label>
-            <Chips
-              value={newRequest.keywords}
-              onChange={(e) => setNewRequest(prev => ({ ...prev, keywords: e.value }))}
-              className="w-full"
-              placeholder="Add keywords"
-            />
-          </div>
-          
-          <div className="col-12">
-            <label className="block font-medium mb-2">Reason for Removal</label>
-            <InputTextarea
-              value={newRequest.reason || ''}
-              onChange={(e) => setNewRequest(prev => ({ ...prev, reason: e.value }))}
-              rows={3}
-              className="w-full"
-              placeholder="Describe why this content should be removed from search results..."
-            />
-          </div>
-          
-          <div className="col-12">
-            <h4>Additional Options</h4>
-            <div className="grid">
-              <div className="col-12 md:col-6">
-                <div className="flex align-items-center gap-2">
-                  <Checkbox
-                    inputId="cache-removal"
-                    checked={newRequest.metadata?.cacheRemoval || false}
-                    onChange={(e) => setNewRequest(prev => ({
-                      ...prev,
-                      metadata: { ...prev.metadata, cacheRemoval: e.checked }
-                    }))}
-                  />
-                  <label htmlFor="cache-removal">Request cache removal</label>
-                </div>
-              </div>
-              <div className="col-12 md:col-6">
-                <div className="flex align-items-center gap-2">
-                  <Checkbox
-                    inputId="image-search"
-                    checked={newRequest.metadata?.imageSearch || false}
-                    onChange={(e) => setNewRequest(prev => ({
-                      ...prev,
-                      metadata: { ...prev.metadata, imageSearch: e.checked }
-                    }))}
-                  />
-                  <label htmlFor="image-search">Include image search</label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+            
+            <FormControl fullWidth>
+              <InputLabel>Priority</InputLabel>
+              <Select
+                value={newRequestForm.priority}
+                label="Priority"
+                onChange={(e) => setNewRequestForm({ ...newRequestForm, priority: e.target.value as any })}
+              >
+                <MenuItem value="low">Low</MenuItem>
+                <MenuItem value="normal">Normal</MenuItem>
+                <MenuItem value="high">High</MenuItem>
+                <MenuItem value="urgent">Urgent</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <FormControl fullWidth>
+              <InputLabel>Search Engines</InputLabel>
+              <Select
+                multiple
+                value={newRequestForm.search_engines}
+                label="Search Engines"
+                onChange={(e) => setNewRequestForm({ ...newRequestForm, search_engines: e.target.value as string[] })}
+              >
+                <MenuItem value="google">Google</MenuItem>
+                <MenuItem value="bing">Bing</MenuItem>
+                <MenuItem value="yandex">Yandex</MenuItem>
+                <MenuItem value="duckduckgo">DuckDuckGo</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNewRequestDialog(false)}>Cancel</Button>
+          <Button onClick={submitNewRequest} variant="contained">Submit</Button>
+        </DialogActions>
       </Dialog>
 
-      {/* Bulk Submit Dialog */}
-      <Dialog
-        header="Bulk URL Submission"
-        visible={showBulkDialog}
-        style={{ width: '600px' }}
-        onHide={() => setShowBulkDialog(false)}
-        footer={
-          <div className="flex gap-2">
-            <Button 
-              label="Cancel" 
-              outlined 
-              onClick={() => setShowBulkDialog(false)}
-              disabled={submitting}
+      {/* Batch Request Dialog */}
+      <Dialog open={batchDialog} onClose={() => setBatchDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Submit Batch Delisting Request</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Batch Name"
+              value={batchForm.name}
+              onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })}
+              fullWidth
+              helperText="Name to identify this batch"
             />
-            <Button 
-              label="Submit All" 
-              onClick={handleBulkSubmit}
-              loading={submitting}
-              disabled={!bulkUrls.trim() || selectedSearchEngines.length === 0}
-            />
-          </div>
-        }
-      >
-        <div className="grid">
-          <div className="col-12">
-            <label className="block font-medium mb-2">URLs (one per line)</label>
-            <InputTextarea
-              value={bulkUrls}
-              onChange={(e) => setBulkUrls(e.target.value)}
+            
+            <TextField
+              label="URLs (one per line)"
+              value={batchForm.urls}
+              onChange={(e) => setBatchForm({ ...batchForm, urls: e.target.value })}
+              fullWidth
+              multiline
               rows={8}
-              className="w-full"
-              placeholder="https://example.com/url1&#10;https://example.com/url2&#10;https://example.com/url3"
+              required
+              helperText="Enter each URL on a separate line"
             />
-          </div>
-          <div className="col-12">
-            <label className="block font-medium mb-2">Search Engines</label>
-            <div className="grid">
-              {searchEngines.map(engine => (
-                <div key={engine.id} className="col-12 md:col-6">
-                  <div className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId={`bulk-${engine.id}`}
-                      checked={selectedSearchEngines.includes(engine.id)}
-                      onChange={() => {
-                        const updated = selectedSearchEngines.includes(engine.id)
-                          ? selectedSearchEngines.filter(id => id !== engine.id)
-                          : [...selectedSearchEngines, engine.id];
-                        setSelectedSearchEngines(updated);
-                      }}
-                      disabled={submitting}
-                    />
-                    <label htmlFor={`bulk-${engine.id}`} className="flex align-items-center gap-2">
-                      <i className={engine.icon} style={{ color: engine.color }}></i>
-                      {engine.name}
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="col-12">
-            <div className="text-sm text-600 mb-3">
-              {bulkUrls.split('\n').filter(url => url.trim()).length} URLs detected
-              {selectedSearchEngines.length > 0 && (
-                <span> • {selectedSearchEngines.length} search engines selected</span>
+            
+            <TextField
+              label="Description"
+              value={batchForm.description}
+              onChange={(e) => setBatchForm({ ...batchForm, description: e.target.value })}
+              fullWidth
+              multiline
+              rows={2}
+            />
+            
+            <TextField
+              label="Batch Size"
+              type="number"
+              value={batchForm.batch_size}
+              onChange={(e) => setBatchForm({ ...batchForm, batch_size: parseInt(e.target.value) || 10 })}
+              fullWidth
+              helperText="Number of URLs to process simultaneously"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBatchDialog(false)}>Cancel</Button>
+          <Button onClick={submitBatchRequest} variant="contained">Submit Batch</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Request Details Dialog */}
+      <Dialog open={detailsDialog} onClose={() => setDetailsDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Request Details</DialogTitle>
+        <DialogContent>
+          {selectedRequest && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="h6" gutterBottom>
+                URL: {selectedRequest.url}
+              </Typography>
+              
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Status</Typography>
+                  <Chip 
+                    label={selectedRequest.status}
+                    color={getStatusColor(selectedRequest.status) as any}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Submitted</Typography>
+                  <Typography>{formatDateTime(selectedRequest.submitted_at)}</Typography>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Search Engines</Typography>
+                  <Box>
+                    {selectedRequest.search_engines.map(engine => (
+                      <Chip key={engine} label={engine} size="small" sx={{ mr: 0.5 }} />
+                    ))}
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Retry Count</Typography>
+                  <Typography>{selectedRequest.retry_count}</Typography>
+                </Grid>
+              </Grid>
+              
+              {selectedRequest.engine_statuses && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="h6" gutterBottom>Search Engine Status</Typography>
+                  {Object.entries(selectedRequest.engine_statuses).map(([engine, status]) => (
+                    <Box key={engine} sx={{ mb: 1 }}>
+                      <Typography variant="subtitle2">{engine.toUpperCase()}</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Status: {(status as any).status} | 
+                        {(status as any).message && ` Message: ${(status as any).message}`}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
               )}
-            </div>
-          </div>
-        </div>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsDialog(false)}>Close</Button>
+        </DialogActions>
       </Dialog>
-      
-      {/* URL Monitoring Dialog */}
-      <Dialog
-        header="Add URL Monitoring"
-        visible={showMonitoringDialog}
-        style={{ width: '600px' }}
-        onHide={() => setShowMonitoringDialog(false)}
-        footer={
-          <div className="flex gap-2">
-            <Button 
-              label="Cancel" 
-              outlined 
-              onClick={() => setShowMonitoringDialog(false)}
-              disabled={submitting}
-            />
-            <Button 
-              label="Add Monitor" 
-              onClick={() => {
-                // This would be connected to the actual form data
-                const mockData = {
-                  url: 'https://example.com/content',
-                  keywords: ['brand name', 'content'],
-                  searchEngines: selectedSearchEngines,
-                  alerts: true,
-                  autoDelisting: false
-                };
-                handleAddUrlMonitoring(mockData);
-              }}
-              loading={submitting}
-              disabled={selectedSearchEngines.length === 0}
-            />
-          </div>
-        }
-      >
-        <div className="grid">
-          <div className="col-12">
-            <label className="block font-medium mb-2">URL to Monitor</label>
-            <InputText
-              className="w-full"
-              placeholder="https://example.com/content-to-monitor"
-              disabled={submitting}
-            />
-          </div>
-          
-          <div className="col-12">
-            <label className="block font-medium mb-2">Keywords</label>
-            <Chips
-              className="w-full"
-              placeholder="Add keywords to monitor"
-              disabled={submitting}
-            />
-          </div>
-          
-          <div className="col-12">
-            <label className="block font-medium mb-2">Search Engines</label>
-            <div className="grid">
-              {searchEngines.map(engine => (
-                <div key={engine.id} className="col-12 md:col-6">
-                  <div className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId={`monitor-${engine.id}`}
-                      checked={selectedSearchEngines.includes(engine.id)}
-                      onChange={() => {
-                        const updated = selectedSearchEngines.includes(engine.id)
-                          ? selectedSearchEngines.filter(id => id !== engine.id)
-                          : [...selectedSearchEngines, engine.id];
-                        setSelectedSearchEngines(updated);
-                      }}
-                      disabled={submitting}
-                    />
-                    <label htmlFor={`monitor-${engine.id}`} className="flex align-items-center gap-2">
-                      <i className={engine.icon} style={{ color: engine.color }}></i>
-                      {engine.name}
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="col-12">
-            <h4>Monitoring Options</h4>
-            <div className="grid">
-              <div className="col-12 md:col-6">
-                <div className="flex align-items-center gap-2">
-                  <InputSwitch disabled={submitting} />
-                  <label>Enable alerts</label>
-                </div>
-              </div>
-              <div className="col-12 md:col-6">
-                <div className="flex align-items-center gap-2">
-                  <InputSwitch disabled={submitting} />
-                  <label>Auto-delisting</label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Dialog>
-    </div>
+    </Box>
   );
 };
 
