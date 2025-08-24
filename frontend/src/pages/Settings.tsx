@@ -654,11 +654,11 @@ const Settings: React.FC = () => {
                 <Card title="Personal Information">
                   <div className="grid">
                     <div className="col-12 md:col-6">
-                      <label htmlFor="firstName" className="block text-900 font-medium mb-2">
+                      <label htmlFor="settings-firstName" className="block text-900 font-medium mb-2">
                         First Name *
                       </label>
                       <InputText
-                        id="firstName"
+                        id="settings-firstName"
                         value={settings.profile.firstName}
                         onChange={(e) => setSettings({
                           ...settings,
@@ -669,11 +669,11 @@ const Settings: React.FC = () => {
                     </div>
                     
                     <div className="col-12 md:col-6">
-                      <label htmlFor="lastName" className="block text-900 font-medium mb-2">
+                      <label htmlFor="settings-lastName" className="block text-900 font-medium mb-2">
                         Last Name *
                       </label>
                       <InputText
-                        id="lastName"
+                        id="settings-lastName"
                         value={settings.profile.lastName}
                         onChange={(e) => setSettings({
                           ...settings,
@@ -684,11 +684,11 @@ const Settings: React.FC = () => {
                     </div>
                     
                     <div className="col-12">
-                      <label htmlFor="email" className="block text-900 font-medium mb-2">
+                      <label htmlFor="settings-email" className="block text-900 font-medium mb-2">
                         Email Address *
                       </label>
                       <InputText
-                        id="email"
+                        id="settings-email"
                         value={settings.profile.email}
                         onChange={(e) => setSettings({
                           ...settings,

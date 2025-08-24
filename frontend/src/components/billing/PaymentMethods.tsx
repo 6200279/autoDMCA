@@ -20,7 +20,7 @@ interface PaymentMethodsProps {
 }
 
 // Initialize Stripe
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || '');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 const PaymentMethods: React.FC<PaymentMethodsProps> = ({ onRefresh }) => {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);

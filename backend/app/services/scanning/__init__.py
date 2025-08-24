@@ -5,7 +5,7 @@ from .piracy_sites import PiracySiteScanner, PiracySiteDatabase
 from .enhanced_search_engines import EnhancedSearchEngineScanner
 from .platforms import (
     GoogleScanner, RedditScanner, InstagramScanner, 
-    TwitterScanner, TikTokScanner, PiracySiteScanner as PlatformPiracyScanner
+    TwitterScanner, TikTokScanner
 )
 
 __all__ = [
@@ -20,6 +20,5 @@ __all__ = [
     'RedditScanner', 
     'InstagramScanner',
     'TwitterScanner',
-    'TikTokScanner',
-    'PlatformPiracyScanner'
+    'TikTokScanner'
 ]

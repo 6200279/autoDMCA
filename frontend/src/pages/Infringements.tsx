@@ -815,6 +815,7 @@ const Infringements: React.FC = () => {
           value={globalFilterValue}
           onChange={onGlobalFilterChange}
           placeholder="Search infringements..."
+          aria-label="Search infringements"
           size="small"
         />
       </span>

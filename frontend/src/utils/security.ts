@@ -17,7 +17,7 @@ export const SECURITY_CONFIG = {
   cspNonce: document.querySelector('meta[name="csp-nonce"]')?.getAttribute('content') || '',
   
   // API endpoints
-  apiBaseUrl: process.env.REACT_APP_API_BASE_URL || '/api/v1',
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   
   // Security headers
   securityHeaders: {
@@ -120,7 +120,7 @@ export class InputValidator {
       }
       
       // Prevent localhost/private IPs in production
-      if (process.env.NODE_ENV === 'production') {
+      if (import.meta.env.PROD) {
         const hostname = parsed.hostname.toLowerCase();
         const privateIPs = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
         const privateRanges = ['192.168.', '10.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.'];
@@ -388,7 +388,7 @@ export class CSRFProtection {
         
         // Update meta tag
         const metaTag = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement;
-        if (metaTag) {
+        if (metaTag && this.csrfToken) {
           metaTag.content = this.csrfToken;
         }
       }
@@ -430,7 +430,7 @@ export class SecureHttpClient {
     // Add authentication token
     const token = SecureStorage.getToken();
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
     }
     
     // Add CSRF protection for unsafe methods
@@ -510,8 +510,8 @@ export class CSPHelper {
     console.warn('CSP Violation:', violation);
     
     // Send violation report to server (if configured)
-    if (process.env.REACT_APP_CSP_REPORT_URI) {
-      fetch(process.env.REACT_APP_CSP_REPORT_URI, {
+    if (import.meta.env.VITE_CSP_REPORT_URI) {
+      fetch(import.meta.env.VITE_CSP_REPORT_URI, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/csp-report'
@@ -565,8 +565,8 @@ export class SecurityLogger {
     console.warn('Security Event:', event);
     
     // Send to server (if configured)
-    if (process.env.REACT_APP_SECURITY_LOG_ENDPOINT) {
-      SecureHttpClient.post(process.env.REACT_APP_SECURITY_LOG_ENDPOINT, event)
+    if (import.meta.env.VITE_SECURITY_LOG_ENDPOINT) {
+      SecureHttpClient.post(import.meta.env.VITE_SECURITY_LOG_ENDPOINT, event)
         .catch(error => console.error('Failed to log security event:', error));
     }
   }

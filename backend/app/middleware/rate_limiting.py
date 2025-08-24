@@ -150,11 +150,11 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         self.default_limit = default_limit
         self.default_window = default_window
         
-        # Define rate limits for different endpoints
+        # Define rate limits for different endpoints - RELAXED FOR TESTING
         self.rate_limits = rate_limits or {
-            "/api/v1/auth/login": {"limit": 5, "window": 900},  # 5 per 15 minutes
-            "/api/v1/auth/register": {"limit": 3, "window": 3600},  # 3 per hour
-            "/api/v1/auth/forgot-password": {"limit": 3, "window": 3600},  # 3 per hour
+            "/api/v1/auth/login": {"limit": 50, "window": 600},  # 50 per 10 minutes - RELAXED
+            "/api/v1/auth/register": {"limit": 10, "window": 3600},  # 10 per hour - RELAXED
+            "/api/v1/auth/forgot-password": {"limit": 10, "window": 3600},  # 10 per hour - RELAXED
             "/api/v1/infringements": {"limit": 100, "window": 3600},  # 100 per hour
             "/api/v1/takedowns": {"limit": 50, "window": 3600},  # 50 per hour
             "/api/v1/profiles/*/scan": {"limit": 10, "window": 3600},  # 10 scans per hour

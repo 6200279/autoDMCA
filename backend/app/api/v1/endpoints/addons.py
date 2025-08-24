@@ -4,11 +4,11 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime
 
-from ....api.deps.auth import get_current_user
-from ....api.deps.database import get_db
-from ....db.models.user import User
-from ....db.models.addon_service import AddonService, UserAddonSubscription, AddonServiceType
-from ....services.billing.addon_service import AddonServiceManager
+from app.api.deps.auth import get_current_user
+from app.db.session import get_db
+from app.db.models.user import User
+from app.db.models.addon_service import AddonService, UserAddonSubscription, AddonServiceType
+from app.services.billing.addon_service import AddonServiceManager
 
 router = APIRouter()
 

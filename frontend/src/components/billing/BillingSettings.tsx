@@ -159,8 +159,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="col-span-2">
-            <label className="block text-sm font-medium mb-2">Company (Optional)</label>
+            <label htmlFor="billing-company" className="block text-sm font-medium mb-2">Company (Optional)</label>
             <InputText
+              id="billing-company"
               value={billingAddress.company}
               onChange={(e) => handleInputChange('company', e.target.value)}
               disabled={!editing}
@@ -169,8 +170,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium mb-2">Address Line 1</label>
+            <label htmlFor="billing-line1" className="block text-sm font-medium mb-2">Address Line 1</label>
             <InputText
+              id="billing-line1"
               value={billingAddress.line1}
               onChange={(e) => handleInputChange('line1', e.target.value)}
               disabled={!editing}
@@ -180,8 +182,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium mb-2">Address Line 2 (Optional)</label>
+            <label htmlFor="billing-line2" className="block text-sm font-medium mb-2">Address Line 2 (Optional)</label>
             <InputText
+              id="billing-line2"
               value={billingAddress.line2}
               onChange={(e) => handleInputChange('line2', e.target.value)}
               disabled={!editing}
@@ -190,8 +193,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">City</label>
+            <label htmlFor="billing-city" className="block text-sm font-medium mb-2">City</label>
             <InputText
+              id="billing-city"
               value={billingAddress.city}
               onChange={(e) => handleInputChange('city', e.target.value)}
               disabled={!editing}
@@ -201,8 +205,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">State/Province</label>
+            <label htmlFor="billing-state" className="block text-sm font-medium mb-2">State/Province</label>
             <InputText
+              id="billing-state"
               value={billingAddress.state}
               onChange={(e) => handleInputChange('state', e.target.value)}
               disabled={!editing}
@@ -211,8 +216,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Postal Code</label>
+            <label htmlFor="billing-postalCode" className="block text-sm font-medium mb-2">Postal Code</label>
             <InputText
+              id="billing-postalCode"
               value={billingAddress.postalCode}
               onChange={(e) => handleInputChange('postalCode', e.target.value)}
               disabled={!editing}
@@ -222,8 +228,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Country</label>
+            <label htmlFor="billing-country" className="block text-sm font-medium mb-2">Country</label>
             <Dropdown
+              id="billing-country"
               value={billingAddress.country}
               onChange={(e) => handleInputChange('country', e.value)}
               options={countryOptions}
@@ -233,8 +240,9 @@ const BillingSettings: React.FC<BillingSettingsProps> = ({ onRefresh }) => {
           </div>
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium mb-2">Tax ID (Optional)</label>
+            <label htmlFor="billing-taxId" className="block text-sm font-medium mb-2">Tax ID (Optional)</label>
             <InputText
+              id="billing-taxId"
               value={billingAddress.taxId}
               onChange={(e) => handleInputChange('taxId', e.target.value)}
               disabled={!editing}

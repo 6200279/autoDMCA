@@ -36,7 +36,10 @@
       "Bash(docker stop:*)",
       "mcp__serena__think_about_collected_information",
       "mcp__serena__think_about_task_adherence",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "mcp__serena__replace_symbol_body",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "additionalDirectories": [

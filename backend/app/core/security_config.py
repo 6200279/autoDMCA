@@ -361,12 +361,12 @@ class InputValidator:
     
     PATH_TRAVERSAL_PATTERNS = [
         r"\.\./",
-        r"\.\.\\",
+        r"\.\.\\\\",
         r"~",
         r"/etc/",
         r"/proc/",
-        r"C:\\",
-        r"\\windows\\"
+        r"C:\\\\",
+        r"\\\\windows\\\\"
     ]
     
     @classmethod

@@ -111,7 +111,7 @@ export class AuthErrorBoundary extends Component<AuthErrorBoundaryProps, AuthErr
                 </ul>
               </div>
               
-              {process.env.NODE_ENV === 'development' && (
+              {import.meta.env.DEV && (
                 <details className="mt-3">
                   <summary className="cursor-pointer text-sm font-medium">
                     Technical Details (Development Only)

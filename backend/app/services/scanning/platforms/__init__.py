@@ -6,7 +6,7 @@ from .base_scanner import BaseScanner, ScanResult
 from .google_scanner import GoogleScanner
 from .reddit_scanner import RedditScanner
 from .social_media_scanner import InstagramScanner, TwitterScanner, TikTokScanner
-from .piracy_scanner import PiracySiteScanner
+# Removed PiracySiteScanner import to avoid circular import
 
 __all__ = [
     'BaseScanner',
@@ -15,6 +15,5 @@ __all__ = [
     'RedditScanner',
     'InstagramScanner',
     'TwitterScanner',
-    'TikTokScanner',
-    'PiracySiteScanner'
+    'TikTokScanner'
 ]

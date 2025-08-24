@@ -4,11 +4,11 @@ from fastapi import APIRouter, Request, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
-from ....core.config import settings
-from ....api.deps.database import get_db
-from ....db.models.user import User
-from ....db.models.addon_service import UserAddonSubscription, AddonServiceStatus
-from ....db.models.gift_subscription import GiftSubscription, GiftStatus
+from app.core.config import settings
+from app.db.session import get_db
+from app.db.models.user import User
+from app.db.models.addon_service import UserAddonSubscription, AddonServiceStatus
+from app.db.models.gift_subscription import GiftSubscription, GiftStatus
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

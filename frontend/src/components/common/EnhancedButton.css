@@ -1,0 +1,336 @@
+/* Enhanced Button System */
+
+.enhanced-button {
+  /* Base button improvements */
+  border: none;
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.enhanced-button:focus,
+.enhanced-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--autodmca-primary-200);
+}
+
+.enhanced-button.enhanced-button-loading {
+  pointer-events: none;
+}
+
+/* === SIZE VARIANTS === */
+.enhanced-button-xs {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+  border-radius: var(--radius-sm);
+  min-height: 1.75rem;
+}
+
+.enhanced-button-sm {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-snug);
+  border-radius: var(--radius-base);
+  min-height: 2rem;
+}
+
+.enhanced-button-md {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+  border-radius: var(--radius-md);
+  min-height: 2.5rem;
+}
+
+.enhanced-button-lg {
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-normal);
+  border-radius: var(--radius-lg);
+  min-height: 3rem;
+}
+
+.enhanced-button-xl {
+  padding: var(--space-5) var(--space-8);
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-normal);
+  border-radius: var(--radius-lg);
+  min-height: 3.5rem;
+}
+
+/* === COLOR VARIANTS === */
+
+/* Primary Button */
+.enhanced-button-primary {
+  background-color: var(--autodmca-primary-600);
+  color: var(--autodmca-text-inverse);
+  border: 1px solid var(--autodmca-primary-600);
+}
+
+.enhanced-button-primary:hover:not(:disabled) {
+  background-color: var(--autodmca-primary-700);
+  border-color: var(--autodmca-primary-700);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-primary:active:not(:disabled) {
+  background-color: var(--autodmca-primary-800);
+  border-color: var(--autodmca-primary-800);
+  transform: translateY(0);
+}
+
+/* Secondary Button */
+.enhanced-button-secondary {
+  background-color: var(--autodmca-secondary-600);
+  color: var(--autodmca-text-inverse);
+  border: 1px solid var(--autodmca-secondary-600);
+}
+
+.enhanced-button-secondary:hover:not(:disabled) {
+  background-color: var(--autodmca-secondary-700);
+  border-color: var(--autodmca-secondary-700);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-secondary:active:not(:disabled) {
+  background-color: var(--autodmca-secondary-800);
+  border-color: var(--autodmca-secondary-800);
+  transform: translateY(0);
+}
+
+/* Success Button */
+.enhanced-button-success {
+  background-color: var(--autodmca-success-600);
+  color: var(--autodmca-text-inverse);
+  border: 1px solid var(--autodmca-success-600);
+}
+
+.enhanced-button-success:hover:not(:disabled) {
+  background-color: var(--autodmca-success-700);
+  border-color: var(--autodmca-success-700);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-success:active:not(:disabled) {
+  background-color: var(--autodmca-success-800);
+  border-color: var(--autodmca-success-800);
+  transform: translateY(0);
+}
+
+/* Warning Button */
+.enhanced-button-warning {
+  background-color: var(--autodmca-warning-600);
+  color: var(--autodmca-text-inverse);
+  border: 1px solid var(--autodmca-warning-600);
+}
+
+.enhanced-button-warning:hover:not(:disabled) {
+  background-color: var(--autodmca-warning-700);
+  border-color: var(--autodmca-warning-700);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-warning:active:not(:disabled) {
+  background-color: var(--autodmca-warning-800);
+  border-color: var(--autodmca-warning-800);
+  transform: translateY(0);
+}
+
+/* Danger Button */
+.enhanced-button-danger {
+  background-color: var(--autodmca-danger-600);
+  color: var(--autodmca-text-inverse);
+  border: 1px solid var(--autodmca-danger-600);
+}
+
+.enhanced-button-danger:hover:not(:disabled) {
+  background-color: var(--autodmca-danger-700);
+  border-color: var(--autodmca-danger-700);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-danger:active:not(:disabled) {
+  background-color: var(--autodmca-danger-800);
+  border-color: var(--autodmca-danger-800);
+  transform: translateY(0);
+}
+
+/* Info Button */
+.enhanced-button-info {
+  background-color: var(--autodmca-info-600);
+  color: var(--autodmca-text-inverse);
+  border: 1px solid var(--autodmca-info-600);
+}
+
+.enhanced-button-info:hover:not(:disabled) {
+  background-color: var(--autodmca-info-700);
+  border-color: var(--autodmca-info-700);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-info:active:not(:disabled) {
+  background-color: var(--autodmca-info-800);
+  border-color: var(--autodmca-info-800);
+  transform: translateY(0);
+}
+
+/* Ghost Button */
+.enhanced-button-ghost {
+  background-color: transparent;
+  color: var(--autodmca-text-primary);
+  border: 1px solid transparent;
+}
+
+.enhanced-button-ghost:hover:not(:disabled) {
+  background-color: var(--autodmca-surface-hover);
+  color: var(--autodmca-primary-600);
+}
+
+.enhanced-button-ghost:active:not(:disabled) {
+  background-color: var(--autodmca-surface-active);
+  transform: translateY(0);
+}
+
+/* Outline Button */
+.enhanced-button-outline {
+  background-color: transparent;
+  color: var(--autodmca-primary-600);
+  border: 1px solid var(--autodmca-primary-600);
+}
+
+.enhanced-button-outline:hover:not(:disabled) {
+  background-color: var(--autodmca-primary-600);
+  color: var(--autodmca-text-inverse);
+  transform: translateY(-1px);
+}
+
+.enhanced-button-outline:active:not(:disabled) {
+  background-color: var(--autodmca-primary-700);
+  border-color: var(--autodmca-primary-700);
+  transform: translateY(0);
+}
+
+/* === ELEVATION VARIANTS === */
+.enhanced-button-elevation-1 {
+  box-shadow: var(--shadow-sm);
+}
+
+.enhanced-button-elevation-1:hover:not(:disabled) {
+  box-shadow: var(--shadow-md);
+}
+
+.enhanced-button-elevation-2 {
+  box-shadow: var(--shadow-base);
+}
+
+.enhanced-button-elevation-2:hover:not(:disabled) {
+  box-shadow: var(--shadow-lg);
+}
+
+.enhanced-button-elevation-3 {
+  box-shadow: var(--shadow-md);
+}
+
+.enhanced-button-elevation-3:hover:not(:disabled) {
+  box-shadow: var(--shadow-xl);
+}
+
+/* === SPECIAL STATES === */
+.enhanced-button-full-width {
+  width: 100%;
+}
+
+.enhanced-button:disabled,
+.enhanced-button-loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.enhanced-button:disabled:hover,
+.enhanced-button-loading:hover {
+  transform: none !important;
+}
+
+/* === RIPPLE EFFECT === */
+.enhanced-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  transform: scale(0);
+  transition: transform 0.3s ease-out;
+  pointer-events: none;
+}
+
+.enhanced-button:active::before {
+  transform: scale(1);
+  transition: transform 0s;
+}
+
+/* === ICON SPACING === */
+.enhanced-button .p-button-icon-left {
+  margin-right: var(--space-2);
+}
+
+.enhanced-button .p-button-icon-right {
+  margin-left: var(--space-2);
+}
+
+/* === LOADING STATE === */
+.enhanced-button-loading .pi-spin {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* === RESPONSIVE DESIGN === */
+@media (max-width: 640px) {
+  .enhanced-button-lg {
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--font-size-base);
+    min-height: 2.75rem;
+  }
+  
+  .enhanced-button-xl {
+    padding: var(--space-4) var(--space-6);
+    font-size: var(--font-size-lg);
+    min-height: 3rem;
+  }
+}
+
+/* === DARK THEME ADJUSTMENTS === */
+.dark-theme .enhanced-button-ghost {
+  color: var(--autodmca-text-primary);
+}
+
+.dark-theme .enhanced-button-ghost:hover:not(:disabled) {
+  background-color: var(--autodmca-surface-hover);
+  color: var(--autodmca-primary-400);
+}
+
+.dark-theme .enhanced-button-outline {
+  color: var(--autodmca-primary-400);
+  border-color: var(--autodmca-primary-400);
+}
+
+.dark-theme .enhanced-button-outline:hover:not(:disabled) {
+  background-color: var(--autodmca-primary-500);
+  border-color: var(--autodmca-primary-500);
+}

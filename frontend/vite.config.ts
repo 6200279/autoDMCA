@@ -72,7 +72,7 @@ export default defineConfig({
   // Security: Configure development server
   server: {
     // Security: Bind to localhost only
-    host: 'localhost',
+    host: '0.0.0.0',
     port: 3000,
     
     // Security: Enable HTTPS in development
@@ -94,8 +94,8 @@ export default defineConfig({
       
       // Security: Content Security Policy for development
       'Content-Security-Policy': process.env.NODE_ENV === 'development' 
-        ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: wss:;"
-        : "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;",
+        ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' https://unpkg.com data:; img-src 'self' data: https:;"
+        : "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' https://unpkg.com data:; connect-src 'self' wss: http://localhost:* https:; img-src 'self' data: https:;",
       
       // Security: Referrer policy
       'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -109,12 +109,11 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
-        secure: true,
+        secure: false,
         // Security: Configure proxy headers
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq, req, _res) => {
             // Security: Add security headers to proxied requests
-            proxyReq.setHeader('X-Forwarded-Proto', 'https');
             proxyReq.setHeader('X-Requested-With', 'XMLHttpRequest');
           });
         },
@@ -166,9 +165,7 @@ export default defineConfig({
       'react-dom',
       'react-router-dom',
       'primereact',
-      'primeicons',
       'axios',
-      'dompurify', // For HTML sanitization
     ],
     
     // Security: Exclude potentially unsafe dependencies
@@ -207,7 +204,7 @@ export default defineConfig({
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'X-XSS-Protection': '1; mode=block',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' wss:;",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://unpkg.com; font-src 'self' https://unpkg.com data:; connect-src 'self' wss: http://localhost:* https:; img-src 'self' data: https:;",
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     },

@@ -7,6 +7,18 @@ import 'primereact/resources/primereact.min.css';
 import 'primeicons/primeicons.css';
 import 'primeflex/primeflex.css';
 
+// Enhanced UI Component Styles
+import './components/common/EnhancedButton.css';
+import './components/common/EnhancedCard.css';
+import './components/common/EnhancedLoading.css';
+import './components/common/TrustIndicators.css';
+import './components/common/EmptyStates.css';
+import './components/common/EnhancedSidebarMenu.css';
+import './components/common/EnhancedChart.css';
+
+// Global Animation System
+import './styles/animations.css';
+
 import { AuthProvider } from './contexts/AuthContext';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
@@ -76,11 +88,9 @@ const LazyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 function AppContent() {
   return (
-    <Router>
-      <LayoutProvider>
-        <AppRoutes />
-      </LayoutProvider>
-    </Router>
+    <LayoutProvider>
+      <AppRoutes />
+    </LayoutProvider>
   );
 }
 
@@ -348,7 +358,7 @@ function App() {
     routePreloader.preloadCriticalRoutes();
 
     // Monitor memory usage every 30 seconds in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       const memoryInterval = setInterval(monitorMemoryUsage, 30000);
       return () => clearInterval(memoryInterval);
     }
@@ -357,16 +367,18 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <WebSocketProvider
-            autoConnect={true}
-            reconnectOnError={true}
-            maxReconnectAttempts={10}
-            debug={process.env.NODE_ENV === 'development'}
-          >
-            <AppContent />
-          </WebSocketProvider>
-        </AuthProvider>
+        <Router>
+          <AuthProvider>
+            <WebSocketProvider
+              autoConnect={true}
+              reconnectOnError={true}
+              maxReconnectAttempts={10}
+              debug={import.meta.env.DEV}
+            >
+              <AppContent />
+            </WebSocketProvider>
+          </AuthProvider>
+        </Router>
       </QueryClientProvider>
     </ErrorBoundary>
   );

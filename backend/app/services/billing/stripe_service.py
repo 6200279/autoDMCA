@@ -70,8 +70,10 @@ class StripeService:
     
     def __init__(self):
         if not settings.STRIPE_SECRET_KEY:
-            raise ValueError("STRIPE_SECRET_KEY is required")
-        self.api_key = settings.STRIPE_SECRET_KEY
+            logger.warning("STRIPE_SECRET_KEY not configured - Stripe service disabled")
+            self.api_key = None
+        else:
+            self.api_key = settings.STRIPE_SECRET_KEY
     
     async def create_customer(
         self, 

@@ -8,6 +8,24 @@ class Settings:
     def __init__(self):
         """Initialize settings with environment variables or defaults."""
         import os
+        from pathlib import Path
+        
+        # Load .env file if it exists
+        env_file = Path(__file__).parent.parent.parent / ".env"
+        if env_file.exists():
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_file)
+                print(f"Loaded .env from {env_file}")
+            except ImportError:
+                # Manually parse .env if python-dotenv not available
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            os.environ.setdefault(key.strip(), value.strip())
+                print(f"Manually loaded .env from {env_file}")
         
         # Load from environment with defaults
         self.PROJECT_NAME = os.getenv("PROJECT_NAME", "Content Protection Platform")
@@ -22,8 +40,8 @@ class Settings:
         self.REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
         
         # CORS
-        cors_origins = os.getenv("BACKEND_CORS_ORIGINS", "")
-        self.BACKEND_CORS_ORIGINS = [origin.strip() for origin in cors_origins.split(",")] if cors_origins else []
+        cors_origins = os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:13000,http://localhost:3000")
+        self.BACKEND_CORS_ORIGINS = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
         allowed_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1")
         self.ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(",")]
         
@@ -37,23 +55,15 @@ class Settings:
         self.POSTGRES_CONNECT_TIMEOUT = int(os.getenv("POSTGRES_CONNECT_TIMEOUT", "30"))
         self.POSTGRES_COMMAND_TIMEOUT = int(os.getenv("POSTGRES_COMMAND_TIMEOUT", "60"))
         
-        # Build database URI
-        self.SQLALCHEMY_DATABASE_URI = os.getenv("SQLALCHEMY_DATABASE_URI")
+        # Build database URI - check DATABASE_URL first (docker-compose standard)
+        self.SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI")
         if not self.SQLALCHEMY_DATABASE_URI:
-            connection_params = [
-                f"sslmode={self.POSTGRES_SSL_MODE}",
-                f"connect_timeout={self.POSTGRES_CONNECT_TIMEOUT}",
-                f"command_timeout={self.POSTGRES_COMMAND_TIMEOUT}",
-                "application_name=content_protection_platform",
-                "jit=off",
-                "timezone=UTC"
-            ]
-            query_string = "&".join(connection_params)
+            # Simple AsyncPG connection for local development
             self.SQLALCHEMY_DATABASE_URI = (
                 f"postgresql+asyncpg://"
                 f"{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
                 f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/"
-                f"{self.POSTGRES_DB}?{query_string}"
+                f"{self.POSTGRES_DB}"
             )
         
         self.DATABASE_QUERY_LOGGING = os.getenv("DATABASE_QUERY_LOGGING", "false").lower() == "true"

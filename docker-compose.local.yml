@@ -24,7 +24,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Redis Cache & Queue
+  # Redisano  Cache & Queue
   redis:
     image: redis:7-alpine
     container_name: content-protection-redis-local
@@ -50,7 +50,7 @@ services:
     container_name: content-protection-api-local
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - DATABASE_URL=postgresql+asyncpg://postgres:localtest123@postgres:5432/contentprotection
       - REDIS_URL=redis://:localredis123@redis:6379/0
       - ENVIRONMENT=local
       - SECRET_KEY=local-secret-key-for-testing-only-never-use-in-production
@@ -91,8 +91,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.production
       args:
-        VITE_API_BASE_URL: http://localhost:18000/api/v1
-        VITE_WS_URL: ws://localhost:18000/ws
+        VITE_API_BASE_URL: /api/v1
+        VITE_WS_URL: ws://localhost:13000/ws
         VITE_LOCAL_TESTING: true
         VITE_ENVIRONMENT: local
     container_name: content-protection-frontend-local
@@ -119,7 +119,7 @@ services:
     restart: unless-stopped
     command: celery -A app.celery worker --loglevel=debug --concurrency=2
     environment:
-      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - DATABASE_URL=postgresql+asyncpg://postgres:localtest123@postgres:5432/contentprotection
       - REDIS_URL=redis://:localredis123@redis:6379/0
       - ENVIRONMENT=local
       - SECRET_KEY=local-secret-key-for-testing-only-never-use-in-production
@@ -149,7 +149,7 @@ services:
     restart: unless-stopped
     command: celery -A app.celery beat --loglevel=debug
     environment:
-      - DATABASE_URL=postgresql://postgres:localtest123@postgres:5432/contentprotection
+      - DATABASE_URL=postgresql+asyncpg://postgres:localtest123@postgres:5432/contentprotection
       - REDIS_URL=redis://:localredis123@redis:6379/0
       - ENVIRONMENT=local
       - SECRET_KEY=local-secret-key-for-testing-only-never-use-in-production

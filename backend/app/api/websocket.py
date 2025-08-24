@@ -83,6 +83,10 @@ class ConnectionManager:
         for user_id in list(self.active_connections.keys()):
             await self.send_to_user(user_id, message)
     
+    async def send_personal_message_by_user_id(self, user_id: int, message: Dict):
+        """Send message to all connections for a specific user (alias for send_to_user)."""
+        await self.send_to_user(user_id, message)
+    
     def get_user_connections_count(self, user_id: int) -> int:
         """Get number of active connections for a user."""
         return len(self.active_connections.get(user_id, []))
@@ -278,3 +282,43 @@ async def websocket_health_check():
 
 # Start health check task
 asyncio.create_task(websocket_health_check())
+
+
+# Notification functions for scanning system
+async def notify_scan_progress(user_id: int, profile_id: int, progress: float, message: str):
+    """Notify about scan progress."""
+    await manager.send_personal_message_by_user_id(
+        user_id,
+        {
+            "type": "scan_progress",
+            "profile_id": profile_id,
+            "progress": progress,
+            "message": message,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
+
+async def notify_infringement_found(user_id: int, infringement_data: dict):
+    """Notify about found infringement."""
+    await manager.send_personal_message_by_user_id(
+        user_id,
+        {
+            "type": "infringement_found",
+            "data": infringement_data,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
+
+async def notify_scan_completed(user_id: int, profile_id: int, results: dict):
+    """Notify about scan completion."""
+    await manager.send_personal_message_by_user_id(
+        user_id,
+        {
+            "type": "scan_completed",
+            "profile_id": profile_id,
+            "results": results,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )

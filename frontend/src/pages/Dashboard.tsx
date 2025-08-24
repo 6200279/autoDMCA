@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card } from 'primereact/card';
 import { Panel } from 'primereact/panel';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
-import { Button } from 'primereact/button';
 import { ProgressBar } from 'primereact/progressbar';
-import { Skeleton } from 'primereact/skeleton';
 import { Calendar } from 'primereact/calendar';
 import { Dropdown } from 'primereact/dropdown';
 import { Chart } from 'primereact/chart';
 import { Divider } from 'primereact/divider';
 import { Badge } from 'primereact/badge';
+import { Button } from 'primereact/button';
 import { Tooltip } from 'primereact/tooltip';
 import { Toast } from 'primereact/toast';
 import { Message } from 'primereact/message';
+import { EnhancedCard } from '../components/common/EnhancedCard';
+import { EnhancedButton } from '../components/common/EnhancedButton';
+import { EnhancedLoading } from '../components/common/EnhancedLoading';
+import { SecurityShield, SecurityBadge, TrustIndicatorBar, DataProtectionNotice } from '../components/common/TrustIndicators';
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -113,7 +115,7 @@ const Dashboard: React.FC = () => {
   // Last updated timestamps
   const [lastUpdated, setLastUpdated] = useState<Record<string, string>>({});
   
-  // Data states
+  // Data states with defensive initialization
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [usageMetrics, setUsageMetrics] = useState<UsageMetrics | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -121,6 +123,15 @@ const Dashboard: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [preferences, setPreferences] = useState<DashboardPreferences | null>(null);
   const [quickActionsData, setQuickActionsData] = useState<QuickActionsData | null>(null);
+  
+  // Safe data accessors with fallbacks
+  const safeRecentActivity = React.useMemo(() => {
+    return Array.isArray(recentActivity) ? recentActivity : [];
+  }, [recentActivity]);
+  
+  const safePlatformData = React.useMemo(() => {
+    return Array.isArray(platformData) ? platformData : [];
+  }, [platformData]);
 
   // Utility functions for error handling
   const showError = useCallback((section: string, error: any) => {
@@ -185,7 +196,9 @@ const Dashboard: React.FC = () => {
     
     try {
       const response = await dashboardApi.getRecentActivity({ limit: 10 });
-      setRecentActivity(response.data);
+      // Fix: Extract activities array from response.data with validation
+      const activities = response.data?.activities;
+      setRecentActivity(Array.isArray(activities) ? activities : []);
       updateLastUpdated('activity');
     } catch (error) {
       showError('activity', error);
@@ -228,7 +241,9 @@ const Dashboard: React.FC = () => {
       } : undefined;
       
       const response = await dashboardApi.getPlatformDistribution(dateParams);
-      setPlatformData(response.data);
+      // Fix: Extract platforms array from response.data with validation
+      const platforms = response.data?.platforms;
+      setPlatformData(Array.isArray(platforms) ? platforms : []);
       updateLastUpdated('platformData');
     } catch (error) {
       showError('platformData', error);
@@ -330,21 +345,54 @@ const Dashboard: React.FC = () => {
     });
   }, [notifications]);
 
-  // Chart data - using real analytics data with fallbacks
-  const monthlyTrendsData = analyticsData?.monthlyTrends || {
-    labels: [],
-    datasets: []
-  };
+  // Chart data - using real analytics data with robust fallbacks
+  const monthlyTrendsData = React.useMemo(() => {
+    if (!analyticsData?.monthlyTrends) {
+      return { labels: [], datasets: [] };
+    }
+    
+    const trends = analyticsData.monthlyTrends;
+    if (!Array.isArray(trends.labels) || !Array.isArray(trends.datasets)) {
+      return { labels: [], datasets: [] };
+    }
+    
+    return {
+      labels: trends.labels || [],
+      datasets: trends.datasets || []
+    };
+  }, [analyticsData]);
 
-  const platformDistributionData = analyticsData?.platformDistribution || {
-    labels: [],
-    datasets: []
-  };
+  const platformDistributionData = React.useMemo(() => {
+    if (!analyticsData?.platformDistribution) {
+      return { labels: [], datasets: [] };
+    }
+    
+    const distribution = analyticsData.platformDistribution;
+    if (!Array.isArray(distribution.labels) || !Array.isArray(distribution.datasets)) {
+      return { labels: [], datasets: [] };
+    }
+    
+    return {
+      labels: distribution.labels || [],
+      datasets: distribution.datasets || []
+    };
+  }, [analyticsData]);
 
-  const successRateData = analyticsData?.successRateByPlatform || {
-    labels: [],
-    datasets: []
-  };
+  const successRateData = React.useMemo(() => {
+    if (!analyticsData?.successRateByPlatform) {
+      return { labels: [], datasets: [] };
+    }
+    
+    const successRate = analyticsData.successRateByPlatform;
+    if (!Array.isArray(successRate.labels) || !Array.isArray(successRate.datasets)) {
+      return { labels: [], datasets: [] };
+    }
+    
+    return {
+      labels: successRate.labels || [],
+      datasets: successRate.datasets || []
+    };
+  }, [analyticsData]);
   
   // Export dashboard data
   const handleExportData = useCallback(async (format: 'csv' | 'xlsx' | 'pdf') => {
@@ -531,213 +579,351 @@ const Dashboard: React.FC = () => {
     );
   };
   
-  // Render loading skeleton for specific sections
+  // Render enhanced loading for specific sections
   const renderSectionSkeleton = (height: string = '80px') => (
-    <Skeleton width="100%" height={height} className="border-round" />
+    <EnhancedLoading type="skeleton" variant="card" size="md" />
   );
 
   return (
     <>
       <Toast ref={toast} />
       <div className="grid">
-      {/* Header */}
+      {/* Enhanced Header with Security Branding */}
       <div className="col-12">
-        <div className="flex flex-column md:flex-row md:justify-content-between md:align-items-center mb-4 gap-3">
-          <div>
-            <h2 className="m-0 text-900">Welcome back, {user?.full_name || 'User'}!</h2>
-            <p className="text-600 m-0 mt-1">Here's what's happening with your content protection</p>
-          </div>
-          <div className="flex gap-2 align-items-center">
-            <Calendar 
-              value={dateRange} 
-              onChange={(e) => setDateRange(e.value as Date[])} 
-              selectionMode="range" 
-              readOnlyInput 
-              showIcon
-              placeholder="Select date range"
-              className="w-full md:w-auto"
-            />
-            <div className="flex gap-2">
-              <Button 
-                label="Refresh" 
-                icon="pi pi-refresh" 
-                size="small"
-                outlined
-                loading={isDataLoading}
-                onClick={refreshAllData}
-                tooltip="Refresh all data"
+        <EnhancedCard variant="filled" padding="lg" className="mb-4" style={{
+          background: 'linear-gradient(135deg, var(--autodmca-primary-600), var(--autodmca-primary-700))',
+          color: 'white',
+          border: 'none'
+        }}>
+          <div className="flex flex-column lg:flex-row lg:justify-content-between lg:align-items-center gap-4">
+            <div className="flex align-items-center gap-3">
+              <SecurityShield level="premium" size="lg" animated={true} />
+              <div>
+                <h1 className="m-0 text-white text-3xl font-bold">
+                  Welcome back, {user?.full_name || 'User'}!
+                </h1>
+                <p className="m-0 mt-2 text-white opacity-90 text-lg">
+                  Your content protection dashboard - Secure, Professional, Reliable
+                </p>
+                <TrustIndicatorBar 
+                  indicators={['ssl', 'verified', 'professional', 'gdpr']} 
+                  size="sm" 
+                  layout="horizontal"
+                  className="mt-3"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 align-items-center">
+              <Calendar 
+                value={dateRange} 
+                onChange={(e) => setDateRange(e.value as Date[])} 
+                selectionMode="range" 
+                readOnlyInput 
+                showIcon
+                placeholder="Select date range"
+                aria-label="Select date range for dashboard metrics"
+                className="w-full lg:w-auto"
+                style={{ minWidth: '250px' }}
               />
-              <Button 
-                label="Export" 
-                icon="pi pi-download" 
-                outlined 
-                size="small"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleExportData('xlsx');
-                }}
-                tooltip="Export dashboard data"
-              />
+              <div className="flex gap-2">
+                <EnhancedButton 
+                  variant="secondary" 
+                  size="md"
+                  icon="pi pi-refresh"
+                  loading={isDataLoading}
+                  loadingText="Refreshing..."
+                  onClick={refreshAllData}
+                  elevation="2"
+                >
+                  Refresh
+                </EnhancedButton>
+                <EnhancedButton 
+                  variant="outline" 
+                  size="md"
+                  icon="pi pi-download"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleExportData('xlsx');
+                  }}
+                  elevation="2"
+                >
+                  Export
+                </EnhancedButton>
+              </div>
             </div>
           </div>
-        </div>
+        </EnhancedCard>
       </div>
 
-      {/* Overview Statistics */}
+      {/* Enhanced Statistics Cards */}
       <div className="col-12 md:col-6 lg:col-3">
-        <Card className="h-full">
+        <EnhancedCard variant="elevated" padding="lg" interactive elevation="2" className="h-full">
           {renderErrorMessage('stats', fetchDashboardStats)}
-          {loading.stats ? renderSectionSkeleton() : (
+          {loading.stats ? (
+            <EnhancedLoading type="skeleton" variant="card" size="md" />
+          ) : (
             <div className="flex justify-content-between align-items-start">
               <div>
-                <div className="text-500 font-medium text-sm">Total Profiles</div>
-                <div className="text-900 font-bold text-xl mt-1">{stats?.totalProfiles || 0}</div>
-                <div className="flex align-items-center gap-1 mt-2">
-                  <i className={`pi ${(stats?.profilesChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                  <span className={`text-sm font-medium ${(stats?.profilesChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {Math.abs(stats?.profilesChange || 0)}%
+                <div className="flex align-items-center gap-2 mb-2">
+                  <SecurityBadge type="verified" size="sm" showText={false} />
+                  <span className="text-600 font-semibold text-sm uppercase tracking-wide">
+                    Protected Profiles
                   </span>
-                  <span className="text-500 text-sm">this month</span>
+                </div>
+                <div className="text-900 font-bold text-3xl mb-2">
+                  {stats?.totalProfiles || 0}
+                </div>
+                <div className="flex align-items-center gap-2">
+                  <div className="flex align-items-center gap-1">
+                    <i className={`pi ${(stats?.profilesChange || 0) >= 0 ? 'pi-arrow-up' : 'pi-arrow-down'} text-sm`}
+                       style={{ color: (stats?.profilesChange || 0) >= 0 ? 'var(--autodmca-success-600)' : 'var(--autodmca-danger-600)' }} />
+                    <span className={`text-sm font-bold`}
+                          style={{ color: (stats?.profilesChange || 0) >= 0 ? 'var(--autodmca-success-600)' : 'var(--autodmca-danger-600)' }}>
+                      {Math.abs(stats?.profilesChange || 0)}%
+                    </span>
+                  </div>
+                  <span className="text-600 text-sm">this month</span>
                 </div>
               </div>
-              <div className="bg-blue-100 text-blue-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-                <i className="pi pi-user text-xl" />
+              <div className="w-4rem h-4rem border-circle flex align-items-center justify-content-center"
+                   style={{ 
+                     background: 'linear-gradient(135deg, var(--autodmca-primary-100), var(--autodmca-primary-200))',
+                     color: 'var(--autodmca-primary-700)' 
+                   }}>
+                <i className="pi pi-shield text-2xl" />
               </div>
             </div>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
       <div className="col-12 md:col-6 lg:col-3">
-        <Card className="h-full">
+        <EnhancedCard variant="elevated" padding="lg" interactive elevation="2" className="h-full">
           {renderErrorMessage('stats', fetchDashboardStats)}
-          {loading.stats ? renderSectionSkeleton() : (
+          {loading.stats ? (
+            <EnhancedLoading type="skeleton" variant="card" size="md" />
+          ) : (
             <div className="flex justify-content-between align-items-start">
               <div>
-                <div className="text-500 font-medium text-sm">Active Scans</div>
-                <div className="text-900 font-bold text-xl mt-1">{stats?.activeScans || 0}</div>
-                <div className="flex align-items-center gap-1 mt-2">
-                  <i className={`pi ${(stats?.scansChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                  <span className={`text-sm font-medium ${(stats?.scansChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {Math.abs(stats?.scansChange || 0)}%
+                <div className="flex align-items-center gap-2 mb-2">
+                  <SecurityBadge type="ssl" size="sm" showText={false} />
+                  <span className="text-600 font-semibold text-sm uppercase tracking-wide">
+                    Active Scans
                   </span>
-                  <span className="text-500 text-sm">this month</span>
+                </div>
+                <div className="text-900 font-bold text-3xl mb-2">
+                  {stats?.activeScans || 0}
+                </div>
+                <div className="flex align-items-center gap-2">
+                  <div className="flex align-items-center gap-1">
+                    <i className={`pi ${(stats?.scansChange || 0) >= 0 ? 'pi-arrow-up' : 'pi-arrow-down'} text-sm`}
+                       style={{ color: (stats?.scansChange || 0) >= 0 ? 'var(--autodmca-success-600)' : 'var(--autodmca-danger-600)' }} />
+                    <span className={`text-sm font-bold`}
+                          style={{ color: (stats?.scansChange || 0) >= 0 ? 'var(--autodmca-success-600)' : 'var(--autodmca-danger-600)' }}>
+                      {Math.abs(stats?.scansChange || 0)}%
+                    </span>
+                  </div>
+                  <span className="text-600 text-sm">this month</span>
                 </div>
               </div>
-              <div className="bg-purple-100 text-purple-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-                <i className="pi pi-search text-xl" />
+              <div className="w-4rem h-4rem border-circle flex align-items-center justify-content-center"
+                   style={{ 
+                     background: 'linear-gradient(135deg, var(--autodmca-info-100), var(--autodmca-info-200))',
+                     color: 'var(--autodmca-info-700)' 
+                   }}>
+                <i className="pi pi-search text-2xl" />
               </div>
             </div>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
       <div className="col-12 md:col-6 lg:col-3">
-        <Card className="h-full">
+        <EnhancedCard variant="elevated" padding="lg" interactive elevation="2" className="h-full">
           {renderErrorMessage('stats', fetchDashboardStats)}
-          {loading.stats ? renderSectionSkeleton() : (
+          {loading.stats ? (
+            <EnhancedLoading type="skeleton" variant="card" size="md" />
+          ) : (
             <div className="flex justify-content-between align-items-start">
               <div>
-                <div className="text-500 font-medium text-sm">Infringements Found</div>
-                <div className="text-900 font-bold text-xl mt-1">{stats?.infringementsFound || 0}</div>
-                <div className="flex align-items-center gap-1 mt-2">
-                  <i className={`pi ${(stats?.infringementsChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                  <span className={`text-sm font-medium ${(stats?.infringementsChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {Math.abs(stats?.infringementsChange || 0)}%
+                <div className="flex align-items-center gap-2 mb-2">
+                  <SecurityBadge type="dmca" size="sm" showText={false} />
+                  <span className="text-600 font-semibold text-sm uppercase tracking-wide">
+                    Threats Detected
                   </span>
-                  <span className="text-500 text-sm">this month</span>
+                </div>
+                <div className="text-900 font-bold text-3xl mb-2">
+                  {stats?.infringementsFound || 0}
+                </div>
+                <div className="flex align-items-center gap-2">
+                  <div className="flex align-items-center gap-1">
+                    <i className={`pi ${(stats?.infringementsChange || 0) >= 0 ? 'pi-arrow-up' : 'pi-arrow-down'} text-sm`}
+                       style={{ color: (stats?.infringementsChange || 0) >= 0 ? 'var(--autodmca-danger-600)' : 'var(--autodmca-success-600)' }} />
+                    <span className={`text-sm font-bold`}
+                          style={{ color: (stats?.infringementsChange || 0) >= 0 ? 'var(--autodmca-danger-600)' : 'var(--autodmca-success-600)' }}>
+                      {Math.abs(stats?.infringementsChange || 0)}%
+                    </span>
+                  </div>
+                  <span className="text-600 text-sm">this month</span>
                 </div>
               </div>
-              <div className="bg-orange-100 text-orange-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-                <i className="pi pi-exclamation-triangle text-xl" />
+              <div className="w-4rem h-4rem border-circle flex align-items-center justify-content-center"
+                   style={{ 
+                     background: 'linear-gradient(135deg, var(--autodmca-warning-100), var(--autodmca-warning-200))',
+                     color: 'var(--autodmca-warning-700)' 
+                   }}>
+                <i className="pi pi-exclamation-triangle text-2xl" />
               </div>
             </div>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
       <div className="col-12 md:col-6 lg:col-3">
-        <Card className="h-full">
+        <EnhancedCard variant="elevated" padding="lg" interactive elevation="2" className="h-full">
           {renderErrorMessage('stats', fetchDashboardStats)}
-          {loading.stats ? renderSectionSkeleton() : (
+          {loading.stats ? (
+            <EnhancedLoading type="skeleton" variant="card" size="md" />
+          ) : (
             <div className="flex justify-content-between align-items-start">
               <div>
-                <div className="text-500 font-medium text-sm">Takedowns Sent</div>
-                <div className="text-900 font-bold text-xl mt-1">{stats?.takedownsSent || 0}</div>
-                <div className="flex align-items-center gap-1 mt-2">
-                  <i className={`pi ${(stats?.takedownsChange || 0) >= 0 ? 'pi-arrow-up text-green-500' : 'pi-arrow-down text-red-500'} text-sm`} />
-                  <span className={`text-sm font-medium ${(stats?.takedownsChange || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {Math.abs(stats?.takedownsChange || 0)}%
+                <div className="flex align-items-center gap-2 mb-2">
+                  <SecurityBadge type="professional" size="sm" showText={false} />
+                  <span className="text-600 font-semibold text-sm uppercase tracking-wide">
+                    Actions Taken
                   </span>
-                  <span className="text-500 text-sm">this month</span>
+                </div>
+                <div className="text-900 font-bold text-3xl mb-2">
+                  {stats?.takedownsSent || 0}
+                </div>
+                <div className="flex align-items-center gap-2">
+                  <div className="flex align-items-center gap-1">
+                    <i className={`pi ${(stats?.takedownsChange || 0) >= 0 ? 'pi-arrow-up' : 'pi-arrow-down'} text-sm`}
+                       style={{ color: (stats?.takedownsChange || 0) >= 0 ? 'var(--autodmca-success-600)' : 'var(--autodmca-danger-600)' }} />
+                    <span className={`text-sm font-bold`}
+                          style={{ color: (stats?.takedownsChange || 0) >= 0 ? 'var(--autodmca-success-600)' : 'var(--autodmca-danger-600)' }}>
+                      {Math.abs(stats?.takedownsChange || 0)}%
+                    </span>
+                  </div>
+                  <span className="text-600 text-sm">this month</span>
                 </div>
               </div>
-              <div className="bg-green-100 text-green-800 border-circle w-3rem h-3rem flex align-items-center justify-content-center">
-                <i className="pi pi-file text-xl" />
+              <div className="w-4rem h-4rem border-circle flex align-items-center justify-content-center"
+                   style={{ 
+                     background: 'linear-gradient(135deg, var(--autodmca-success-100), var(--autodmca-success-200))',
+                     color: 'var(--autodmca-success-700)' 
+                   }}>
+                <i className="pi pi-check-circle text-2xl" />
               </div>
             </div>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
-      {/* Usage Metrics */}
+      {/* Enhanced Usage Metrics */}
       <div className="col-12 md:col-8">
-        <Card title="Usage Metrics" className="h-full">
+        <EnhancedCard 
+          title="Usage Analytics" 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2"
+          className="h-full"
+          headerActions={
+            <SecurityBadge type="professional" size="sm" />
+          }
+        >
           {renderErrorMessage('usage', fetchUsageMetrics)}
-          {loading.usage ? renderSectionSkeleton('200px') : (
+          {loading.usage ? (
+            <EnhancedLoading type="skeleton" variant="dashboard" size="md" />
+          ) : (
             <>
               <div className="grid">
                 <div className="col-12 md:col-6">
-                  <div className="mb-3">
-                    <div className="flex justify-content-between align-items-center mb-2">
-                      <span className="text-900 font-medium">Monthly Scans</span>
-                      <span className="text-600">
+                  <div className="mb-4">
+                    <div className="flex justify-content-between align-items-center mb-3">
+                      <div className="flex align-items-center gap-2">
+                        <SecurityBadge type="ssl" size="sm" showText={false} />
+                        <span className="text-900 font-semibold">Monthly Scans</span>
+                      </div>
+                      <span className="text-600 font-bold text-lg">
                         {usageMetrics?.scansUsed || 0} / {usageMetrics?.scansLimit || 0}
                       </span>
                     </div>
                     <ProgressBar 
                       value={usageMetrics ? (usageMetrics.scansUsed / usageMetrics.scansLimit) * 100 : 0} 
                       showValue={false}
-                      style={{ height: '8px' }}
+                      style={{ 
+                        height: '12px', 
+                        background: 'var(--autodmca-surface-200)',
+                        borderRadius: 'var(--border-radius-lg)'
+                      }}
+                      color="var(--autodmca-primary-500)"
                     />
+                    <div className="flex justify-content-between mt-2">
+                      <span className="text-xs text-600">Used</span>
+                      <span className="text-xs text-600">Limit</span>
+                    </div>
                   </div>
                 </div>
                 <div className="col-12 md:col-6">
-                  <div className="mb-3">
-                    <div className="flex justify-content-between align-items-center mb-2">
-                      <span className="text-900 font-medium">Success Rate</span>
-                      <span className="text-600">{usageMetrics?.successRate || 0}%</span>
+                  <div className="mb-4">
+                    <div className="flex justify-content-between align-items-center mb-3">
+                      <div className="flex align-items-center gap-2">
+                        <SecurityBadge type="verified" size="sm" showText={false} />
+                        <span className="text-900 font-semibold">Success Rate</span>
+                      </div>
+                      <span className="text-600 font-bold text-lg">{usageMetrics?.successRate || 0}%</span>
                     </div>
                     <ProgressBar 
                       value={usageMetrics?.successRate || 0} 
                       showValue={false}
-                      style={{ height: '8px' }}
-                      color="#10B981"
+                      style={{ 
+                        height: '12px',
+                        background: 'var(--autodmca-surface-200)',
+                        borderRadius: 'var(--border-radius-lg)'
+                      }}
+                      color="var(--autodmca-success-500)"
                     />
+                    <div className="flex justify-content-between mt-2">
+                      <span className="text-xs text-600">0%</span>
+                      <span className="text-xs text-600">100%</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3 mt-4">
-                <div className="flex align-items-center gap-2 p-3 bg-blue-50 border-round">
-                  <i className="pi pi-calendar text-blue-600" />
+              <div className="flex flex-wrap gap-4 mt-4">
+                <div className="flex align-items-center gap-3 p-3 border-round-lg" 
+                     style={{ background: 'linear-gradient(135deg, var(--autodmca-primary-50), var(--autodmca-primary-100))' }}>
+                  <div className="w-3rem h-3rem border-circle flex align-items-center justify-content-center"
+                       style={{ background: 'var(--autodmca-primary-500)', color: 'white' }}>
+                    <i className="pi pi-calendar text-lg" />
+                  </div>
                   <div>
-                    <div className="text-blue-900 font-medium text-sm">This Month</div>
-                    <div className="text-blue-600 text-lg font-bold">{usageMetrics?.scansUsed || 0}</div>
+                    <div className="text-primary-900 font-semibold text-sm">This Month</div>
+                    <div className="text-primary-700 text-xl font-bold">{usageMetrics?.scansUsed || 0}</div>
                   </div>
                 </div>
-                <div className="flex align-items-center gap-2 p-3 bg-green-50 border-round">
-                  <i className="pi pi-check-circle text-green-600" />
+                <div className="flex align-items-center gap-3 p-3 border-round-lg"
+                     style={{ background: 'linear-gradient(135deg, var(--autodmca-success-50), var(--autodmca-success-100))' }}>
+                  <div className="w-3rem h-3rem border-circle flex align-items-center justify-content-center"
+                       style={{ background: 'var(--autodmca-success-500)', color: 'white' }}>
+                    <i className="pi pi-check-circle text-lg" />
+                  </div>
                   <div>
-                    <div className="text-green-900 font-medium text-sm">Success Rate</div>
-                    <div className="text-green-600 text-lg font-bold">{usageMetrics?.monthlySuccessRate || 0}%</div>
+                    <div className="text-green-900 font-semibold text-sm">Success Rate</div>
+                    <div className="text-green-700 text-xl font-bold">{usageMetrics?.monthlySuccessRate || 0}%</div>
                   </div>
                 </div>
                 {usageMetrics?.resetDate && (
-                  <div className="flex align-items-center gap-2 p-3 bg-gray-50 border-round">
-                    <i className="pi pi-refresh text-gray-600" />
+                  <div className="flex align-items-center gap-3 p-3 border-round-lg"
+                       style={{ background: 'linear-gradient(135deg, var(--autodmca-surface-50), var(--autodmca-surface-100))' }}>
+                    <div className="w-3rem h-3rem border-circle flex align-items-center justify-content-center"
+                         style={{ background: 'var(--autodmca-surface-400)', color: 'white' }}>
+                      <i className="pi pi-refresh text-lg" />
+                    </div>
                     <div>
-                      <div className="text-gray-900 font-medium text-sm">Resets</div>
-                      <div className="text-gray-600 text-sm">
+                      <div className="text-600 font-semibold text-sm">Resets</div>
+                      <div className="text-700 text-sm font-medium">
                         {new Date(usageMetrics.resetDate).toLocaleDateString()}
                       </div>
                     </div>
@@ -746,292 +932,590 @@ const Dashboard: React.FC = () => {
               </div>
             </>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
-      {/* Quick Actions */}
+      {/* Enhanced Quick Actions */}
       <div className="col-12 md:col-4">
-        <Card title="Quick Actions" className="h-full">
+        <EnhancedCard 
+          title="Security Actions" 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2"
+          className="h-full"
+          headerActions={
+            <SecurityShield level="premium" size="sm" animated={false} />
+          }
+        >
           <div className="flex flex-column gap-3">
-            <Button 
-              label="Submit New URL" 
-              icon="pi pi-plus" 
-              className="p-button-primary w-full justify-content-start"
+            <EnhancedButton 
+              variant="primary" 
+              size="lg"
+              icon="pi pi-plus"
+              fullWidth
+              elevation="1"
               onClick={() => navigate('/protection/submissions')}
-            />
-            <Button 
-              label="Create Profile" 
-              icon="pi pi-user-plus" 
-              outlined 
-              className="w-full justify-content-start"
+            >
+              Submit New Content
+            </EnhancedButton>
+            <EnhancedButton 
+              variant="outline" 
+              size="lg"
+              icon="pi pi-shield"
+              fullWidth
               onClick={() => navigate('/protection/profiles')}
-            />
-            <Button 
-              label="View Reports" 
-              icon="pi pi-chart-bar" 
-              outlined 
-              className="w-full justify-content-start"
+            >
+              Create Profile
+            </EnhancedButton>
+            <EnhancedButton 
+              variant="outline" 
+              size="lg"
+              icon="pi pi-chart-line"
+              fullWidth
               onClick={() => navigate('/reports')}
-            />
+            >
+              View Analytics
+            </EnhancedButton>
+            
             <Divider />
-            <div className="text-center">
-              <div className="text-500 text-sm mb-2">Need help?</div>
-              <Button 
-                label="Contact Support" 
-                icon="pi pi-question-circle" 
-                link 
-                size="small"
+            
+            <div className="text-center p-3 border-round-lg"
+                 style={{ background: 'var(--autodmca-surface-50)' }}>
+              <SecurityBadge type="encrypted" size="md" className="mb-2" />
+              <div className="text-700 font-semibold text-sm mb-2">Professional Support</div>
+              <EnhancedButton 
+                variant="ghost" 
+                size="sm"
+                icon="pi pi-headphones"
                 onClick={() => navigate('/support')}
-              />
+              >
+                Contact Support
+              </EnhancedButton>
             </div>
           </div>
-        </Card>
+        </EnhancedCard>
       </div>
 
-      {/* Monthly Trends Chart */}
+      {/* Enhanced Monthly Trends Chart */}
       <div className="col-12 lg:col-8">
-        <Card className="h-full">
-          <div className="flex justify-content-between align-items-center mb-3">
-            <span className="text-900 font-bold text-lg">Monthly Trends</span>
-            {lastUpdated.analytics && (
-              <span className="text-sm text-500">
-                Updated {formatTimestamp(lastUpdated.analytics)}
-              </span>
-            )}
+        <EnhancedCard 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2" 
+          className="h-full"
+          headerActions={
+            <div className="flex align-items-center gap-2">
+              <SecurityBadge type="professional" size="sm" showText={false} />
+              {lastUpdated.analytics && (
+                <span className="text-sm text-600">
+                  Updated {formatTimestamp(lastUpdated.analytics)}
+                </span>
+              )}
+            </div>
+          }
+        >
+          <div className="flex align-items-center gap-2 mb-4">
+            <SecurityShield level="premium" size="sm" animated={false} />
+            <h3 className="text-900 font-bold text-xl m-0">Security Trends</h3>
           </div>
           {renderErrorMessage('analytics', fetchAnalyticsData)}
-          {loading.analytics ? renderSectionSkeleton('300px') : (
-            <div style={{ height: '300px' }}>
+          {loading.analytics ? (
+            <EnhancedLoading type="skeleton" variant="dashboard" size="lg" />
+          ) : (
+            <div className="border-round-lg p-3"
+                 style={{ 
+                   height: '350px',
+                   background: 'linear-gradient(135deg, var(--autodmca-surface-50), var(--autodmca-surface-100))',
+                   border: '1px solid var(--autodmca-surface-200)'
+                 }}>
               {monthlyTrendsData.labels.length > 0 ? (
                 <Chart 
                   type="line" 
                   data={monthlyTrendsData} 
-                  options={chartOptions} 
-                  height="300px"
+                  options={{
+                    ...chartOptions,
+                    plugins: {
+                      ...chartOptions.plugins,
+                      legend: {
+                        position: 'top' as const,
+                        labels: {
+                          usePointStyle: true,
+                          font: {
+                            family: 'Inter',
+                            size: 12,
+                            weight: '500'
+                          }
+                        }
+                      }
+                    }
+                  }}
+                  height="350px"
                 />
               ) : (
                 <div className="flex align-items-center justify-content-center h-full">
                   <div className="text-center">
-                    <i className="pi pi-chart-line text-6xl text-300 mb-3" />
-                    <p className="text-500">No trend data available for the selected period</p>
+                    <SecurityShield level="basic" size="lg" animated={false} className="mb-3" />
+                    <p className="text-600 font-medium">No trend data available for the selected period</p>
+                    <p className="text-500 text-sm">Data will appear as your protection activities increase</p>
                   </div>
                 </div>
               )}
             </div>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
-      {/* Platform Distribution */}
+      {/* Enhanced Platform Distribution */}
       <div className="col-12 lg:col-4">
-        <Card className="h-full">
-          <div className="flex justify-content-between align-items-center mb-3">
-            <span className="text-900 font-bold text-lg">Platform Distribution</span>
-            {lastUpdated.platformData && (
-              <span className="text-sm text-500">
-                Updated {formatTimestamp(lastUpdated.platformData)}
-              </span>
-            )}
+        <EnhancedCard 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2" 
+          className="h-full"
+          headerActions={
+            <div className="flex align-items-center gap-2">
+              <SecurityBadge type="ssl" size="sm" showText={false} />
+              {lastUpdated.platformData && (
+                <span className="text-sm text-600">
+                  Updated {formatTimestamp(lastUpdated.platformData)}
+                </span>
+              )}
+            </div>
+          }
+        >
+          <div className="flex align-items-center gap-2 mb-4">
+            <SecurityBadge type="verified" size="sm" />
+            <h3 className="text-900 font-bold text-xl m-0">Platform Coverage</h3>
           </div>
           {renderErrorMessage('platformData', fetchPlatformData)}
-          {loading.platformData ? renderSectionSkeleton('300px') : (
-            <div style={{ height: '300px' }}>
+          {loading.platformData ? (
+            <EnhancedLoading type="skeleton" variant="dashboard" size="lg" />
+          ) : (
+            <div className="border-round-lg p-3"
+                 style={{ 
+                   height: '350px',
+                   background: 'linear-gradient(135deg, var(--autodmca-surface-50), var(--autodmca-surface-100))',
+                   border: '1px solid var(--autodmca-surface-200)'
+                 }}>
               {platformDistributionData.labels.length > 0 ? (
                 <Chart 
                   type="doughnut" 
                   data={platformDistributionData} 
-                  options={doughnutOptions}
+                  options={{
+                    ...doughnutOptions,
+                    plugins: {
+                      ...doughnutOptions.plugins,
+                      legend: {
+                        position: 'right' as const,
+                        labels: {
+                          usePointStyle: true,
+                          font: {
+                            family: 'Inter',
+                            size: 11,
+                            weight: '500'
+                          }
+                        }
+                      }
+                    }
+                  }}
+                  height="350px"
+                />
+              ) : (
+                <div className="flex align-items-center justify-content-center h-full">
+                  <div className="text-center">
+                    <SecurityShield level="enterprise" size="lg" animated={false} className="mb-3" />
+                    <p className="text-600 font-medium">No platform data available</p>
+                    <p className="text-500 text-sm">Start monitoring to see platform distribution</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </EnhancedCard>
+      </div>
+
+      {/* Enhanced Success Rate by Platform */}
+      <div className="col-12 lg:col-6">
+        <EnhancedCard 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2" 
+          className="h-full"
+          headerActions={
+            <div className="flex align-items-center gap-2">
+              <SecurityBadge type="verified" size="sm" showText={false} />
+              {lastUpdated.analytics && (
+                <span className="text-sm text-600">
+                  Updated {formatTimestamp(lastUpdated.analytics)}
+                </span>
+              )}
+            </div>
+          }
+        >
+          <div className="flex align-items-center gap-2 mb-4">
+            <SecurityBadge type="professional" size="sm" />
+            <h3 className="text-900 font-bold text-xl m-0">Success Metrics</h3>
+          </div>
+          {renderErrorMessage('analytics', fetchAnalyticsData)}
+          {loading.analytics ? (
+            <EnhancedLoading type="skeleton" variant="dashboard" size="md" />
+          ) : (
+            <div className="border-round-lg p-3"
+                 style={{ 
+                   height: '300px',
+                   background: 'linear-gradient(135deg, var(--autodmca-surface-50), var(--autodmca-surface-100))',
+                   border: '1px solid var(--autodmca-surface-200)'
+                 }}>
+              {successRateData.labels.length > 0 ? (
+                <Chart 
+                  type="bar" 
+                  data={successRateData} 
+                  options={{
+                    ...chartOptions,
+                    plugins: {
+                      ...chartOptions.plugins,
+                      legend: {
+                        position: 'top' as const,
+                        labels: {
+                          font: {
+                            family: 'Inter',
+                            size: 12,
+                            weight: '500'
+                          }
+                        }
+                      }
+                    }
+                  }}
                   height="300px"
                 />
               ) : (
                 <div className="flex align-items-center justify-content-center h-full">
                   <div className="text-center">
-                    <i className="pi pi-chart-pie text-6xl text-300 mb-3" />
-                    <p className="text-500">No platform data available</p>
+                    <SecurityShield level="premium" size="lg" animated={false} className="mb-3" />
+                    <p className="text-600 font-medium">No success rate data available</p>
+                    <p className="text-500 text-sm">Data will populate as takedowns are processed</p>
                   </div>
                 </div>
               )}
             </div>
           )}
-        </Card>
+        </EnhancedCard>
       </div>
 
-      {/* Success Rate by Platform */}
+      {/* Enhanced Platform Performance Table */}
       <div className="col-12 lg:col-6">
-        <Card className="h-full">
-          <div className="flex justify-content-between align-items-center mb-3">
-            <span className="text-900 font-bold text-lg">Success Rate by Platform</span>
-            {lastUpdated.analytics && (
-              <span className="text-sm text-500">
-                Updated {formatTimestamp(lastUpdated.analytics)}
-              </span>
-            )}
-          </div>
-          {renderErrorMessage('analytics', fetchAnalyticsData)}
-          {loading.analytics ? renderSectionSkeleton('250px') : (
-            <div style={{ height: '250px' }}>
-              {successRateData.labels.length > 0 ? (
-                <Chart 
-                  type="bar" 
-                  data={successRateData} 
-                  options={chartOptions}
-                  height="250px"
-                />
-              ) : (
-                <div className="flex align-items-center justify-content-center h-full">
-                  <div className="text-center">
-                    <i className="pi pi-chart-bar text-6xl text-300 mb-3" />
-                    <p className="text-500">No success rate data available</p>
-                  </div>
-                </div>
+        <EnhancedCard 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2" 
+          className="h-full"
+          headerActions={
+            <div className="flex align-items-center gap-2">
+              <SecurityBadge type="dmca" size="sm" showText={false} />
+              {lastUpdated.platformData && (
+                <span className="text-sm text-600">
+                  Updated {formatTimestamp(lastUpdated.platformData)}
+                </span>
               )}
             </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Platform Performance Table */}
-      <div className="col-12 lg:col-6">
-        <Card className="h-full">
-          <div className="flex justify-content-between align-items-center mb-3">
-            <span className="text-900 font-bold text-lg">Platform Performance</span>
-            {lastUpdated.platformData && (
-              <span className="text-sm text-500">
-                Updated {formatTimestamp(lastUpdated.platformData)}
-              </span>
-            )}
+          }
+        >
+          <div className="flex align-items-center gap-2 mb-4">
+            <SecurityBadge type="ssl" size="sm" />
+            <h3 className="text-900 font-bold text-xl m-0">Platform Status</h3>
           </div>
           {renderErrorMessage('platformData', fetchPlatformData)}
-          {loading.platformData ? renderSectionSkeleton('250px') : (
-            <DataTable 
-              value={platformData} 
-              size="small"
-              showGridlines
-              emptyMessage="No platform data available"
-            >
-              <Column field="platform" header="Platform" />
-              <Column 
-                field="infringements" 
-                header="Infringements" 
-                body={(rowData) => (
-                  <Badge value={rowData.infringements} severity="warning" />
-                )}
-              />
-              <Column 
-                field="takedowns" 
-                header="Takedowns" 
-                body={(rowData) => (
-                  <Badge value={rowData.takedowns} severity="success" />
-                )}
-              />
-              <Column 
-                field="successRate" 
-                header="Success Rate" 
-                body={(rowData) => (
-                  <div className="flex align-items-center gap-2">
-                    <ProgressBar 
-                      value={rowData.successRate} 
-                      showValue={false} 
-                      style={{ width: '60px', height: '6px' }}
-                    />
-                    <span className="text-sm">{rowData.successRate}%</span>
-                    {rowData.trend && (
-                      <i className={`pi ${
-                        rowData.trend === 'up' ? 'pi-arrow-up text-green-500' :
-                        rowData.trend === 'down' ? 'pi-arrow-down text-red-500' :
-                        'pi-minus text-gray-500'
-                      } text-sm`} />
-                    )}
+          {loading.platformData ? (
+            <EnhancedLoading type="skeleton" variant="table" size="md" lines={5} />
+          ) : (
+            <div className="border-round-lg overflow-hidden"
+                 style={{ 
+                   background: 'linear-gradient(135deg, var(--autodmca-surface-50), var(--autodmca-surface-100))',
+                   border: '1px solid var(--autodmca-surface-200)'
+                 }}>
+              <DataTable 
+                value={safePlatformData} 
+                size="small"
+                showGridlines
+                emptyMessage={
+                  <div className="text-center p-4">
+                    <SecurityShield level="enterprise" size="lg" animated={false} className="mb-3" />
+                    <p className="text-600 font-medium">No platform data available</p>
+                    <p className="text-500 text-sm">Begin monitoring to see platform performance</p>
                   </div>
-                )}
-              />
-            </DataTable>
-          )}
-        </Card>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="col-12">
-        <Panel 
-          toggleable 
-          className="mt-4"
-          headerTemplate={(options) => (
-            <div className="flex justify-content-between align-items-center w-full">
-              <div className="flex align-items-center gap-3">
-                <span className="font-bold text-lg">Recent Activity</span>
-                {lastUpdated.activity && (
-                  <span className="text-sm text-500">
-                    Updated {formatTimestamp(lastUpdated.activity)}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  icon="pi pi-refresh" 
-                  size="small"
-                  text
-                  loading={loading.activity}
-                  onClick={fetchRecentActivity}
-                  tooltip="Refresh activity"
+                }
+                className="border-none"
+                style={{ background: 'transparent' }}
+              >
+                <Column 
+                  field="platform" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="ssl" size="sm" showText={false} />
+                      <span>Platform</span>
+                    </div>
+                  } 
                 />
-                <Button 
-                  label="View All" 
-                  link 
-                  size="small"
-                  onClick={() => navigate('/protection/activity')}
+                <Column 
+                  field="infringements" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="dmca" size="sm" showText={false} />
+                      <span>Threats</span>
+                    </div>
+                  }
+                  body={(rowData) => (
+                    <Badge 
+                      value={rowData.infringements} 
+                      severity="warning"
+                      style={{ background: 'var(--autodmca-warning-500)' }}
+                    />
+                  )}
                 />
-                {options.togglerElement}
-              </div>
+                <Column 
+                  field="takedowns" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="professional" size="sm" showText={false} />
+                      <span>Actions</span>
+                    </div>
+                  }
+                  body={(rowData) => (
+                    <Badge 
+                      value={rowData.takedowns} 
+                      severity="success"
+                      style={{ background: 'var(--autodmca-success-500)' }}
+                    />
+                  )}
+                />
+                <Column 
+                  field="successRate" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="verified" size="sm" showText={false} />
+                      <span>Success Rate</span>
+                    </div>
+                  }
+                  body={(rowData) => (
+                    <div className="flex align-items-center gap-2">
+                      <ProgressBar 
+                        value={rowData.successRate} 
+                        showValue={false} 
+                        style={{ 
+                          width: '60px', 
+                          height: '8px',
+                          background: 'var(--autodmca-surface-200)'
+                        }}
+                        color="var(--autodmca-success-500)"
+                      />
+                      <span className="text-sm font-medium">{rowData.successRate}%</span>
+                      {rowData.trend && (
+                        <i className={`pi ${
+                          rowData.trend === 'up' ? 'pi-arrow-up' :
+                          rowData.trend === 'down' ? 'pi-arrow-down' :
+                          'pi-minus'
+                        } text-sm`} 
+                        style={{ 
+                          color: rowData.trend === 'up' ? 'var(--autodmca-success-600)' :
+                                 rowData.trend === 'down' ? 'var(--autodmca-danger-600)' :
+                                 'var(--autodmca-surface-500)'
+                        }} />
+                      )}
+                    </div>
+                  )}
+                />
+              </DataTable>
             </div>
           )}
+        </EnhancedCard>
+      </div>
+
+      {/* Enhanced Recent Activity */}
+      <div className="col-12">
+        <EnhancedCard 
+          variant="elevated" 
+          padding="lg" 
+          elevation="2"
+          className="mt-4"
+          headerActions={
+            <div className="flex gap-2 align-items-center">
+              <SecurityBadge type="ssl" size="sm" showText={false} />
+              <EnhancedButton 
+                variant="ghost" 
+                size="sm"
+                icon="pi pi-refresh"
+                loading={loading.activity}
+                onClick={fetchRecentActivity}
+              />
+              <EnhancedButton 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate('/protection/activity')}
+              >
+                View All
+              </EnhancedButton>
+            </div>
+          }
         >
+          <div className="flex align-items-center gap-3 mb-4">
+            <SecurityShield level="premium" size="sm" animated={false} />
+            <h3 className="text-900 font-bold text-xl m-0">Security Activity Feed</h3>
+            {lastUpdated.activity && (
+              <span className="text-sm text-600">
+                Updated {formatTimestamp(lastUpdated.activity)}
+              </span>
+            )}
+          </div>
+          
           {renderErrorMessage('activity', fetchRecentActivity)}
-          {loading.activity ? renderSectionSkeleton('300px') : (
-            <DataTable 
-              value={recentActivity} 
-              paginator 
-              rows={10}
-              size="small"
-              showGridlines
-              emptyMessage="No recent activity found"
-              loading={loading.activity}
-            >
-              <Column 
-                field="type" 
-                header="Activity" 
-                body={activityTypeTemplate}
-                style={{ width: '25%' }}
-              />
-              <Column 
-                field="description" 
-                header="Description" 
-                style={{ width: '30%' }}
-              />
-              <Column 
-                field="platform" 
-                header="Platform" 
-                body={platformTemplate}
-                style={{ width: '15%' }}
-              />
-              <Column 
-                field="status" 
-                header="Status" 
-                body={statusTemplate}
-                style={{ width: '15%' }}
-              />
-              <Column 
-                field="timestamp" 
-                header="Time" 
-                body={timestampTemplate}
-                style={{ width: '10%' }}
-              />
-              <Column 
-                body={actionsTemplate}
-                style={{ width: '5%' }}
-              />
-            </DataTable>
+          {loading.activity ? (
+            <EnhancedLoading type="skeleton" variant="table" size="lg" lines={8} />
+          ) : (
+            <div className="border-round-lg overflow-hidden"
+                 style={{ 
+                   background: 'linear-gradient(135deg, var(--autodmca-surface-50), var(--autodmca-surface-100))',
+                   border: '1px solid var(--autodmca-surface-200)'
+                 }}>
+              <DataTable 
+                value={safeRecentActivity} 
+                paginator 
+                rows={10}
+                size="small"
+                showGridlines
+                emptyMessage={
+                  <div className="text-center p-5">
+                    <SecurityShield level="basic" size="xl" animated={false} className="mb-4" />
+                    <h4 className="text-900 font-bold mb-2">No Recent Activity</h4>
+                    <p className="text-600 mb-3">Your security monitoring will appear here once activated</p>
+                    <EnhancedButton 
+                      variant="primary" 
+                      size="md"
+                      icon="pi pi-plus"
+                      onClick={() => navigate('/protection/submissions')}
+                    >
+                      Start Monitoring
+                    </EnhancedButton>
+                  </div>
+                }
+                loading={loading.activity}
+                className="border-none"
+                style={{ background: 'transparent' }}
+              >
+                <Column 
+                  field="type" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="dmca" size="sm" showText={false} />
+                      <span>Activity Type</span>
+                    </div>
+                  }
+                  body={activityTypeTemplate}
+                  style={{ width: '25%' }}
+                />
+                <Column 
+                  field="description" 
+                  header="Description" 
+                  style={{ width: '30%' }}
+                />
+                <Column 
+                  field="platform" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="ssl" size="sm" showText={false} />
+                      <span>Platform</span>
+                    </div>
+                  }
+                  body={platformTemplate}
+                  style={{ width: '15%' }}
+                />
+                <Column 
+                  field="status" 
+                  header={
+                    <div className="flex align-items-center gap-2">
+                      <SecurityBadge type="verified" size="sm" showText={false} />
+                      <span>Status</span>
+                    </div>
+                  }
+                  body={statusTemplate}
+                  style={{ width: '15%' }}
+                />
+                <Column 
+                  field="timestamp" 
+                  header="Time" 
+                  body={timestampTemplate}
+                  style={{ width: '10%' }}
+                />
+                <Column 
+                  body={actionsTemplate}
+                  style={{ width: '5%' }}
+                />
+              </DataTable>
+            </div>
           )}
-        </Panel>
+        </EnhancedCard>
+      </div>
+
+      {/* Professional Footer */}
+      <div className="col-12 mt-5">
+        <EnhancedCard 
+          variant="filled" 
+          padding="lg"
+          style={{
+            background: 'linear-gradient(135deg, var(--autodmca-surface-100), var(--autodmca-surface-200))',
+            border: '1px solid var(--autodmca-surface-300)'
+          }}
+        >
+          <div className="flex flex-column lg:flex-row justify-content-between align-items-center gap-4">
+            <div className="flex align-items-center gap-3">
+              <SecurityShield level="enterprise" size="md" animated={false} />
+              <div>
+                <h4 className="text-900 font-bold m-0">Enterprise-Grade Content Protection</h4>
+                <p className="text-600 m-0 mt-1">
+                  Powered by advanced AI and professional DMCA enforcement
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-column lg:flex-row align-items-center gap-4">
+              <TrustIndicatorBar 
+                indicators={['ssl', 'encrypted', 'verified', 'professional', 'gdpr', 'dmca']} 
+                size="md" 
+                layout="horizontal"
+              />
+              <div className="flex gap-2">
+                <EnhancedButton 
+                  variant="outline" 
+                  size="sm"
+                  icon="pi pi-shield"
+                  onClick={() => navigate('/security')}
+                >
+                  Security Center
+                </EnhancedButton>
+                <EnhancedButton 
+                  variant="outline" 
+                  size="sm"
+                  icon="pi pi-book"
+                  onClick={() => navigate('/docs')}
+                >
+                  Documentation
+                </EnhancedButton>
+              </div>
+            </div>
+          </div>
+          
+          <Divider className="my-4" />
+          
+          <div className="flex flex-column lg:flex-row justify-content-between align-items-center gap-3">
+            <DataProtectionNotice compact />
+            <div className="text-center">
+              <p className="text-600 text-sm m-0">
+                © 2024 AutoDMCA Professional. All rights reserved. | 
+                <a href="/privacy" className="text-primary-600 ml-1 no-underline">Privacy Policy</a> | 
+                <a href="/terms" className="text-primary-600 ml-1 no-underline">Terms of Service</a>
+              </p>
+            </div>
+          </div>
+        </EnhancedCard>
       </div>
     </div>
     </>

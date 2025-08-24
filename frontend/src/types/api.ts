@@ -1,3 +1,6 @@
+// Import DMCA template types
+import type { IDMCATemplate, TemplateCategoryType } from './dmca';
+
 // User types
 export interface User {
   id: number;
@@ -814,17 +817,27 @@ export interface RemovalImpactEstimate {
 }
 
 export interface SystemHealth {
-  status: 'healthy' | 'degraded' | 'down';
-  uptime: number;
-  activeConnections: number;
+  status: 'healthy' | 'degraded' | 'down' | 'critical';
+  uptime?: number;
+  activeConnections?: number;
   queueSize: number;
   errorRate: number;
   components: Array<{
     name: string;
+    component?: string;
     status: 'up' | 'down' | 'degraded';
     lastCheck: string;
+    last_check?: string;
     responseTime?: number;
+    response_time?: number;
+    error_message?: string;
   }>;
+  performance?: {
+    queue_size: number;
+    processing_rate: number;
+    error_rate: number;
+    uptime_seconds: number;
+  };
 }
 
 export interface RegionData {
@@ -3279,31 +3292,6 @@ export interface TemplateLibrary {
   };
 }
 
-export interface SystemHealth {
-  status: 'healthy' | 'degraded' | 'critical';
-  components: {
-    component: string;
-    status: 'up' | 'down' | 'degraded';
-    response_time?: number;
-    last_check: string;
-    error_message?: string;
-  }[];
-  performance: {
-    queue_size: number;
-    processing_rate: number;
-    error_rate: number;
-    uptime: number;
-    storage_usage: number;
-    memory_usage: number;
-    cpu_usage: number;
-  };
-  recent_errors: {
-    timestamp: string;
-    component: string;
-    error: string;
-    severity: 'low' | 'medium' | 'high' | 'critical';
-  }[];
-}
 
 export interface ExportRequest {
   content_ids?: string[];

@@ -214,7 +214,7 @@ const Login: React.FC = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-column gap-4">
               {/* Email Field */}
               <div className="field">
-                <label htmlFor="email" className="block text-color font-medium mb-2">
+                <label htmlFor="login-email" className="block text-color font-medium mb-2">
                   Email Address *
                 </label>
                 <Controller
@@ -227,7 +227,7 @@ const Login: React.FC = () => {
                       </span>
                       <InputText
                         {...field}
-                        id="email"
+                        id="login-email"
                         type="email"
                         placeholder="Enter your email address"
                         className={`w-full ${errors.email ? 'p-invalid' : ''}`}
@@ -248,7 +248,7 @@ const Login: React.FC = () => {
 
               {/* Password Field */}
               <div className="field">
-                <label htmlFor="password" className="block text-color font-medium mb-2">
+                <label htmlFor="login-password" className="block text-color font-medium mb-2">
                   Password *
                 </label>
                 <Controller
@@ -261,7 +261,7 @@ const Login: React.FC = () => {
                       </span>
                       <Password
                         {...field}
-                        id="password"
+                        id="login-password"
                         placeholder="Enter your password"
                         className={`w-full ${errors.password ? 'p-invalid' : ''}`}
                         inputClassName="w-full"
@@ -290,7 +290,7 @@ const Login: React.FC = () => {
                     <div className="flex align-items-center">
                       <Checkbox
                         {...field}
-                        id="rememberMe"
+                        id="login-rememberMe"
                         checked={field.value || false}
                         onChange={(e) => {
                           field.onChange(e.checked);
@@ -298,7 +298,7 @@ const Login: React.FC = () => {
                         }}
                         disabled={isLoading}
                       />
-                      <label htmlFor="rememberMe" className="ml-2 text-color">
+                      <label htmlFor="login-rememberMe" className="ml-2 text-color">
                         Remember me for 30 days
                       </label>
                     </div>

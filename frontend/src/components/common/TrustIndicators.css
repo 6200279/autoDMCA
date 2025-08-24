@@ -1,0 +1,381 @@
+/* Trust Indicators & Security Badges */
+
+/* === SECURITY BADGE === */
+.security-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+/* Badge sizes */
+.security-badge-sm {
+  padding: 2px var(--space-2);
+  font-size: 0.65rem;
+}
+
+.security-badge-sm .security-badge-icon {
+  font-size: 0.8rem;
+}
+
+.security-badge-md {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+}
+
+.security-badge-lg {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.security-badge-lg .security-badge-icon {
+  font-size: var(--font-size-base);
+}
+
+/* Badge color variants */
+.security-badge-success {
+  background-color: var(--autodmca-success-100);
+  color: var(--autodmca-success-700);
+  border-color: var(--autodmca-success-300);
+}
+
+.security-badge-info {
+  background-color: var(--autodmca-info-100);
+  color: var(--autodmca-info-700);
+  border-color: var(--autodmca-info-300);
+}
+
+.security-badge-warning {
+  background-color: var(--autodmca-warning-100);
+  color: var(--autodmca-warning-700);
+  border-color: var(--autodmca-warning-300);
+}
+
+.security-badge-primary {
+  background-color: var(--autodmca-primary-100);
+  color: var(--autodmca-primary-700);
+  border-color: var(--autodmca-primary-300);
+}
+
+.security-badge-danger {
+  background-color: var(--autodmca-danger-100);
+  color: var(--autodmca-danger-700);
+  border-color: var(--autodmca-danger-300);
+}
+
+.security-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* === TRUST INDICATOR BAR === */
+.trust-indicator-bar {
+  display: flex;
+  align-items: center;
+}
+
+.trust-indicator-bar-horizontal {
+  gap: var(--space-2);
+}
+
+.trust-indicator-bar-vertical {
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+.trust-indicator-bar-sm .security-badge {
+  padding: 2px var(--space-2);
+  font-size: 0.6rem;
+}
+
+.trust-indicator-bar-md .security-badge {
+  padding: var(--space-1) var(--space-2);
+}
+
+.trust-indicator-bar-lg .security-badge {
+  padding: var(--space-2) var(--space-3);
+}
+
+/* === SECURITY SHIELD === */
+.security-shield {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.security-shield-sm {
+  width: 3rem;
+  height: 3rem;
+}
+
+.security-shield-sm .security-shield-icon {
+  font-size: var(--font-size-lg);
+}
+
+.security-shield-sm .security-shield-label {
+  font-size: var(--font-size-xs);
+  margin-top: var(--space-1);
+}
+
+.security-shield-md {
+  width: 4rem;
+  height: 4rem;
+}
+
+.security-shield-md .security-shield-icon {
+  font-size: var(--font-size-xl);
+}
+
+.security-shield-md .security-shield-label {
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-2);
+}
+
+.security-shield-lg {
+  width: 6rem;
+  height: 6rem;
+}
+
+.security-shield-lg .security-shield-icon {
+  font-size: var(--font-size-3xl);
+}
+
+.security-shield-lg .security-shield-label {
+  font-size: var(--font-size-base);
+  margin-top: var(--space-3);
+}
+
+.security-shield-xl {
+  width: 8rem;
+  height: 8rem;
+}
+
+.security-shield-xl .security-shield-icon {
+  font-size: var(--font-size-4xl);
+}
+
+.security-shield-xl .security-shield-label {
+  font-size: var(--font-size-lg);
+  margin-top: var(--space-4);
+}
+
+.security-shield-icon {
+  position: relative;
+  z-index: 3;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+  animation: shield-glow 3s ease-in-out infinite;
+}
+
+.security-shield-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--autodmca-text-secondary);
+  position: relative;
+  z-index: 2;
+}
+
+/* Shield rings */
+.security-shield-ring {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+.security-shield-ring-1 {
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+}
+
+.security-shield-ring-2 {
+  width: 120%;
+  height: 120%;
+  top: -10%;
+  left: -10%;
+  opacity: 0.4;
+}
+
+.security-shield-ring-3 {
+  width: 140%;
+  height: 140%;
+  top: -20%;
+  left: -20%;
+  opacity: 0.3;
+}
+
+.security-shield-animated .security-shield-ring {
+  animation: shield-pulse 2s ease-in-out infinite;
+}
+
+/* Shield level variants */
+.security-shield-basic .security-shield-icon {
+  color: var(--autodmca-info-600);
+}
+
+.security-shield-premium .security-shield-icon {
+  color: var(--autodmca-primary-600);
+}
+
+.security-shield-enterprise .security-shield-icon {
+  color: var(--autodmca-secondary-600);
+}
+
+/* === DATA PROTECTION NOTICE === */
+.data-protection-notice {
+  background: var(--autodmca-surface-card);
+  border: 1px solid var(--autodmca-surface-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.data-protection-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--autodmca-surface-border);
+}
+
+.data-protection-header h4 {
+  margin: 0;
+  color: var(--autodmca-primary-600);
+  font-size: var(--font-size-lg);
+}
+
+.data-protection-features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.protection-feature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--autodmca-text-secondary);
+}
+
+/* Compact data protection notice */
+.data-protection-notice-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--autodmca-surface-hover);
+  border-radius: var(--radius-base);
+  border: 1px solid var(--autodmca-surface-border);
+}
+
+/* === ANIMATIONS === */
+@keyframes shield-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.3;
+  }
+}
+
+@keyframes shield-glow {
+  0%, 100% {
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+  }
+  50% {
+    filter: drop-shadow(0 4px 12px rgba(21, 101, 192, 0.4));
+  }
+}
+
+/* === RESPONSIVE DESIGN === */
+@media (max-width: 640px) {
+  .trust-indicator-bar-horizontal {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  
+  .security-badge {
+    font-size: 0.6rem;
+    padding: 2px var(--space-2);
+  }
+  
+  .data-protection-notice {
+    padding: var(--space-3);
+  }
+  
+  .data-protection-header {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-2);
+  }
+  
+  .protection-feature {
+    justify-content: center;
+  }
+}
+
+/* === DARK THEME ADJUSTMENTS === */
+.dark-theme .security-badge-success {
+  background-color: var(--autodmca-success-200);
+  color: var(--autodmca-success-800);
+}
+
+.dark-theme .security-badge-info {
+  background-color: var(--autodmca-info-200);
+  color: var(--autodmca-info-800);
+}
+
+.dark-theme .security-badge-warning {
+  background-color: var(--autodmca-warning-200);
+  color: var(--autodmca-warning-800);
+}
+
+.dark-theme .security-badge-primary {
+  background-color: var(--autodmca-primary-200);
+  color: var(--autodmca-primary-800);
+}
+
+.dark-theme .security-badge-danger {
+  background-color: var(--autodmca-danger-200);
+  color: var(--autodmca-danger-800);
+}
+
+/* === ACCESSIBILITY === */
+@media (prefers-reduced-motion: reduce) {
+  .security-shield-animated .security-shield-ring,
+  .security-shield-icon {
+    animation: none;
+  }
+  
+  .security-badge:hover {
+    transform: none;
+  }
+}
+
+/* High contrast adjustments */
+@media (prefers-contrast: high) {
+  .security-badge {
+    border-width: 2px;
+  }
+  
+  .security-shield-ring {
+    border-width: 3px;
+    opacity: 0.8;
+  }
+}

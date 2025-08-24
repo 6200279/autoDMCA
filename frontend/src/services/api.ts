@@ -1,8 +1,13 @@
 import axios from 'axios';
+import type { 
+  User, UserLogin, UserRegister, Subscription, 
+  Profile, TakedownRequest, 
+  SystemHealth, BillingDashboard, ApiResponse 
+} from '../types/api';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:18000/api/v1',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -85,21 +90,21 @@ api.interceptors.response.use(
 // Billing API endpoints
 export const billingApi = {
   // Subscriptions
-  createSubscription: (data: any) => api.post('/billing/subscriptions', data),
+  createSubscription: (data: Partial<Subscription>) => api.post('/billing/subscriptions', data),
   getCurrentSubscription: () => api.get('/billing/subscriptions/current'),
-  updateSubscription: (data: any) => api.put('/billing/subscriptions/current', data),
-  cancelSubscription: (data: any) => api.post('/billing/subscriptions/cancel', data),
+  updateSubscription: (data: Partial<Subscription>) => api.put('/billing/subscriptions/current', data),
+  cancelSubscription: (data: { reason?: string }) => api.post('/billing/subscriptions/cancel', data),
   reactivateSubscription: () => api.post('/billing/subscriptions/reactivate'),
   getSubscriptionPlans: () => api.get('/billing/plans'),
   
   // Payment Methods
-  createSetupIntent: (data: any) => api.post('/billing/payment-methods/setup-intent', data),
-  addPaymentMethod: (data: any) => api.post('/billing/payment-methods', data),
+  createSetupIntent: (data: { payment_method_types?: string[] }) => api.post('/billing/payment-methods/setup-intent', data),
+  addPaymentMethod: (data: { payment_method: string; set_as_default?: boolean }) => api.post('/billing/payment-methods', data),
   getPaymentMethods: () => api.get('/billing/payment-methods'),
   removePaymentMethod: (id: number) => api.delete(`/billing/payment-methods/${id}`),
   
   // Invoices
-  getInvoices: (params?: any) => api.get('/billing/invoices', { params }),
+  getInvoices: (params?: { page?: number; limit?: number; status?: string }) => api.get('/billing/invoices', { params }),
   getInvoice: (id: number) => api.get(`/billing/invoices/${id}`),
   
   // Usage
@@ -114,34 +119,34 @@ export const billingApi = {
   getBillingDashboard: () => api.get('/billing/dashboard'),
   
   // Webhooks
-  handleStripeWebhook: (data: any) => api.post('/billing/webhooks/stripe', data),
+  handleStripeWebhook: (data: Record<string, unknown>) => api.post('/billing/webhooks/stripe', data),
 };
 
 // Auth API endpoints
 export const authApi = {
-  login: (data: any) => api.post('/auth/login', data),
-  register: (data: any) => api.post('/auth/register', data),
+  login: (data: UserLogin) => api.post('/auth/login', data),
+  register: (data: UserRegister) => api.post('/auth/register', data),
   logout: () => api.post('/auth/logout'),
-  refreshToken: (data: any) => api.post('/auth/refresh', data),
-  forgotPassword: (data: any) => api.post('/auth/forgot-password', data),
-  resetPassword: (data: any) => api.post('/auth/reset-password', data),
-  verifyEmail: (data: any) => api.post('/auth/verify-email', data),
-  resendVerification: (data: any) => api.post('/auth/resend-verification', data),
+  refreshToken: (data: { refreshToken: string }) => api.post('/auth/refresh', data),
+  forgotPassword: (data: { email: string }) => api.post('/auth/forgot-password', data),
+  resetPassword: (data: { token: string; password: string }) => api.post('/auth/reset-password', data),
+  verifyEmail: (data: { token: string }) => api.post('/auth/verify-email', data),
+  resendVerification: (data: { email: string }) => api.post('/auth/resend-verification', data),
 };
 
 // User API endpoints
 export const userApi = {
   getCurrentUser: () => api.get('/users/me'),
-  updateUser: (data: any) => api.put('/users/me', data),
-  changePassword: (data: any) => api.post('/users/me/change-password', data),
+  updateUser: (data: Partial<User>) => api.put('/users/me', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) => api.post('/users/me/change-password', data),
   deleteAccount: () => api.delete('/users/me'),
   
   // Settings and preferences
   getUserSettings: () => api.get('/users/me/settings'),
-  updateUserSettings: (data: any) => api.put('/users/me/settings', data),
+  updateUserSettings: (data: Record<string, unknown>) => api.put('/users/me/settings', data),
   
   // Activity and audit logs
-  getUserActivity: (params?: any) => api.get('/users/me/activity', { params }),
+  getUserActivity: (params?: { page?: number; limit?: number; type?: string }) => api.get('/users/me/activity', { params }),
   
   // Avatar management
   uploadAvatar: (file: File) => {
@@ -157,17 +162,17 @@ export const userApi = {
   
   // API Keys management
   getApiKeys: () => api.get('/users/me/api-keys'),
-  createApiKey: (data: any) => api.post('/users/me/api-keys', data),
+  createApiKey: (data: { name: string; permissions: string[] }) => api.post('/users/me/api-keys', data),
   revokeApiKey: (keyId: string) => api.delete(`/users/me/api-keys/${keyId}`),
-  updateApiKey: (keyId: string, data: any) => api.put(`/users/me/api-keys/${keyId}`, data),
+  updateApiKey: (keyId: string, data: { name?: string; permissions?: string[] }) => api.put(`/users/me/api-keys/${keyId}`, data),
 };
 
 // Profile API endpoints
 export const profileApi = {
-  getProfiles: (params?: any) => api.get('/profiles', { params }),
-  createProfile: (data: any) => api.post('/profiles', data),
+  getProfiles: (params?: { page?: number; limit?: number; search?: string }) => api.get('/profiles', { params }),
+  createProfile: (data: Partial<Profile>) => api.post('/profiles', data),
   getProfile: (id: number) => api.get(`/profiles/${id}`),
-  updateProfile: (id: number, data: any) => api.put(`/profiles/${id}`, data),
+  updateProfile: (id: number, data: Partial<Profile>) => api.put(`/profiles/${id}`, data),
   deleteProfile: (id: number) => api.delete(`/profiles/${id}`),
   uploadProfileImage: (id: number, file: File) => {
     const formData = new FormData();

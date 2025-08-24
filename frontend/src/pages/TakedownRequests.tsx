@@ -915,6 +915,7 @@ const TakedownRequests: React.FC = () => {
           value={globalFilterValue}
           onChange={onGlobalFilterChange}
           placeholder="Search requests..."
+          aria-label="Search takedown requests"
           size="small"
         />
       </span>
@@ -989,6 +990,7 @@ const TakedownRequests: React.FC = () => {
               readOnlyInput 
               showIcon
               placeholder="Filter by date range"
+              aria-label="Filter takedown requests by date range"
             />
           </div>
         </div>

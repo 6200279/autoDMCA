@@ -11,22 +11,24 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Enhanced database engine configuration with optimized connection pooling
+# For AsyncPG, we need to be more careful with pool configuration
 engine_kwargs = {
-    "pool_size": 20,  # Number of connections to maintain in the pool
-    "max_overflow": 30,  # Additional connections that can be created on demand
-    "pool_timeout": 30,  # Timeout when getting connection from pool
-    "pool_recycle": 3600,  # Recycle connections after 1 hour
-    "pool_pre_ping": True,  # Validate connections before use
     "echo": settings.DEBUG,  # Log SQL queries in debug mode
-    "echo_pool": settings.DEBUG,  # Log connection pool activity in debug mode
     "future": True,  # Use SQLAlchemy 2.0 style
 }
 
-# Use QueuePool for production, NullPool for testing to avoid connection issues
+# Use NullPool for development to avoid connection pool issues with mock authentication
 if settings.DEBUG:
     engine_kwargs["poolclass"] = NullPool
 else:
-    engine_kwargs["poolclass"] = QueuePool
+    # Production pool settings - only include AsyncPG-compatible options
+    engine_kwargs.update({
+        "pool_size": 20,  # Number of connections to maintain in the pool
+        "max_overflow": 30,  # Additional connections that can be created on demand
+        "pool_recycle": 3600,  # Recycle connections after 1 hour
+        "pool_pre_ping": True,  # Validate connections before use
+        "poolclass": QueuePool
+    })
 
 engine = create_async_engine(str(settings.SQLALCHEMY_DATABASE_URI), **engine_kwargs)
 

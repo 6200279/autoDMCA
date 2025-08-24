@@ -132,11 +132,11 @@ export interface ConnectionHealth {
 
 // Default configuration
 const DEFAULT_CONFIG: WebSocketConfig = {
-  url: process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws',
+  url: import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws',
   reconnectInterval: 3000,
   maxReconnectAttempts: 10,
   heartbeatInterval: 30000,
-  debug: process.env.NODE_ENV === 'development',
+  debug: import.meta.env.DEV,
 };
 
 export class WebSocketService extends SimpleEventEmitter {

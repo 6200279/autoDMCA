@@ -101,7 +101,16 @@ def create_application() -> FastAPI:
         lifespan=lifespan
     )
     
-    # Add CORS middleware
+    # Add custom middleware first (they process in reverse order)
+    # from app.middleware.security import SecurityMiddleware  # Temporarily disabled
+    from app.middleware.logging import LoggingMiddleware
+    from app.middleware.rate_limiting import RateLimitingMiddleware
+    
+    # app.add_middleware(SecurityMiddleware)  # Temporarily disabled
+    app.add_middleware(LoggingMiddleware)
+    app.add_middleware(RateLimitingMiddleware)
+    
+    # Add CORS middleware LAST so it processes all responses (including rate limit errors)
     from fastapi.middleware.cors import CORSMiddleware
     
     app.add_middleware(
@@ -111,15 +120,6 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
-    # Add custom middleware
-    from app.middleware.security import SecurityMiddleware
-    from app.middleware.logging import LoggingMiddleware
-    from app.middleware.rate_limiting import RateLimitingMiddleware
-    
-    app.add_middleware(SecurityMiddleware)
-    app.add_middleware(LoggingMiddleware)
-    app.add_middleware(RateLimitingMiddleware)
     
     # Include routers
     from app.api.v1.api import api_router

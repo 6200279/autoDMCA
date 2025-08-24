@@ -272,7 +272,7 @@ const Register: React.FC = () => {
                 {/* First Name Field */}
                 <div className="col-12 md:col-6">
                   <div className="field">
-                    <label htmlFor="firstName" className="block text-color font-medium mb-2">
+                    <label htmlFor="register-firstName" className="block text-color font-medium mb-2">
                       First Name *
                     </label>
                     <Controller
@@ -281,7 +281,7 @@ const Register: React.FC = () => {
                       render={({ field }) => (
                         <InputText
                           {...field}
-                          id="firstName"
+                          id="register-firstName"
                           placeholder="Enter your first name"
                           className={`w-full ${errors.firstName ? 'p-invalid' : ''}`}
                           autoComplete="given-name"
@@ -301,7 +301,7 @@ const Register: React.FC = () => {
                 {/* Last Name Field */}
                 <div className="col-12 md:col-6">
                   <div className="field">
-                    <label htmlFor="lastName" className="block text-color font-medium mb-2">
+                    <label htmlFor="register-lastName" className="block text-color font-medium mb-2">
                       Last Name *
                     </label>
                     <Controller
@@ -310,7 +310,7 @@ const Register: React.FC = () => {
                       render={({ field }) => (
                         <InputText
                           {...field}
-                          id="lastName"
+                          id="register-lastName"
                           placeholder="Enter your last name"
                           className={`w-full ${errors.lastName ? 'p-invalid' : ''}`}
                           autoComplete="family-name"
@@ -330,7 +330,7 @@ const Register: React.FC = () => {
 
               {/* Email Field */}
               <div className="field">
-                <label htmlFor="email" className="block text-color font-medium mb-2">
+                <label htmlFor="register-email" className="block text-color font-medium mb-2">
                   Email Address *
                 </label>
                 <Controller
@@ -343,7 +343,7 @@ const Register: React.FC = () => {
                       </span>
                       <InputText
                         {...field}
-                        id="email"
+                        id="register-email"
                         type="email"
                         placeholder="Enter your email address"
                         className={`w-full ${errors.email ? 'p-invalid' : ''}`}
@@ -363,7 +363,7 @@ const Register: React.FC = () => {
 
               {/* Password Field */}
               <div className="field">
-                <label htmlFor="password" className="block text-color font-medium mb-2">
+                <label htmlFor="register-password" className="block text-color font-medium mb-2">
                   Password *
                 </label>
                 <Controller
@@ -376,7 +376,7 @@ const Register: React.FC = () => {
                       </span>
                       <Password
                         {...field}
-                        id="password"
+                        id="register-password"
                         placeholder="Create a strong password"
                         className={`w-full ${errors.password ? 'p-invalid' : ''}`}
                         inputClassName="w-full"
@@ -402,7 +402,7 @@ const Register: React.FC = () => {
 
               {/* Confirm Password Field */}
               <div className="field">
-                <label htmlFor="confirmPassword" className="block text-color font-medium mb-2">
+                <label htmlFor="register-confirmPassword" className="block text-color font-medium mb-2">
                   Confirm Password *
                 </label>
                 <Controller
@@ -415,7 +415,7 @@ const Register: React.FC = () => {
                       </span>
                       <Password
                         {...field}
-                        id="confirmPassword"
+                        id="register-confirmPassword"
                         placeholder="Confirm your password"
                         className={`w-full ${errors.confirmPassword ? 'p-invalid' : ''}`}
                         inputClassName="w-full"
@@ -444,14 +444,14 @@ const Register: React.FC = () => {
                     <div className="flex align-items-start">
                       <Checkbox
                         {...field}
-                        id="acceptTerms"
+                        id="register-acceptTerms"
                         checked={field.value}
                         onChange={(e) => field.onChange(e.checked)}
                         disabled={isLoading}
                         className={`${errors.acceptTerms ? 'p-invalid' : ''}`}
                         aria-describedby={errors.acceptTerms ? 'acceptTerms-error' : undefined}
                       />
-                      <label htmlFor="acceptTerms" className="ml-2 text-color text-sm line-height-3">
+                      <label htmlFor="register-acceptTerms" className="ml-2 text-color text-sm line-height-3">
                         I agree to the{' '}
                         <Link 
                           to="/terms" 
@@ -493,12 +493,12 @@ const Register: React.FC = () => {
                     <div className="flex align-items-start">
                       <Checkbox
                         {...field}
-                        id="subscribeNewsletter"
+                        id="register-subscribeNewsletter"
                         checked={field.value}
                         onChange={(e) => field.onChange(e.checked)}
                         disabled={isLoading}
                       />
-                      <label htmlFor="subscribeNewsletter" className="ml-2 text-color text-sm line-height-3">
+                      <label htmlFor="register-subscribeNewsletter" className="ml-2 text-color text-sm line-height-3">
                         Subscribe to our newsletter for updates and tips on content protection
                       </label>
                     </div>

@@ -8,15 +8,15 @@ import os
 import hashlib
 import uuid
 
-from ....api.deps.auth import get_current_user
-from ....api.deps.database import get_db
-from ....db.models.user import User
-from ....db.models.watermark import (
+from app.api.deps.auth import get_current_user
+from app.db.session import get_db
+from app.db.models.user import User
+from app.db.models.watermark import (
     WatermarkJob, WatermarkRecord, WatermarkTemplate, 
     WatermarkType, WatermarkStatus, ContentType
 )
-from ....services.watermarking.watermark_service import ContentWatermarkingService
-from ....core.config import settings
+from app.services.watermarking.watermark_service import ContentWatermarkingService
+from app.core.config import settings
 
 router = APIRouter()
 

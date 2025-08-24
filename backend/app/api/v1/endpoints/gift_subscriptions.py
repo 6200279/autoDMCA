@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Backgrou
 from sqlalchemy.orm import Session
 
 from app.api.deps.auth import get_current_user
-from app.api.deps.database import get_db
+from app.db.session import get_db
 from app.db.models.user import User
 from app.schemas.gift_subscription import (
     GiftPurchaseRequest, GiftPurchaseResponse,

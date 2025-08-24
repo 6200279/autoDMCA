@@ -98,7 +98,7 @@ export const useApiErrorHandler = () => {
     const apiError = ApiErrorHandler.handle(error);
     
     // Log error for debugging (only in development)
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error('API Error:', {
         originalError: error,
         processedError: apiError

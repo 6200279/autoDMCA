@@ -3,8 +3,14 @@ import uuid
 import hashlib
 from typing import Optional, Dict, Any, List
 from PIL import Image, ImageDraw, ImageFont
-import cv2
-import numpy as np
+try:
+    import cv2
+    import numpy as np
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    cv2 = None
+    np = None
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 import logging

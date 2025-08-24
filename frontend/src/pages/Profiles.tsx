@@ -1241,6 +1241,7 @@ const Profiles: React.FC = () => {
           setFilters(_filters);
         }}
         placeholder="Filter by category"
+        aria-label="Filter profiles by category"
         showClear
         className="w-10rem"
         size="small"
@@ -1254,6 +1255,7 @@ const Profiles: React.FC = () => {
           setFilters(_filters);
         }}
         placeholder="Filter by status"
+        aria-label="Filter profiles by status"
         showClear
         className="w-10rem"
         size="small"
@@ -1272,6 +1274,7 @@ const Profiles: React.FC = () => {
           value={globalFilterValue}
           onChange={onGlobalFilterChange}
           placeholder="Search profiles..."
+          aria-label="Search profiles"
           size="small"
           className="w-12rem"
         />
@@ -1409,7 +1412,7 @@ const Profiles: React.FC = () => {
                 {profiles.reduce((sum, p) => sum + p.infringementsFound, 0)}
               </div>
               <div className="text-xs text-500">
-                Avg response: {(profiles.reduce((sum, p) => sum + p.analytics.averageResponseTime, 0) / profiles.length || 0).toFixed(1)}h
+                Avg response: {(profiles.reduce((sum, p) => sum + (p.analytics?.averageResponseTime || 0), 0) / profiles.length || 0).toFixed(1)}h
               </div>
             </Card>
           </div>
@@ -1771,6 +1774,7 @@ const Profiles: React.FC = () => {
                     <div className="col-6">
                       <label htmlFor="category" className="block text-900 font-medium mb-2">Category</label>
                       <Dropdown
+                        id="category"
                         value={profileForm.category}
                         options={categoryOptions.filter(opt => opt.value)}
                         onChange={(e) => setProfileForm({ ...profileForm, category: e.value })}
@@ -1782,6 +1786,7 @@ const Profiles: React.FC = () => {
                     <div className="col-6">
                       <label htmlFor="priority" className="block text-900 font-medium mb-2">Priority</label>
                       <Dropdown
+                        id="priority"
                         value={profileForm.priority}
                         options={priorityOptions.filter(opt => opt.value)}
                         onChange={(e) => setProfileForm({ ...profileForm, priority: e.value })}
@@ -1793,6 +1798,7 @@ const Profiles: React.FC = () => {
                     <div className="col-6">
                       <label htmlFor="customColor" className="block text-900 font-medium mb-2">Theme Color</label>
                       <ColorPicker
+                        id="customColor"
                         value={profileForm.customColor}
                         onChange={(e) => setProfileForm({ ...profileForm, customColor: e.value as string })}
                         format="hex"
@@ -1801,6 +1807,7 @@ const Profiles: React.FC = () => {
                     <div className="col-6">
                       <label htmlFor="autoScan" className="block text-900 font-medium mb-2">Auto Scan</label>
                       <InputSwitch
+                        id="autoScan"
                         checked={profileForm.autoScanEnabled}
                         onChange={(e) => setProfileForm({ ...profileForm, autoScanEnabled: e.value })}
                       />
@@ -1874,6 +1881,7 @@ const Profiles: React.FC = () => {
                     optionLabel="name"
                     optionValue="code"
                     placeholder="Select content types to monitor"
+                    aria-label="Select content types to monitor"
                     className="w-full"
                   />
                 </div>
@@ -2144,6 +2152,7 @@ const Profiles: React.FC = () => {
                       optionLabel="name"
                       optionValue="code"
                       placeholder="Select content types"
+                      aria-label="Select content types"
                       className="w-full"
                     />
                   </div>
@@ -2307,8 +2316,8 @@ const Profiles: React.FC = () => {
                       <div className="col-12 md:col-6">
                         <Card className="text-center h-full">
                           <h6 className="text-600 m-0 mb-2">Protection Score</h6>
-                          <div className="text-3xl font-bold text-primary mb-2">{selectedProfile.analytics.protectionScore}</div>
-                          <ProgressBar value={selectedProfile.analytics.protectionScore} showValue={false} style={{ height: '6px' }} />
+                          <div className="text-3xl font-bold text-primary mb-2">{selectedProfile.analytics?.protectionScore || 0}</div>
+                          <ProgressBar value={selectedProfile.analytics?.protectionScore || 0} showValue={false} style={{ height: '6px' }} />
                         </Card>
                       </div>
                       <div className="col-12 md:col-6">
@@ -2330,7 +2339,7 @@ const Profiles: React.FC = () => {
                       <div className="col-12 md:col-6">
                         <Card className="text-center h-full">
                           <h6 className="text-600 m-0 mb-2">Response Time</h6>
-                          <div className="text-3xl font-bold text-blue-600 mb-2">{selectedProfile.analytics.averageResponseTime}h</div>
+                          <div className="text-3xl font-bold text-blue-600 mb-2">{selectedProfile.analytics?.averageResponseTime || 0}h</div>
                           <div className="text-sm text-500">average</div>
                         </Card>
                       </div>
@@ -2377,7 +2386,7 @@ const Profiles: React.FC = () => {
                     <Card>
                       <h6>Monthly Trends</h6>
                       <div className="grid">
-                        {selectedProfile.analytics.monthlyTrends.map((trend, index) => (
+                        {(selectedProfile.analytics?.monthlyTrends || []).map((trend, index) => (
                           <div key={index} className="col-4 md:col-2 text-center">
                             <div className="text-600 text-sm">{trend.month}</div>
                             <div className="font-bold text-lg">{trend.scans}</div>
@@ -2391,7 +2400,7 @@ const Profiles: React.FC = () => {
                     <Card>
                       <h6>Top Infringing Platforms</h6>
                       <div className="flex flex-wrap gap-2">
-                        {selectedProfile.analytics.topInfringingPlatforms.map((platform, index) => (
+                        {(selectedProfile.analytics?.topInfringingPlatforms || []).map((platform, index) => (
                           <Chip key={index} label={platform} className="text-sm" />
                         ))}
                       </div>

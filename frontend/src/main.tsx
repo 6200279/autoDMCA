@@ -11,7 +11,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 )
 
 // Register service worker for production caching
-if (process.env.NODE_ENV === 'production') {
+if (import.meta.env.PROD) {
   serviceWorker.register({
     onSuccess: () => {
       console.log('Content cached for offline use');

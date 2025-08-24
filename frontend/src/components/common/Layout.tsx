@@ -17,7 +17,11 @@ import { useLayout, useLayoutTheme, useLayoutSidebar, useLayoutNotifications } f
 import { NavigationItem, BreadcrumbItem, LayoutProps, NotificationItem } from '../../types/layout';
 import FeatureStatusBadge from './FeatureStatusBadge';
 import SidebarMenu from './SidebarMenu';
+import EnhancedSidebarMenu from './EnhancedSidebarMenu';
+import { TrustIndicatorBar } from './TrustIndicators';
 import './Layout.css';
+import './TrustIndicators.css';
+import './EnhancedSidebarMenu.css';
 
 // Re-export types for convenience (they're now imported from types/layout.ts)
 export type { NavigationItem, BreadcrumbItem, LayoutProps, NotificationItem };
@@ -285,10 +289,21 @@ export const Layout: React.FC<LayoutProps> = ({
   // Top navigation bar items
   const topNavItems: MenuItem[] = [
     {
-      label: 'AutoDMCA',
-      icon: 'pi pi-shield',
-      className: 'navbar-brand',
-      command: () => handleNavigation('/dashboard')
+      template: () => (
+        <div 
+          className="navbar-brand"
+          onClick={() => handleNavigation('/dashboard')}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              handleNavigation('/dashboard');
+            }
+          }}
+        >
+          <span className="navbar-brand-text">AutoDMCA</span>
+        </div>
+      )
     }
   ];
 
@@ -460,7 +475,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <p className="text-color-secondary m-0">Content Protection</p>
             </div>
             <Divider className="my-2" />
-            <SidebarMenu
+            <EnhancedSidebarMenu
               items={getFilteredNavigationItems()}
               onNavigate={handleNavigation}
               isActiveRoute={isActiveRoute}
@@ -479,7 +494,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <p className="text-color-secondary m-0">Content Protection</p>
             </div>
             <Divider className="my-2" />
-            <SidebarMenu
+            <EnhancedSidebarMenu
               items={getFilteredNavigationItems()}
               onNavigate={handleNavigation}
               isActiveRoute={isActiveRoute}
@@ -512,13 +527,18 @@ export const Layout: React.FC<LayoutProps> = ({
 
         {/* Footer */}
         <footer className="layout-footer p-3 mt-6">
-          <div className="flex justify-content-between align-items-center">
-            <div>
+          <div className="flex justify-content-between align-items-center flex-wrap gap-4">
+            <div className="flex flex-column gap-2">
               <span className="text-color-secondary">
                 © 2024 AutoDMCA. All rights reserved.
               </span>
+              <TrustIndicatorBar 
+                indicators={['ssl', 'gdpr', 'verified']} 
+                size="sm" 
+                layout="horizontal" 
+              />
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 align-items-center flex-wrap">
               <a href="/privacy" className="text-color-secondary no-underline">
                 Privacy Policy
               </a>
@@ -528,7 +548,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <a href="/support" className="text-color-secondary no-underline">
                 Support
               </a>
-              <span className="text-color-secondary">v1.0.0</span>
+              <span className="text-color-secondary font-medium">v1.0.0</span>
             </div>
           </div>
         </footer>

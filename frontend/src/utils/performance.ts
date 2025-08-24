@@ -1,5 +1,15 @@
 // Performance monitoring utilities
 
+// Web Vitals type definitions
+interface LayoutShift extends PerformanceEntry {
+  hadRecentInput: boolean;
+  value: number;
+}
+
+interface PerformanceEventTiming extends PerformanceEntry {
+  processingStart: number;
+}
+
 interface PerformanceMetrics {
   loadTime: number;
   domContentLoaded: number;
@@ -27,7 +37,7 @@ class PerformanceMonitor {
       this.metrics.loadTime = navigation.loadEventEnd - navigation.loadEventStart;
       this.metrics.domContentLoaded = navigation.domContentLoadedEventEnd - navigation.domContentLoadedEventStart;
       
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('Performance Metrics:', this.metrics);
       }
     });
@@ -53,7 +63,8 @@ class PerformanceMonitor {
     // First Input Delay (FID)
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        this.metrics.firstInputDelay = entry.processingStart - entry.startTime;
+        const fidEntry = entry as PerformanceEventTiming;
+        this.metrics.firstInputDelay = fidEntry.processingStart - fidEntry.startTime;
       }
     }).observe({ entryTypes: ['first-input'] });
 
@@ -61,8 +72,9 @@ class PerformanceMonitor {
     let clsValue = 0;
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
-        if (!entry.hadRecentInput) {
-          clsValue += entry.value;
+        const clsEntry = entry as LayoutShift;
+        if (!clsEntry.hadRecentInput) {
+          clsValue += clsEntry.value;
         }
       }
       this.metrics.cumulativeLayoutShift = clsValue;
@@ -77,7 +89,7 @@ class PerformanceMonitor {
     const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
     const chunkEntry = entries.find(entry => entry.name.includes(chunkName));
     
-    if (chunkEntry && process.env.NODE_ENV === 'development') {
+    if (chunkEntry && import.meta.env.DEV) {
       console.log(`Chunk "${chunkName}" loaded in ${chunkEntry.responseEnd - chunkEntry.startTime}ms`);
     }
   }
@@ -87,7 +99,7 @@ class PerformanceMonitor {
     
     return () => {
       const end = performance.now();
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log(`Route "${routeName}" transition took ${end - start}ms`);
       }
     };
@@ -120,7 +132,7 @@ export const reportBundleSize = (): void => {
       });
     });
 
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.group('Bundle Analysis');
       console.log(`Total JS bundle size: ${(totalSize / 1024).toFixed(2)} KB`);
       console.log('Individual chunks:', bundleInfo.sort((a, b) => b.size - a.size));
@@ -134,7 +146,7 @@ export const monitorMemoryUsage = (): void => {
   if ('memory' in performance) {
     const memory = (performance as any).memory;
     
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('Memory usage:', {
         used: `${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB`,
         total: `${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)} MB`,

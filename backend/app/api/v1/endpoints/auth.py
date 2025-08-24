@@ -2,7 +2,8 @@ from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 import re
 import time
 
@@ -108,7 +109,7 @@ async def register(
     request: Request,
     user_data: RegisterRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Register new user account with enhanced security validation."""
     client_ip = getattr(request.client, "host", "unknown")
@@ -182,7 +183,8 @@ async def register(
             )
     
     # Check if user already exists
-    existing_user = db.query(User).filter(User.email == sanitized_email).first()
+    result = await db.execute(select(User).where(User.email == sanitized_email))
+    existing_user = result.scalar_one_or_none()
     if existing_user:
         # Security: Don't reveal if email exists, but log the attempt
         security_monitor.log_security_event(
@@ -256,8 +258,8 @@ async def register(
         )
         
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         
         # Security: Log successful registration
         security_monitor.log_security_event(
@@ -366,7 +368,7 @@ async def register(
 async def login(
     request: Request,
     user_credentials: LoginRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Authenticate user with enhanced security checks."""
     client_ip = getattr(request.client, "host", "unknown")
@@ -391,10 +393,33 @@ async def login(
     # Security: Rate limiting check (should also be handled by middleware)
     # This is an additional application-level check
     
-    # Mock authentication for development only (REMOVED for production)
+    # Mock authentication for development only (UPDATED for frontend compatibility)
     if settings.ENVIRONMENT in ["development", "test"] and settings.DEBUG:
-        # SECURITY: Limited mock user for development only
-        if sanitized_email == "dev@localhost" and user_credentials.password == "DevPassword123!":
+        # SECURITY: Limited mock users for development only - Updated to match frontend
+        mock_user = None
+        
+        # Admin mock user
+        if sanitized_email == "admin@autodmca.com" and user_credentials.password == "admin123":
+            mock_user = {
+                "id": "admin_user_1",
+                "email": "admin@autodmca.com",
+                "full_name": "Admin User",
+                "is_active": True,
+                "is_superuser": True,  # Admin has superuser privileges
+                "password": "admin123"
+            }
+        # Regular user mock user  
+        elif sanitized_email == "user@example.com" and user_credentials.password == "user1234":
+            mock_user = {
+                "id": "regular_user_1", 
+                "email": "user@example.com",
+                "full_name": "Regular User",
+                "is_active": True,
+                "is_superuser": False,
+                "password": "user1234"
+            }
+        # Legacy dev user (keeping for backward compatibility)
+        elif sanitized_email == "dev@localhost" and user_credentials.password == "DevPassword123!":
             mock_user = {
                 "id": "dev_user_1",
                 "email": "dev@localhost",
@@ -403,19 +428,17 @@ async def login(
                 "is_superuser": False,  # Never superuser for mock
                 "password": "DevPassword123!"
             }
-            
+        
+        if mock_user:
             # Log development login
             security_monitor.log_security_event(
                 event_type="mock_user_login",
                 severity="INFO",
-                details={"environment": settings.ENVIRONMENT},
-                user_id="dev_user_1",
+                details={"environment": settings.ENVIRONMENT, "user_type": "admin" if mock_user["is_superuser"] else "user"},
+                user_id=mock_user["id"],
                 ip_address=client_ip
             )
-        else:
-            mock_user = None
-        
-        if mock_user:
+            
             # Create tokens for mock user with security level
             access_token_expires = timedelta(minutes=30)  # Limited time for dev
             if user_credentials.remember_me:
@@ -475,7 +498,8 @@ async def login(
     # Enhanced database authentication with security logging
     start_time = time.time()
     
-    user = db.query(User).filter(User.email == sanitized_email).first()
+    result = await db.execute(select(User).where(User.email == sanitized_email))
+    user = result.scalar_one_or_none()
     
     # Always perform password verification even if user doesn't exist (timing attack prevention)
     if user:
@@ -540,7 +564,7 @@ async def login(
     # Update last login
     from datetime import datetime
     user.last_login = datetime.utcnow()
-    db.commit()
+    await db.commit()
     
     # Log successful login
     security_monitor.log_security_event(
@@ -591,10 +615,11 @@ async def login(
 @router.post("/2fa/login", response_model=Token)
 async def two_factor_login(
     user_credentials: TwoFactorLoginRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Login with 2FA."""
-    user = db.query(User).filter(User.email == user_credentials.email).first()
+    result = await db.execute(select(User).where(User.email == user_credentials.email))
+    user = result.scalar_one_or_none()
     
     if not user or not verify_password(user_credentials.password, user.hashed_password):
         raise HTTPException(
@@ -618,7 +643,7 @@ async def two_factor_login(
     # Update last login
     from datetime import datetime
     user.last_login = datetime.utcnow()
-    db.commit()
+    await db.commit()
     
     # Create tokens
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -637,7 +662,7 @@ async def two_factor_login(
 async def refresh_token(
     request: Request,
     token_data: RefreshTokenRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Securely refresh access token with validation."""
     client_ip = getattr(request.client, "host", "unknown")
@@ -670,7 +695,8 @@ async def refresh_token(
             detail="Invalid token payload"
         )
     
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
     
     if not user:
         security_monitor.log_security_event(
@@ -741,7 +767,7 @@ async def refresh_token(
 @router.post("/verify-email", response_model=StatusResponse)
 async def verify_email(
     token: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Verify user email."""
     email = verify_email_token(token)
@@ -751,7 +777,8 @@ async def verify_email(
             detail="Invalid verification token"
         )
     
-    user = db.query(User).filter(User.email == email).first()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -762,7 +789,7 @@ async def verify_email(
         return StatusResponse(success=True, message="Email already verified")
     
     user.is_verified = True
-    db.commit()
+    await db.commit()
     
     return StatusResponse(success=True, message="Email verified successfully")
 
@@ -771,10 +798,11 @@ async def verify_email(
 async def forgot_password(
     reset_data: PasswordResetRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Request password reset."""
-    user = db.query(User).filter(User.email == reset_data.email).first()
+    result = await db.execute(select(User).where(User.email == reset_data.email))
+    user = result.scalar_one_or_none()
     
     if user:
         reset_token = create_email_verification_token(user.email)
@@ -793,7 +821,7 @@ async def forgot_password(
 @router.post("/reset-password", response_model=StatusResponse)
 async def reset_password(
     reset_data: PasswordResetConfirm,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Reset password with token."""
     email = verify_email_token(reset_data.token)
@@ -803,7 +831,8 @@ async def reset_password(
             detail="Invalid reset token"
         )
     
-    user = db.query(User).filter(User.email == email).first()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -819,7 +848,7 @@ async def reset_password(
         )
     
     user.hashed_password = get_password_hash(reset_data.new_password)
-    db.commit()
+    await db.commit()
     
     return StatusResponse(success=True, message="Password reset successfully")
 
@@ -828,7 +857,7 @@ async def reset_password(
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Change user password."""
     if not verify_password(password_data.current_password, current_user.hashed_password):
@@ -846,7 +875,7 @@ async def change_password(
         )
     
     current_user.hashed_password = get_password_hash(password_data.new_password)
-    db.commit()
+    await db.commit()
     
     return StatusResponse(success=True, message="Password changed successfully")
 
@@ -854,7 +883,7 @@ async def change_password(
 @router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
 async def setup_two_factor(
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Setup two-factor authentication."""
     if current_user.totp_secret:
@@ -868,7 +897,7 @@ async def setup_two_factor(
     
     # Store secret temporarily (user needs to verify)
     current_user.totp_secret = secret
-    db.commit()
+    await db.commit()
     
     import pyotp
     import qrcode
@@ -902,7 +931,7 @@ async def setup_two_factor(
 async def verify_two_factor(
     verify_data: TwoFactorVerifyRequest,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Verify and enable two-factor authentication."""
     if not current_user.totp_secret:
@@ -924,11 +953,11 @@ async def verify_two_factor(
 @router.post("/2fa/disable", response_model=StatusResponse)
 async def disable_two_factor(
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Disable two-factor authentication."""
     current_user.totp_secret = None
-    db.commit()
+    await db.commit()
     
     return StatusResponse(success=True, message="2FA disabled successfully")
 

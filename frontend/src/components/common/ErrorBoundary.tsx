@@ -52,7 +52,7 @@ class ErrorBoundary extends Component<Props, State> {
                 className="w-full mb-4"
               />
               
-              {process.env.NODE_ENV === 'development' && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <details className="text-left mb-4 p-3 bg-gray-100 border-round">
                   <summary className="cursor-pointer font-semibold mb-2">
                     Error Details (Development Only)

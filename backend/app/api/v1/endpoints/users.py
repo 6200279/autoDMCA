@@ -245,6 +245,95 @@ async def get_user_activity(
     )
 
 
+@router.get("/me/api-keys")
+async def get_user_api_keys(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Get user API keys."""
+    # Return mock API keys for now
+    from datetime import datetime
+    return {
+        "items": [
+            {
+                "id": "key_1",
+                "name": "Production API Key",
+                "key": "pk_live_" + "x" * 32,
+                "created_at": datetime.utcnow().isoformat(),
+                "last_used": datetime.utcnow().isoformat(),
+                "permissions": ["read", "write"],
+                "is_active": True
+            },
+            {
+                "id": "key_2",
+                "name": "Development API Key",
+                "key": "pk_test_" + "x" * 32,
+                "created_at": datetime.utcnow().isoformat(),
+                "last_used": None,
+                "permissions": ["read"],
+                "is_active": True
+            }
+        ],
+        "total": 2
+    }
+
+
+@router.post("/me/api-keys")
+async def create_user_api_key(
+    data: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Create a new API key."""
+    from datetime import datetime
+    import secrets
+    
+    # Generate a new API key
+    key_prefix = "pk_test_" if data.get("environment") == "test" else "pk_live_"
+    new_key = key_prefix + secrets.token_hex(16)
+    
+    return {
+        "id": "key_" + secrets.token_hex(4),
+        "name": data.get("name", "API Key"),
+        "key": new_key,
+        "created_at": datetime.utcnow().isoformat(),
+        "last_used": None,
+        "permissions": data.get("permissions", ["read"]),
+        "is_active": True
+    }
+
+
+@router.delete("/me/api-keys/{key_id}")
+async def revoke_user_api_key(
+    key_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Revoke an API key."""
+    return {"message": f"API key {key_id} has been revoked"}
+
+
+@router.put("/me/api-keys/{key_id}")
+async def update_user_api_key(
+    key_id: str,
+    data: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    """Update an API key."""
+    from datetime import datetime
+    
+    return {
+        "id": key_id,
+        "name": data.get("name", "Updated API Key"),
+        "key": "pk_live_" + "x" * 32,
+        "created_at": datetime.utcnow().isoformat(),
+        "last_used": datetime.utcnow().isoformat(),
+        "permissions": data.get("permissions", ["read"]),
+        "is_active": data.get("is_active", True)
+    }
+
+
 # Admin endpoints
 @router.get("", response_model=PaginatedResponse)
 async def get_users(

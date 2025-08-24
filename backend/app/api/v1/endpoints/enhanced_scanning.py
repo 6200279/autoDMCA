@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
-from app.core.security import get_current_user
+from app.api.deps.auth import get_current_active_user as get_current_user
 from app.services.scanning.orchestrator import orchestrator
 from app.services.scanning.enhanced_search_engines import EnhancedSearchEngineScanner
 from app.services.scanning.piracy_sites import PiracySiteDatabase
