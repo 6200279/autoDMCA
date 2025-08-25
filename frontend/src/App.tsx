@@ -63,6 +63,9 @@ const GiftSubscription = lazy(() => import('./pages/GiftSubscription'));
 const GiftRedemption = lazy(() => import('./pages/GiftRedemption'));
 const AddonServices = lazy(() => import('./pages/AddonServices'));
 
+// Workbench Components
+const ContentProtectionWorkbench = lazy(() => import('./components/workbench/ContentProtectionWorkbench'));
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -116,6 +119,18 @@ function AppRoutes() {
             <ProtectedRoute>
               <Layout>
                 <Dashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/workbench" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <LazyRoute>
+                  <ContentProtectionWorkbench />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } 

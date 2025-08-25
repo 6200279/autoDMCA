@@ -36,6 +36,13 @@ const navigationItems: NavigationItem[] = [
     description: 'Real-time analytics and overview of your content protection'
   },
   {
+    label: 'Workbench',
+    icon: 'pi pi-wrench',
+    path: '/workbench',
+    status: 'functional',
+    description: 'AI-powered unified workflow for content protection management'
+  },
+  {
     label: 'Content Protection',
     icon: 'pi pi-shield',
     path: '/protection',
@@ -125,6 +132,7 @@ const navigationItems: NavigationItem[] = [
 // Route to breadcrumb mapping
 const routeBreadcrumbMap: Record<string, BreadcrumbItem[]> = {
   '/dashboard': [{ label: 'Dashboard', icon: 'pi pi-home' }],
+  '/workbench': [{ label: 'Workbench', icon: 'pi pi-wrench' }],
   '/protection/profiles': [
     { label: 'Content Protection', url: '/protection' },
     { label: 'Profiles', icon: 'pi pi-user' }
