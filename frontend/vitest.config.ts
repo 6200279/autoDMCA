@@ -52,18 +52,8 @@ export default defineConfig({
     teardownTimeout: 10000,
     // Parallel execution
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
-        maxThreads: 4
-      }
-    },
     // Reporting
-    reporter: ['verbose', 'json', 'html'],
-    outputFile: {
-      json: './test-results/vitest-report.json',
-      html: './test-results/vitest-report.html'
-    }
+    reporter: ['verbose'],
   },
   resolve: {
     alias: {

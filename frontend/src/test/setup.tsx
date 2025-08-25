@@ -68,8 +68,8 @@ Object.defineProperty(window, 'sessionStorage', {
 
 // Mock environment variables
 vi.mock('import.meta.env', () => ({
-  VITE_API_URL: 'http://localhost:8000',
-  VITE_WS_URL: 'ws://localhost:8000',
+  VITE_API_URL: 'http://localhost:8080',
+  VITE_WS_URL: 'ws://localhost:8080',
   VITE_STRIPE_PUBLIC_KEY: 'pk_test_fake_key',
   MODE: 'test',
   DEV: false,

@@ -1,0 +1,380 @@
+/* Template Creation Wizard Styles */
+
+.template-creation-wizard {
+  min-height: 60vh;
+}
+
+.template-wizard-dialog .p-dialog-content {
+  padding: 0;
+}
+
+.wizard-header {
+  padding: 1rem 0;
+}
+
+.wizard-header h3 {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.wizard-steps-container {
+  padding: 0 2rem;
+  background: var(--surface-ground);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.wizard-steps {
+  background: transparent;
+  border: none;
+  padding: 1.5rem 0;
+}
+
+.wizard-steps .p-steps-item {
+  flex: 1;
+}
+
+.wizard-steps .p-steps-item .p-steps-number {
+  background: var(--surface-300);
+  color: var(--text-color-secondary);
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+}
+
+.wizard-steps .p-steps-item.p-steps-current .p-steps-number {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.wizard-steps .p-steps-item.p-steps-current .p-steps-title {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.wizard-steps .p-steps-item.p-highlight .p-steps-number {
+  background: var(--green-500);
+  color: white;
+  border-color: var(--green-500);
+}
+
+.wizard-steps .p-steps-item.p-highlight .p-steps-title {
+  color: var(--green-600);
+  font-weight: 500;
+}
+
+.wizard-steps .p-steps-item .p-steps-title {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.wizard-step-content {
+  padding: 2rem;
+  min-height: 500px;
+}
+
+.wizard-footer {
+  padding: 1rem 2rem;
+  background: var(--surface-ground);
+  border-top: 1px solid var(--surface-border);
+}
+
+/* Step Type Selection Styles */
+.step-type-selection .starter-card {
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  height: 100%;
+}
+
+.step-type-selection .starter-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.step-type-selection .starter-card.selected {
+  border-color: var(--primary-color);
+  background: var(--primary-50);
+}
+
+.step-type-selection .starter-preview-content {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.step-type-selection .template-content-preview {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  background: var(--surface-100);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  border-left: 4px solid var(--primary-color);
+}
+
+/* Step Basic Info Styles */
+.step-basic-info .suggestions-card {
+  background: var(--blue-50);
+  border: 1px solid var(--blue-200);
+}
+
+.step-basic-info .suggestion-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--blue-100);
+}
+
+.step-basic-info .suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.step-basic-info .tag-suggestions button {
+  background: var(--surface-50);
+  border: 1px solid var(--primary-200);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--border-radius);
+  transition: all 0.2s ease;
+}
+
+.step-basic-info .tag-suggestions button:hover:not(:disabled) {
+  background: var(--primary-50);
+  border-color: var(--primary-300);
+}
+
+.step-basic-info .tag-suggestions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Step Content Creation Styles */
+.step-content-creation .p-editor-toolbar {
+  border-color: var(--surface-border);
+}
+
+.step-content-creation .p-editor-content {
+  border-color: var(--surface-border);
+}
+
+.step-content-creation .template-syntax-help code {
+  background: var(--surface-100);
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  color: var(--primary-color);
+}
+
+.step-content-creation .suggestion-card {
+  border: 1px solid var(--surface-border);
+  transition: all 0.2s ease;
+}
+
+.step-content-creation .suggestion-card:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Step Variable Setup Styles */
+.step-variable-setup .variable-table {
+  border: 1px solid var(--surface-border);
+}
+
+.step-variable-setup .variable-table .p-datatable-thead > tr > th {
+  background: var(--surface-100);
+  font-weight: 600;
+}
+
+.step-variable-setup .variable-editor-form .p-divider {
+  margin: 1rem 0;
+}
+
+.step-variable-setup .variable-analysis .p-card {
+  border-left-width: 4px;
+}
+
+/* Step Preview Finalize Styles */
+.step-preview-finalize .sticky-top {
+  position: sticky;
+  top: 1rem;
+}
+
+.step-preview-finalize .preview-form {
+  scrollbar-width: thin;
+}
+
+.step-preview-finalize .preview-form::-webkit-scrollbar {
+  width: 6px;
+}
+
+.step-preview-finalize .preview-form::-webkit-scrollbar-track {
+  background: var(--surface-100);
+  border-radius: 3px;
+}
+
+.step-preview-finalize .preview-form::-webkit-scrollbar-thumb {
+  background: var(--surface-400);
+  border-radius: 3px;
+}
+
+.step-preview-finalize .preview-content {
+  font-family: 'Georgia', serif;
+  line-height: 1.6;
+}
+
+.step-preview-finalize .validation-issues .p-card {
+  border-left-width: 3px;
+}
+
+.step-preview-finalize .validation-issues .border-red-500 {
+  border-left-color: var(--red-500);
+}
+
+.step-preview-finalize .validation-issues .border-yellow-500 {
+  border-left-color: var(--yellow-500);
+}
+
+.step-preview-finalize .validation-issues .border-blue-500 {
+  border-left-color: var(--blue-500);
+}
+
+/* Enhanced Card Animations */
+.template-creation-wizard .p-card {
+  transition: all 0.2s ease;
+}
+
+.template-creation-wizard .p-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .wizard-step-content {
+    padding: 1rem;
+  }
+  
+  .wizard-footer {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .wizard-steps .p-steps-item .p-steps-title {
+    display: none;
+  }
+  
+  .template-wizard-dialog {
+    width: 95vw !important;
+    height: 90vh !important;
+  }
+  
+  .step-preview-finalize .sticky-top {
+    position: static;
+  }
+}
+
+@media (max-width: 576px) {
+  .wizard-steps-container {
+    padding: 0 1rem;
+  }
+  
+  .wizard-steps {
+    padding: 1rem 0;
+  }
+  
+  .wizard-steps .p-steps-item .p-steps-number {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Focus and Accessibility */
+.template-creation-wizard .p-button:focus,
+.template-creation-wizard .p-inputtext:focus,
+.template-creation-wizard .p-dropdown:focus {
+  box-shadow: 0 0 0 2px var(--primary-200);
+}
+
+.template-creation-wizard .p-steps-item .p-steps-number:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Loading States */
+.wizard-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* Dark Mode Support */
+[data-theme="dark"] .wizard-steps .p-steps-item .p-steps-number {
+  background: var(--surface-700);
+  color: var(--text-color);
+}
+
+[data-theme="dark"] .step-type-selection .starter-card.selected {
+  background: var(--primary-900);
+}
+
+[data-theme="dark"] .step-basic-info .suggestions-card {
+  background: var(--surface-800);
+  border-color: var(--surface-600);
+}
+
+[data-theme="dark"] .step-content-creation .template-syntax-help code {
+  background: var(--surface-800);
+}
+
+/* Print Styles */
+@media print {
+  .template-creation-wizard .wizard-footer,
+  .template-creation-wizard .wizard-steps-container {
+    display: none;
+  }
+  
+  .template-creation-wizard .wizard-step-content {
+    padding: 0;
+  }
+}
+
+/* Animation Keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.wizard-step-content > * {
+  animation: fadeInUp 0.3s ease;
+}
+
+.starter-card {
+  animation: slideInRight 0.3s ease;
+}

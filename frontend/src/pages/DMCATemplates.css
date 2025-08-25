@@ -1,5 +1,10 @@
 /* DMCA Templates Page Styling */
 
+.dmca-templates-page {
+  min-height: 100vh;
+  background: var(--surface-ground);
+}
+
 .dmca-templates-management {
   min-height: 100vh;
   background: var(--surface-ground);
@@ -480,5 +485,111 @@
   }
   100% {
     background-position: -200% 0;
+  }
+}
+
+/* Editor Selection Dialog Styles */
+.editor-selection-dialog .editor-selection-content {
+  padding: 1rem 0;
+}
+
+.editor-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.editor-option {
+  padding: 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.editor-option:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.option-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.option-title {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.option-badge {
+  background: var(--primary-color);
+  color: var(--primary-color-text);
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.option-description {
+  color: var(--text-color-secondary);
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.option-features {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.feature-tag {
+  background: var(--surface-100);
+  color: var(--text-color-secondary);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--surface-border);
+}
+
+/* Dark theme support for editor selection */
+.p-dark .editor-option:hover {
+  background: var(--surface-800);
+  border-color: var(--primary-color);
+}
+
+.p-dark .feature-tag {
+  background: var(--surface-700);
+  color: var(--text-color-secondary);
+  border-color: var(--surface-600);
+}
+
+/* Responsive design for editor selection */
+@media (max-width: 768px) {
+  .editor-selection-dialog {
+    width: 90vw !important;
+  }
+  
+  .option-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .option-badge {
+    margin-left: 0;
+    align-self: flex-start;
+  }
+  
+  .feature-tag {
+    font-size: 0.7rem;
   }
 }

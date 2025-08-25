@@ -1,0 +1,42 @@
+# Enhanced Content Fingerprinting Dependencies
+# Add these to your main requirements.txt or install separately
+
+# Audio fingerprinting
+librosa>=0.10.0
+soundfile>=0.12.1
+resampy>=0.4.2
+
+# Video processing
+ffmpeg-python>=0.2.0
+opencv-python>=4.8.0
+imageio>=2.31.0
+imageio-ffmpeg>=0.4.9
+
+# Enhanced image hashing
+ImageHash>=4.3.1
+Pillow>=10.0.0
+
+# Machine learning and data analysis
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.11.0
+
+# Database and serialization
+psycopg2-binary>=2.9.7  # For PostgreSQL JSONB and ARRAY support
+sqlalchemy[postgresql]>=2.0.0
+
+# Existing dependencies that may need updates
+torch>=2.0.0
+torchvision>=0.15.0
+face-recognition>=1.3.0
+opencv-python>=4.8.0
+
+# Optional: GPU acceleration for audio/video processing
+# numba>=0.57.0  # For librosa acceleration
+# cupy>=12.0.0   # For GPU-accelerated operations (CUDA required)
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0

@@ -6,8 +6,9 @@ Provides missing dashboard endpoints as mock data
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from datetime import datetime, timedelta
+import math
 import random
 import uvicorn
 
@@ -309,50 +310,143 @@ async def get_platform_distribution():
 # Mock profiles endpoint
 @app.get("/api/v1/profiles")
 async def get_profiles():
-    """Mock profiles endpoint"""
+    """Mock profiles endpoint with comprehensive data"""
+    statuses = ["active", "inactive", "scanning", "paused", "error"]
+    platform_names = ["instagram", "tiktok", "youtube", "onlyfans", "twitter", "snapchat"]
+    profile_images = [
+        "https://picsum.photos/64/64?random=1",
+        "https://picsum.photos/64/64?random=2", 
+        "https://picsum.photos/64/64?random=3",
+        "https://picsum.photos/64/64?random=4",
+        "https://picsum.photos/64/64?random=5"
+    ]
+    
     profiles = []
     for i in range(5):
-        profiles.append({
-            "id": i + 1,
-            "name": f"Profile {i + 1}",
-            "stage_name": f"@user{i + 1}",
-            "description": f"Content creator profile {i + 1}",
-            "status": random.choice(["active", "inactive", "scanning"]),
-            "platforms": random.sample(["instagram", "tiktok", "youtube"], 2),
-            "created_at": (datetime.now() - timedelta(days=random.randint(1, 365))).isoformat() + "Z"
-        })
+        selected_platforms = random.sample(platform_names, random.randint(2, 4))
+        platform_accounts = []
+        
+        for platform in selected_platforms:
+            platform_accounts.append({
+                "id": f"{platform}_{i}",
+                "name": platform.title(),
+                "username": f"@creator{i+1}_{platform}",
+                "isConnected": random.choice([True, False]),
+                "followers": random.randint(1000, 100000),
+                "platform": platform,
+                "lastSync": (datetime.now() - timedelta(hours=random.randint(1, 48))).isoformat() + "Z",
+                "scanEnabled": random.choice([True, False])
+            })
+        
+        last_scan = datetime.now() - timedelta(hours=random.randint(1, 168))
+        created_at = datetime.now() - timedelta(days=random.randint(30, 365))
+        
+        profile = {
+            "id": str(i + 1),
+            "name": f"Creator Profile {i + 1}",
+            "stageName": f"@creator{i+1}",
+            "description": f"Professional content creator specializing in {random.choice(['lifestyle', 'fitness', 'beauty', 'gaming', 'music'])} content",
+            "image": profile_images[i],
+            "status": random.choice(statuses),
+            "platforms": platform_accounts,
+            "totalScans": random.randint(10, 100),
+            "infringementsFound": random.randint(0, 25),
+            "lastScan": last_scan.isoformat() + "Z",
+            "createdAt": created_at.isoformat() + "Z", 
+            "successRate": round(random.uniform(75, 98), 1),
+            "scanFrequency": random.choice(["daily", "weekly", "monthly"]),
+            "tags": random.sample(["premium", "verified", "new", "high-volume", "protected"], random.randint(1, 3)),
+            
+            # Additional profile data for enhanced UI
+            "category": random.choice(["Adult Entertainment", "Fitness", "Lifestyle", "Gaming", "Music"]),
+            "priority": random.choice(["low", "normal", "high"]),
+            "scanCost": round(random.uniform(5.99, 29.99), 2),
+            "nextScan": (datetime.now() + timedelta(hours=random.randint(1, 24))).isoformat() + "Z",
+            "totalInfringements": random.randint(5, 150),
+            "resolvedInfringements": random.randint(3, 120),
+            "pendingInfringements": random.randint(0, 15),
+            
+            # Analytics data
+            "monthlyStats": {
+                "scansPerformed": random.randint(4, 30),
+                "infringementsFound": random.randint(0, 20),
+                "takedownsSent": random.randint(0, 18),
+                "successfulRemovals": random.randint(0, 15)
+            },
+            
+            # Billing and subscription
+            "subscriptionStatus": random.choice(["active", "paused", "cancelled"]),
+            "lastBillingDate": (datetime.now() - timedelta(days=random.randint(1, 30))).isoformat() + "Z",
+            "nextBillingDate": (datetime.now() + timedelta(days=random.randint(1, 30))).isoformat() + "Z",
+            
+            # Settings
+            "notifications": {
+                "email": random.choice([True, False]),
+                "sms": random.choice([True, False]),
+                "inApp": random.choice([True, False]),
+                "frequency": random.choice(["immediate", "daily", "weekly"]),
+                "infringementAlert": random.choice([True, False]),
+                "scanComplete": random.choice([True, False]),
+                "weeklyReport": random.choice([True, False])
+            },
+            
+            # Performance metrics
+            "avgResponseTime": round(random.uniform(2.5, 8.5), 1),
+            "topInfringingPlatforms": random.sample(platform_names, 3),
+            "protectedContent": random.randint(50, 500),
+            "monitoredUrls": random.randint(10, 100)
+        }
+        
+        profiles.append(profile)
     
     return {
         "items": profiles,
         "total": len(profiles),
         "page": 1,
-        "pages": 1,
+        "pages": 1, 
         "size": 20
     }
 
 # Mock infringements endpoint
 @app.get("/api/v1/infringements")
-async def get_infringements(include_stats: bool = False):
+async def get_infringements(page: int = 1, limit: int = 20, include_stats: bool = False):
     """Mock infringements endpoint"""
+    # Generate a larger set of infringements to support pagination
+    total_infringements = 25
     infringements = []
-    for i in range(8):
+    
+    for i in range(total_infringements):
         infringements.append({
             "id": i + 1,
             "profile_id": random.randint(1, 5),
-            "platform": random.choice(["instagram", "tiktok", "youtube"]),
+            "platform": random.choice(["instagram", "tiktok", "youtube", "twitter", "facebook"]),
             "url": f"https://example.com/content/{i + 1}",
-            "status": random.choice(["detected", "submitted", "resolved"]),
-            "severity": random.choice(["low", "medium", "high"]),
+            "original_url": f"https://yoursite.com/original/{i + 1}",
+            "status": random.choice(["detected", "submitted", "resolved", "pending"]),
+            "severity": random.choice(["low", "medium", "high", "critical"]),
             "confidence": round(random.uniform(0.7, 0.99), 2),
-            "detected_at": (datetime.now() - timedelta(hours=random.randint(1, 168))).isoformat() + "Z"
+            "detected_at": (datetime.now() - timedelta(hours=random.randint(1, 168))).isoformat() + "Z",
+            "description": f"Potential copyright infringement detected on {random.choice(['Instagram', 'TikTok', 'YouTube'])}",
+            "evidence_urls": [f"https://evidence.com/screenshot_{i + 1}.jpg"],
+            "takedown_sent": random.choice([True, False]),
+            "response_received": random.choice([True, False, None])
         })
     
+    # Apply pagination
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_infringements = infringements[start_idx:end_idx]
+    
+    total_pages = math.ceil(total_infringements / limit)
+    
     result = {
-        "items": infringements,
-        "total": len(infringements),
-        "page": 1,
-        "pages": 1,
-        "size": 20
+        "items": paginated_infringements,
+        "total": total_infringements,
+        "page": page,
+        "pages": total_pages,
+        "size": limit,
+        "has_next": page < total_pages,
+        "has_prev": page > 1
     }
     
     if include_stats:
@@ -451,6 +545,332 @@ async def get_current_user():
         "company": "Test Company",
         "created_at": "2024-01-01T00:00:00Z"
     }
+
+# Search Engine Delisting Mock Endpoints
+def generate_mock_delisting_requests():
+    """Generate mock delisting requests"""
+    statuses = ["pending", "processing", "submitted", "completed", "failed", "cancelled"]
+    search_engines = ["google", "bing", "yahoo", "yandex"]
+    priorities = ["low", "normal", "high", "urgent"]
+    
+    requests = []
+    for i in range(25):  # Generate 25 mock requests
+        created_at = datetime.now() - timedelta(hours=random.randint(1, 168))  # Last 7 days
+        updated_at = created_at + timedelta(minutes=random.randint(5, 1440))
+        
+        status = random.choice(statuses)
+        priority = random.choice(priorities)
+        
+        # Generate realistic URLs
+        domains = ["example-infringing-site.com", "pirate-content.net", "stolen-media.org", "copyright-violation.site"]
+        url = f"https://{random.choice(domains)}/content-{random.randint(1000, 9999)}"
+        
+        # Search engine responses
+        selected_engines = random.sample(search_engines, random.randint(2, 4))
+        engine_responses = []
+        for engine in selected_engines:
+            engine_responses.append({
+                "engine": engine,
+                "status": random.choice(statuses),
+                "requestId": f"req_{engine}_{i}_{random.randint(1000, 9999)}",
+                "submittedAt": created_at.isoformat() + "Z",
+                "completedAt": updated_at.isoformat() + "Z" if status == "completed" else None
+            })
+        
+        request = {
+            "id": f"req_{i+1:03d}",
+            "url": url,
+            "originalContentUrl": f"https://original-creator.com/content-{i+1}",
+            "reason": "Copyright infringement - unauthorized distribution",
+            "evidenceUrl": f"https://evidence.creator.com/proof-{i+1}" if random.choice([True, False]) else None,
+            "priority": priority,
+            "status": status,
+            "userId": "user_123",
+            "profileId": f"profile_{random.randint(1, 5)}",
+            "createdAt": created_at.isoformat() + "Z",
+            "updatedAt": updated_at.isoformat() + "Z",
+            "submittedAt": (created_at + timedelta(minutes=5)).isoformat() + "Z" if status != "pending" else None,
+            "completedAt": updated_at.isoformat() + "Z" if status == "completed" else None,
+            "errorMessage": "Temporary network error - will retry" if status == "failed" else None,
+            "retryCount": random.randint(0, 3) if status in ["failed", "retrying"] else 0,
+            "searchEngineResponses": engine_responses
+        }
+        requests.append(request)
+    
+    return requests
+
+def generate_delisting_statistics():
+    """Generate mock delisting statistics"""
+    # Generate search engine breakdown
+    engines = ["google", "bing", "yahoo", "yandex"]
+    engine_breakdown = {}
+    
+    for engine in engines:
+        total = random.randint(50, 200)
+        successful = random.randint(int(total * 0.6), int(total * 0.9))
+        failed = total - successful
+        success_rate = (successful / total * 100) if total > 0 else 0
+        
+        engine_breakdown[engine] = {
+            "total": total,
+            "successful": successful, 
+            "failed": failed,
+            "successRate": round(success_rate, 1)
+        }
+    
+    # Calculate overall stats
+    total_requests = sum(data["total"] for data in engine_breakdown.values())
+    completed_requests = sum(data["successful"] for data in engine_breakdown.values())
+    failed_requests = sum(data["failed"] for data in engine_breakdown.values())
+    pending_requests = random.randint(5, 25)
+    
+    overall_success_rate = (completed_requests / total_requests * 100) if total_requests > 0 else 0
+    
+    # Generate recent activity
+    recent_activity = []
+    activity_types = ["submitted", "completed", "failed", "retry"]
+    for i in range(10):
+        activity = {
+            "id": f"activity_{i+1}",
+            "url": f"https://example-site-{i+1}.com/content",
+            "status": random.choice(["completed", "failed", "processing", "pending"]),
+            "searchEngine": random.choice(engines),
+            "timestamp": (datetime.now() - timedelta(hours=random.randint(1, 48))).isoformat() + "Z",
+            "type": random.choice(activity_types)
+        }
+        recent_activity.append(activity)
+    
+    return {
+        "totalRequests": total_requests,
+        "pendingRequests": pending_requests,
+        "completedRequests": completed_requests,
+        "failedRequests": failed_requests,
+        "successRate": round(overall_success_rate, 1),
+        "averageProcessingTime": round(random.uniform(30, 180), 1),  # minutes
+        "searchEngineBreakdown": engine_breakdown,
+        "recentActivity": recent_activity
+    }
+
+def generate_dashboard_metrics():
+    """Generate mock dashboard metrics"""
+    return {
+        "activeRequests": random.randint(5, 20),
+        "completedToday": random.randint(3, 15),
+        "successRateToday": round(random.uniform(75, 95), 1),
+        "avgResponseTime": round(random.uniform(45, 120), 1),  # minutes
+        "systemAlerts": [
+            {
+                "id": "alert_1",
+                "type": "Rate Limit Warning",
+                "severity": "medium",
+                "message": "Google API approaching rate limit",
+                "triggeredAt": (datetime.now() - timedelta(hours=2)).isoformat() + "Z",
+                "isActive": True
+            },
+            {
+                "id": "alert_2", 
+                "type": "Success Rate",
+                "severity": "low",
+                "message": "Yahoo delisting success rate below 80%",
+                "triggeredAt": (datetime.now() - timedelta(hours=6)).isoformat() + "Z",
+                "isActive": True
+            }
+        ],
+        "recentActivity": [
+            {
+                "id": f"recent_{i}",
+                "url": f"https://example-{i}.com/content",
+                "status": random.choice(["completed", "failed", "processing"]),
+                "createdAt": (datetime.now() - timedelta(hours=random.randint(1, 24))).isoformat() + "Z"
+            }
+            for i in range(5)
+        ]
+    }
+
+# Delisting API endpoints
+@app.get("/api/v1/delisting/requests")
+async def get_delisting_requests(
+    page: int = 1,
+    size: int = 10,
+    status: str = None,
+    search_engine: str = None,
+    priority: str = None,
+    date_from: str = None,
+    date_to: str = None
+):
+    """Get paginated list of delisting requests"""
+    all_requests = generate_mock_delisting_requests()
+    
+    # Apply filters
+    filtered_requests = all_requests
+    if status:
+        filtered_requests = [r for r in filtered_requests if r["status"] == status]
+    if search_engine:
+        filtered_requests = [r for r in filtered_requests 
+                           if any(resp["engine"] == search_engine for resp in r["searchEngineResponses"])]
+    if priority:
+        filtered_requests = [r for r in filtered_requests if r["priority"] == priority]
+    
+    # Pagination
+    start_idx = (page - 1) * size
+    end_idx = start_idx + size
+    paginated_requests = filtered_requests[start_idx:end_idx]
+    
+    return {
+        "items": paginated_requests,
+        "total": len(all_requests),
+        "page": page,
+        "pageSize": size,
+        "totalPages": (len(all_requests) + size - 1) // size
+    }
+
+@app.get("/api/v1/delisting/requests/{request_id}")
+async def get_delisting_request(request_id: str):
+    """Get specific delisting request"""
+    # Generate single request based on ID
+    return {
+        "id": request_id,
+        "url": f"https://example-site.com/content-{request_id}",
+        "status": "processing",
+        "searchEngines": ["google", "bing"],
+        "submittedAt": (datetime.now() - timedelta(hours=2)).isoformat() + "Z",
+        "message": "Request is being processed"
+    }
+
+@app.post("/api/v1/delisting/requests")
+async def submit_delisting_request(request_data: dict):
+    """Submit new delisting request"""
+    request_id = f"req_{random.randint(10000, 99999)}"
+    
+    return JSONResponse(
+        status_code=201,
+        content={
+            "id": request_id,
+            "url": request_data.get("url"),
+            "status": "pending",
+            "searchEngines": request_data.get("searchEngines", []),
+            "submittedAt": datetime.now().isoformat() + "Z",
+            "message": "Request submitted successfully"
+        }
+    )
+
+@app.post("/api/v1/delisting/batch")
+async def submit_batch_delisting(batch_data: dict):
+    """Submit batch delisting request"""
+    batch_id = f"batch_{random.randint(10000, 99999)}"
+    urls = batch_data.get("urls", [])
+    
+    return JSONResponse(
+        status_code=201,
+        content={
+            "id": batch_id,
+            "totalUrls": len(urls),
+            "processedUrls": 0,
+            "successfulUrls": 0,
+            "failedUrls": 0,
+            "status": "pending",
+            "createdAt": datetime.now().isoformat() + "Z",
+            "updatedAt": datetime.now().isoformat() + "Z",
+            "requests": []
+        }
+    )
+
+@app.post("/api/v1/delisting/requests/{request_id}/cancel")
+async def cancel_delisting_request(request_id: str):
+    """Cancel delisting request"""
+    return {
+        "id": request_id,
+        "url": f"https://example-site.com/content-{request_id}",
+        "status": "cancelled",
+        "searchEngines": ["google", "bing"],
+        "submittedAt": (datetime.now() - timedelta(hours=2)).isoformat() + "Z",
+        "message": "Request cancelled successfully"
+    }
+
+@app.post("/api/v1/delisting/requests/{request_id}/retry")
+async def retry_delisting_request(request_id: str):
+    """Retry failed delisting request"""
+    return {
+        "id": request_id,
+        "url": f"https://example-site.com/content-{request_id}",
+        "status": "pending",
+        "searchEngines": ["google", "bing"],
+        "submittedAt": datetime.now().isoformat() + "Z",
+        "message": "Request retry initiated"
+    }
+
+@app.get("/api/v1/delisting/statistics")
+async def get_delisting_statistics(
+    date_from: str = None,
+    date_to: str = None,
+    search_engine: str = None
+):
+    """Get delisting statistics and analytics"""
+    return generate_delisting_statistics()
+
+@app.get("/api/v1/delisting/dashboard")  
+async def get_delisting_dashboard():
+    """Get real-time dashboard data"""
+    return generate_dashboard_metrics()
+
+@app.get("/api/v1/delisting/requests/{request_id}/verification")
+async def get_verification_results(request_id: str):
+    """Get verification results for a request"""
+    engines = ["google", "bing", "yahoo", "yandex"]
+    results = []
+    
+    for engine in random.sample(engines, 3):
+        results.append({
+            "searchEngine": engine,
+            "url": f"https://example-site.com/content-{request_id}",
+            "isDelisted": random.choice([True, False]),
+            "lastSeen": (datetime.now() - timedelta(hours=random.randint(1, 72))).isoformat() + "Z",
+            "notes": f"Verified via {engine} search API"
+        })
+    
+    return {
+        "requestId": request_id,
+        "verificationStatus": "completed",
+        "results": results,
+        "lastChecked": datetime.now().isoformat() + "Z"
+    }
+
+@app.post("/api/v1/delisting/requests/{request_id}/verify")
+async def trigger_verification(request_id: str):
+    """Trigger verification for a request"""
+    return {"message": f"Verification triggered for request {request_id}"}
+
+@app.post("/api/v1/delisting/bulk/cancel")
+async def bulk_cancel_requests(request_data: dict):
+    """Cancel multiple requests"""
+    request_ids = request_data.get("request_ids", [])
+    return {
+        "cancelled": len(request_ids),
+        "failed": 0
+    }
+
+@app.post("/api/v1/delisting/bulk/retry")
+async def bulk_retry_requests(request_data: dict):
+    """Retry multiple failed requests"""
+    request_ids = request_data.get("request_ids", [])
+    return {
+        "retried": len(request_ids),
+        "failed": 0
+    }
+
+@app.post("/api/v1/delisting/bulk/update-status")
+async def bulk_update_status(request_data: dict):
+    """Update status for multiple requests"""
+    request_ids = request_data.get("request_ids", [])
+    return {
+        "updated": len(request_ids)
+    }
+
+# Placeholder image endpoint for missing images
+@app.get("/api/placeholder/{width}/{height}")
+async def get_placeholder_image(width: int, height: int):
+    """Generate placeholder image URL - redirect to external service"""
+    return RedirectResponse(f"https://via.placeholder.com/{width}x{height}/e2e8f0/64748b?text=Image")
 
 # Health check
 @app.get("/health")

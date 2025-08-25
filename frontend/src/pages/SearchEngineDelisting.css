@@ -1,0 +1,277 @@
+/* Search Engine Delisting Page Styles */
+.search-engine-delisting-page {
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 140px);
+}
+
+.page-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.page-header h1 {
+  color: var(--text-color);
+  margin: 0;
+}
+
+.page-header p {
+  color: var(--text-color-secondary);
+  margin: 0;
+}
+
+.content-wrapper {
+  margin-bottom: 2rem;
+}
+
+/* Tab Styles */
+.delisting-tabs {
+  background: var(--surface-card);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+.delisting-tabs .p-tabview-nav {
+  background: var(--surface-ground);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.delisting-tabs .p-tabview-panel {
+  padding: 1.5rem;
+}
+
+.delisting-tabs .p-tabview-nav li .p-tabview-nav-link {
+  border: none;
+  background: transparent;
+  color: var(--text-color-secondary);
+  font-weight: 500;
+  padding: 1rem 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.delisting-tabs .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  background: var(--primary-color);
+  color: white;
+  border-radius: 8px 8px 0 0;
+}
+
+.delisting-tabs .p-tabview-nav li .p-tabview-nav-link:hover {
+  background: var(--surface-hover);
+  color: var(--text-color);
+}
+
+/* Component Specific Styles */
+.single-request-form,
+.batch-request-form {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.single-request-form .p-card-title,
+.batch-request-form .p-card-title {
+  color: var(--text-color);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Form Field Styles */
+.field {
+  margin-bottom: 1.5rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.field .p-inputtext,
+.field .p-inputtextarea,
+.field .p-dropdown,
+.field .p-multiselect {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field .p-inputtext:focus,
+.field .p-inputtextarea:focus,
+.field .p-dropdown:focus,
+.field .p-multiselect:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.1);
+}
+
+/* Status Table Styles */
+.delisting-requests-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.delisting-requests-table .p-datatable-header {
+  background: var(--surface-ground);
+  border-bottom: 1px solid var(--surface-border);
+  padding: 1rem;
+}
+
+.delisting-requests-table .p-datatable-tbody > tr {
+  transition: background-color 0.15s ease;
+}
+
+.delisting-requests-table .p-datatable-tbody > tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Statistics Dashboard Styles */
+.statistics-dashboard .p-card {
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  height: 100%;
+}
+
+.statistics-dashboard .p-card-title {
+  color: var(--text-color);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Quick Actions Card */
+.quick-actions-card {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.quick-actions-card .p-button {
+  height: 3rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.quick-actions-card .p-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Tag and Badge Styles */
+.p-tag {
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.p-badge {
+  border-radius: 4px;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Loading and Message Styles */
+.p-skeleton {
+  border-radius: 8px;
+}
+
+.p-message {
+  border-radius: 8px;
+  border-width: 1px;
+}
+
+/* Progress Bar Customization */
+.p-progressbar {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.p-progressbar .p-progressbar-value {
+  transition: width 0.3s ease;
+}
+
+/* Chart Container */
+.p-chart {
+  border-radius: 8px;
+  background: var(--surface-card);
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .search-engine-delisting-page {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-engine-delisting-page {
+    padding: 0.75rem;
+  }
+  
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+  
+  .page-header h1 {
+    font-size: 2rem !important;
+  }
+  
+  .delisting-tabs .p-tabview-nav li .p-tabview-nav-link {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .delisting-tabs .p-tabview-panel {
+    padding: 1rem;
+  }
+  
+  .quick-actions-card .grid > div {
+    margin-bottom: 0.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .page-header .flex {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 1rem;
+  }
+  
+  .delisting-tabs .p-tabview-nav {
+    flex-wrap: wrap;
+  }
+  
+  .delisting-tabs .p-tabview-nav li {
+    flex: 1;
+    min-width: calc(50% - 0.25rem);
+  }
+}
+
+/* Dark Theme Support */
+@media (prefers-color-scheme: dark) {
+  .search-engine-delisting-page {
+    background: var(--surface-ground);
+  }
+  
+  .delisting-tabs,
+  .single-request-form,
+  .batch-request-form,
+  .quick-actions-card {
+    background: var(--surface-card);
+    border-color: var(--surface-border);
+  }
+}

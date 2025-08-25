@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, profiles, infringements, takedowns, subscriptions, dashboard, social_media, scanning, enhanced_scanning, delisting, gift_subscriptions, addons, stripe_webhooks, watermarking
+from app.api.v1.endpoints import auth, users, profiles, infringements, takedowns, subscriptions, dashboard, social_media, scanning, enhanced_scanning, delisting, gift_subscriptions, addons, stripe_webhooks, watermarking, dmca_templates
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
@@ -18,3 +18,4 @@ api_router.include_router(gift_subscriptions.router, prefix="/gifts", tags=["gif
 api_router.include_router(addons.router, prefix="/addons", tags=["addon-services"])
 api_router.include_router(stripe_webhooks.router, prefix="/webhooks", tags=["webhooks"])
 api_router.include_router(watermarking.router, prefix="/watermarking", tags=["content-watermarking"])
+api_router.include_router(dmca_templates.router, prefix="/templates", tags=["dmca-templates"])

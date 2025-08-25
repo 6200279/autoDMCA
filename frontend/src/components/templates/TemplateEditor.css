@@ -1,0 +1,373 @@
+.template-editor-dialog {
+  max-height: 90vh;
+}
+
+.template-editor {
+  padding: 0;
+}
+
+.template-editor .p-tabview-nav {
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.template-editor .p-tabview-panels {
+  padding: 1.5rem 0 0 0;
+}
+
+.template-editor .p-tabview-panel {
+  padding: 0 1rem;
+}
+
+/* Basic Information Tab */
+.template-editor .field {
+  margin-bottom: 1.5rem;
+}
+
+.template-editor .field label {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.template-editor .field small {
+  color: var(--text-color-secondary);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.template-editor .p-error {
+  color: var(--red-500);
+}
+
+.template-editor .p-invalid {
+  border-color: var(--red-500);
+}
+
+/* Template Content Editor */
+.template-content-editor {
+  min-height: 500px;
+}
+
+.template-content-editor .p-editor {
+  border-radius: 6px;
+}
+
+.template-content-editor .ql-editor {
+  min-height: 350px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.template-content-editor .ql-toolbar {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.template-content-editor .ql-container {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.template-syntax-help {
+  background-color: #eff6ff;
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
+}
+
+.template-syntax-help ul {
+  padding-left: 1.5rem;
+}
+
+.template-syntax-help li {
+  margin-bottom: 0.5rem;
+}
+
+/* Variables Tab */
+.template-variables .p-datatable {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.template-variables .p-datatable-header {
+  background: var(--surface-50);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.template-variables .p-datatable-tbody > tr:hover {
+  background-color: var(--surface-hover);
+}
+
+.template-variables .p-tag {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Preview Tab */
+.template-preview .p-splitter {
+  height: 500px;
+}
+
+.template-preview .p-splitter-panel {
+  overflow: auto;
+}
+
+.preview-variables {
+  padding: 1rem;
+  background: var(--surface-50);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.preview-variables h4 {
+  color: var(--text-color);
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.preview-variables .field {
+  margin-bottom: 1rem;
+}
+
+.preview-variables label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text-color);
+}
+
+.preview-variables .p-inputtext,
+.preview-variables .p-inputtextarea,
+.preview-variables .p-dropdown {
+  font-size: 0.875rem;
+}
+
+.template-preview-content {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.template-rendered-content {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--surface-border);
+  font-family: 'Inter', sans-serif;
+  line-height: 1.6;
+  color: var(--text-color);
+}
+
+.template-rendered-content h1,
+.template-rendered-content h2,
+.template-rendered-content h3 {
+  color: var(--text-color);
+  margin-bottom: 1rem;
+}
+
+.template-rendered-content p {
+  margin-bottom: 1rem;
+}
+
+.template-rendered-content ul,
+.template-rendered-content ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.template-rendered-content li {
+  margin-bottom: 0.5rem;
+}
+
+/* Variable Dialog */
+.template-editor .p-dialog .p-dialog-content {
+  padding-top: 0;
+}
+
+.template-editor .p-chips .p-chips-multiple-container {
+  min-height: 38px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .template-editor-dialog {
+    width: 95vw !important;
+    max-width: none !important;
+    margin: 0;
+  }
+  
+  .template-editor .p-tabview-panel {
+    padding: 0 0.5rem;
+  }
+  
+  .template-preview .p-splitter {
+    height: auto;
+    flex-direction: column;
+  }
+  
+  .preview-variables {
+    height: auto;
+    max-height: 300px;
+  }
+  
+  .template-content-editor .ql-editor {
+    min-height: 250px;
+  }
+}
+
+@media (max-width: 576px) {
+  .template-editor .grid .col-md-6,
+  .template-editor .grid .col-md-4 {
+    flex: 0 0 100%;
+    max-width: 100%;
+  }
+}
+
+/* Dark Mode Support */
+[data-theme="dark"] .template-syntax-help {
+  background-color: #1e3a8a;
+  border-left-color: #60a5fa;
+}
+
+[data-theme="dark"] .template-syntax-help h5 {
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .template-syntax-help li {
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .preview-variables {
+  background: var(--surface-card);
+  border-right: 1px solid var(--surface-border);
+}
+
+[data-theme="dark"] .template-rendered-content {
+  background: var(--surface-card);
+  color: var(--text-color);
+}
+
+/* Loading States */
+.template-editor .p-skeleton {
+  border-radius: 6px;
+}
+
+.template-editor .field.loading .p-inputtext,
+.template-editor .field.loading .p-dropdown,
+.template-editor .field.loading .p-inputtextarea {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Validation States */
+.template-editor .field.has-error .p-inputtext,
+.template-editor .field.has-error .p-dropdown,
+.template-editor .field.has-error .p-inputtextarea {
+  border-color: var(--red-500);
+}
+
+.template-editor .field.has-success .p-inputtext,
+.template-editor .field.has-success .p-dropdown,
+.template-editor .field.has-success .p-inputtextarea {
+  border-color: var(--green-500);
+}
+
+/* Enhanced Animations */
+.template-editor .p-tabview-panel {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Variable Type Indicators */
+.variable-type-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.variable-type-indicator .p-tag {
+  font-size: 0.75rem;
+}
+
+/* Editor Toolbar Customization */
+.template-content-editor .ql-toolbar .ql-formats {
+  margin-right: 15px;
+}
+
+.template-content-editor .ql-toolbar button {
+  width: 28px;
+  height: 28px;
+}
+
+.template-content-editor .ql-toolbar button:hover {
+  color: var(--primary-color);
+}
+
+/* Preview Error States */
+.template-preview .error-message {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.template-preview .warning-message {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #d97706;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+/* Variable Form Enhancements */
+.variable-form .p-checkbox {
+  margin-right: 0.5rem;
+}
+
+.variable-form .help-text {
+  color: var(--text-color-secondary);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* Accessibility Enhancements */
+.template-editor .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.template-editor [aria-invalid="true"] {
+  border-color: var(--red-500);
+}
+
+.template-editor .required-field::after {
+  content: " *";
+  color: var(--red-500);
+}
+
+/* Focus Management */
+.template-editor .p-inputtext:focus,
+.template-editor .p-inputtextarea:focus,
+.template-editor .p-dropdown:focus {
+  box-shadow: 0 0 0 2px var(--primary-color-light);
+  border-color: var(--primary-color);
+}

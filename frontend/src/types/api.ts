@@ -739,19 +739,6 @@ export interface DelistingProgress {
   details?: Record<string, any>;
 }
 
-export interface AutomationRule {
-  id: string;
-  name: string;
-  trigger: string;
-  conditions: Record<string, any>;
-  action: string;
-  actionConfig: Record<string, any>;
-  isActive: boolean;
-  triggerCount: number;
-  successRate: number;
-  createdAt: string;
-  lastTriggered?: string;
-}
 
 export interface SearchEngineCapabilities {
   id: string;

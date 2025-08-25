@@ -1,9 +1,17 @@
 import axios from 'axios';
 import type { 
   User, UserLogin, UserRegister, Subscription, 
-  Profile, TakedownRequest, 
-  SystemHealth, BillingDashboard, ApiResponse 
+  ProtectedProfile, TakedownRequest, 
+  SystemHealth, BillingDashboard, ApiResponse,
+  CreateSubmission, BulkSubmission, Submission,
+  UrlValidationResult, PaginatedResponse, CreateProtectedProfile
 } from '../types/api';
+import type {
+  DelistingRequestCreate, DelistingRequestResponse, DelistingRequest,
+  DelistingBatchCreate, DelistingBatch, DelistingStatistics,
+  DashboardMetrics, DelistingFilters, PaginatedDelistingResponse,
+  DelistingVerificationResponse
+} from '../types/delisting';
 
 // Create axios instance
 const api = axios.create({
@@ -170,9 +178,9 @@ export const userApi = {
 // Profile API endpoints
 export const profileApi = {
   getProfiles: (params?: { page?: number; limit?: number; search?: string }) => api.get('/profiles', { params }),
-  createProfile: (data: Partial<Profile>) => api.post('/profiles', data),
+  createProfile: (data: import('../types/api').CreateProtectedProfile) => api.post('/profiles', data),
   getProfile: (id: number) => api.get(`/profiles/${id}`),
-  updateProfile: (id: number, data: Partial<Profile>) => api.put(`/profiles/${id}`, data),
+  updateProfile: (id: number, data: Partial<import('../types/api').ProtectedProfile>) => api.put(`/profiles/${id}`, data),
   deleteProfile: (id: number) => api.delete(`/profiles/${id}`),
   uploadProfileImage: (id: number, file: File) => {
     const formData = new FormData();
@@ -222,10 +230,16 @@ export const takedownApi = {
 
 // Submission API endpoints
 export const submissionApi = {
-  getSubmissions: (params?: any) => api.get('/submissions', { params }),
+  getSubmissions: (params?: {
+    status?: string;
+    type?: string;
+    priority?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/submissions', { params }),
   getSubmission: (id: string) => api.get(`/submissions/${id}`),
-  createSubmission: (data: any) => api.post('/submissions', data),
-  updateSubmission: (id: string, data: any) => api.put(`/submissions/${id}`, data),
+  createSubmission: (data: import('../types/api').CreateSubmission) => api.post('/submissions', data),
+  updateSubmission: (id: string, data: Partial<import('../types/api').Submission>) => api.put(`/submissions/${id}`, data),
   deleteSubmission: (id: string) => api.delete(`/submissions/${id}`),
   cancelSubmission: (id: string) => api.post(`/submissions/${id}/cancel`),
   retrySubmission: (id: string) => api.post(`/submissions/${id}/retry`),
@@ -240,7 +254,7 @@ export const submissionApi = {
     });
   },
   validateUrls: (urls: string[]) => api.post('/submissions/validate-urls', { urls }),
-  bulkCreate: (data: any) => api.post('/submissions/bulk', data),
+  bulkCreate: (data: import('../types/api').BulkSubmission) => api.post('/submissions/bulk', data),
 };
 
 // Admin API endpoints
@@ -1333,347 +1347,70 @@ export const dmcaTemplatesApi = {
 };
 
 // Search Engine Delisting API endpoints
+// Search Engine Delisting API endpoints - matches backend/app/api/v1/endpoints/delisting.py
 export const searchEngineDelistingApi = {
-  // Search Engine Management
-  getSearchEngines: (params?: any) => api.get('/search-engine-delisting/engines', { params }),
-  getSearchEngine: (id: string) => api.get(`/search-engine-delisting/engines/${id}`),
-  updateSearchEngine: (id: string, data: any) => api.put(`/search-engine-delisting/engines/${id}`, data),
-  testSearchEngineConnection: (id: string) => api.post(`/search-engine-delisting/engines/${id}/test`),
-  getSearchEngineStats: (id: string, params?: any) => 
-    api.get(`/search-engine-delisting/engines/${id}/stats`, { params }),
+  // Core delisting request operations
+  submitDelistingRequest: (data: DelistingRequestCreate): Promise<{ data: DelistingRequestResponse }> => 
+    api.post('/delisting/requests', data),
   
-  // Delisting Request Management
-  getDelistingRequests: (params?: {
-    status?: string[];
-    engines?: string[];
-    type?: string;
+  submitBatchDelisting: (data: DelistingBatchCreate): Promise<{ data: DelistingBatch }> =>
+    api.post('/delisting/batch', data),
+  
+  getDelistingRequestStatus: (requestId: string): Promise<{ data: DelistingRequestResponse }> =>
+    api.get(`/delisting/requests/${requestId}`),
+  
+  getBatchStatus: (batchId: string): Promise<{ data: DelistingBatch }> =>
+    api.get(`/delisting/batch/${batchId}`),
+  
+  listDelistingRequests: (params?: {
+    page?: number;
+    size?: number;
+    status?: string;
+    search_engine?: string;
     priority?: string;
-    region?: string;
-    dateRange?: { start: string; end: string };
-    page?: number;
-    per_page?: number;
-    sort?: string;
-    order?: 'asc' | 'desc';
-  }) => api.get('/search-engine-delisting/requests', { params }),
-  
-  getDelistingRequest: (id: string) => api.get(`/search-engine-delisting/requests/${id}`),
-  
-  createDelistingRequest: (data: {
-    searchEngineIds: string[];
-    type: string;
-    priority: string;
-    urls: string[];
-    keywords?: string[];
-    region?: string;
-    reason: string;
-    template?: string;
-    metadata?: Record<string, any>;
-  }) => api.post('/search-engine-delisting/requests', data),
-  
-  updateDelistingRequest: (id: string, data: any) => 
-    api.put(`/search-engine-delisting/requests/${id}`, data),
-  
-  deleteDelistingRequest: (id: string) => api.delete(`/search-engine-delisting/requests/${id}`),
-  
-  submitDelistingRequest: (id: string) => api.post(`/search-engine-delisting/requests/${id}/submit`),
-  
-  cancelDelistingRequest: (id: string) => api.post(`/search-engine-delisting/requests/${id}/cancel`),
-  
-  retryDelistingRequest: (id: string) => api.post(`/search-engine-delisting/requests/${id}/retry`),
-  
-  // Bulk Operations
-  bulkCreateRequests: (data: {
-    searchEngineIds: string[];
-    type: string;
-    priority: string;
-    urls: string[];
-    region?: string;
-    reason: string;
-    template?: string;
-    metadata?: Record<string, any>;
-  }) => api.post('/search-engine-delisting/requests/bulk', data),
-  
-  bulkUpdateRequests: (requestIds: string[], data: any) => 
-    api.put('/search-engine-delisting/requests/bulk-update', { request_ids: requestIds, ...data }),
-  
-  bulkSubmitRequests: (requestIds: string[]) => 
-    api.post('/search-engine-delisting/requests/bulk-submit', { request_ids: requestIds }),
-  
-  bulkCancelRequests: (requestIds: string[]) => 
-    api.post('/search-engine-delisting/requests/bulk-cancel', { request_ids: requestIds }),
-  
-  // URL Monitoring
-  getUrlMonitoring: (params?: {
-    url?: string;
-    status?: string;
-    engines?: string[];
-    page?: number;
-    per_page?: number;
-  }) => api.get('/search-engine-delisting/monitoring', { params }),
-  
-  addUrlMonitoring: (data: {
-    url: string;
-    keywords: string[];
-    searchEngines: string[];
-    alerts: boolean;
-    autoDelisting: boolean;
-  }) => api.post('/search-engine-delisting/monitoring', data),
-  
-  updateUrlMonitoring: (id: string, data: any) => 
-    api.put(`/search-engine-delisting/monitoring/${id}`, data),
-  
-  deleteUrlMonitoring: (id: string) => api.delete(`/search-engine-delisting/monitoring/${id}`),
-  
-  checkUrlVisibility: (id: string) => api.post(`/search-engine-delisting/monitoring/${id}/check`),
-  
-  bulkCheckVisibility: (monitorIds: string[]) => 
-    api.post('/search-engine-delisting/monitoring/bulk-check', { monitor_ids: monitorIds }),
-  
-  // Search Results and Visibility
-  searchUrl: (data: {
-    url: string;
-    keywords?: string[];
-    searchEngines?: string[];
-    region?: string;
-  }) => api.post('/search-engine-delisting/search', data),
-  
-  getSearchHistory: (params?: {
-    url?: string;
-    engines?: string[];
-    dateRange?: { start: string; end: string };
-  }) => api.get('/search-engine-delisting/search-history', { params }),
-  
-  getVisibilityMetrics: (params?: {
-    engines?: string[];
-    dateRange?: { start: string; end: string };
-    urls?: string[];
-  }) => api.get('/search-engine-delisting/visibility-metrics', { params }),
-  
-  // Templates and Legal Notices
-  getDelistingTemplates: (params?: {
-    type?: string;
-    searchEngine?: string;
-    jurisdiction?: string;
-    active?: boolean;
-  }) => api.get('/search-engine-delisting/templates', { params }),
-  
-  getDelistingTemplate: (id: string) => api.get(`/search-engine-delisting/templates/${id}`),
-  
-  createDelistingTemplate: (data: {
-    name: string;
-    type: string;
-    searchEngine?: string;
-    jurisdiction?: string;
-    subject: string;
-    content: string;
-    variables?: string[];
-    metadata?: Record<string, any>;
-  }) => api.post('/search-engine-delisting/templates', data),
-  
-  updateDelistingTemplate: (id: string, data: any) => 
-    api.put(`/search-engine-delisting/templates/${id}`, data),
-  
-  deleteDelistingTemplate: (id: string) => api.delete(`/search-engine-delisting/templates/${id}`),
-  
-  generateLegalNotice: (templateId: string, data: {
-    requestId: string;
-    variables?: Record<string, any>;
-  }) => api.post(`/search-engine-delisting/templates/${templateId}/generate`, data),
-  
-  // Analytics and Reporting
-  getDashboardStats: (params?: {
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-    regions?: string[];
-  }) => api.get('/search-engine-delisting/dashboard', { params }),
-  
-  getSuccessRateAnalytics: (params?: {
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-    type?: string;
-    granularity?: 'daily' | 'weekly' | 'monthly';
-  }) => api.get('/search-engine-delisting/analytics/success-rates', { params }),
-  
-  getResponseTimeAnalytics: (params?: {
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-    region?: string;
-  }) => api.get('/search-engine-delisting/analytics/response-times', { params }),
-  
-  getVisibilityTrends: (params?: {
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-    urls?: string[];
-    granularity?: 'daily' | 'weekly' | 'monthly';
-  }) => api.get('/search-engine-delisting/analytics/visibility-trends', { params }),
-  
-  getRegionalAnalytics: (params?: {
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-  }) => api.get('/search-engine-delisting/analytics/regional', { params }),
-  
-  getEnginePerformance: (params?: {
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-  }) => api.get('/search-engine-delisting/analytics/engine-performance', { params }),
-  
-  // Real-time Status and Updates
-  getRealTimeStatus: () => api.get('/search-engine-delisting/real-time/status'),
-  
-  getActiveRequests: () => api.get('/search-engine-delisting/real-time/active-requests'),
-  
-  subscribeToUpdates: (subscriptionData: {
-    types: ('request_status' | 'visibility_change' | 'engine_response' | 'system_alert')[];
-    engines?: string[];
-    requests?: string[];
-  }) => api.post('/search-engine-delisting/real-time/subscribe', subscriptionData),
-  
-  unsubscribeFromUpdates: (subscriptionId: string) => 
-    api.delete(`/search-engine-delisting/real-time/subscribe/${subscriptionId}`),
-  
-  // Search Engine Integration Management
-  configureEngineIntegration: (engineId: string, config: {
-    apiKey?: string;
-    apiSecret?: string;
-    webhookUrl?: string;
-    rateLimits?: Record<string, number>;
-    regions?: string[];
-    features?: string[];
-  }) => api.post(`/search-engine-delisting/engines/${engineId}/configure`, config),
-  
-  testEngineIntegration: (engineId: string, testData?: any) => 
-    api.post(`/search-engine-delisting/engines/${engineId}/test-integration`, testData),
-  
-  getEngineCapabilities: (engineId: string) => 
-    api.get(`/search-engine-delisting/engines/${engineId}/capabilities`),
-  
-  refreshEngineStatus: (engineId: string) => 
-    api.post(`/search-engine-delisting/engines/${engineId}/refresh-status`),
-  
-  // Automated Processing and Workflows
-  enableAutomatedProcessing: (config: {
-    engines?: string[];
-    autoSubmit?: boolean;
-    autoRetry?: boolean;
-    maxRetries?: number;
-    retryDelay?: number;
-    notificationSettings?: Record<string, any>;
-  }) => api.post('/search-engine-delisting/automation/enable', config),
-  
-  disableAutomatedProcessing: () => api.post('/search-engine-delisting/automation/disable'),
-  
-  getAutomationStatus: () => api.get('/search-engine-delisting/automation/status'),
-  
-  getAutomationRules: () => api.get('/search-engine-delisting/automation/rules'),
-  
-  createAutomationRule: (rule: {
-    name: string;
-    trigger: string;
-    conditions: Record<string, any>;
-    action: string;
-    actionConfig: Record<string, any>;
-    isActive: boolean;
-  }) => api.post('/search-engine-delisting/automation/rules', rule),
-  
-  updateAutomationRule: (ruleId: string, data: any) => 
-    api.put(`/search-engine-delisting/automation/rules/${ruleId}`, data),
-  
-  deleteAutomationRule: (ruleId: string) => 
-    api.delete(`/search-engine-delisting/automation/rules/${ruleId}`),
-  
-  toggleAutomationRule: (ruleId: string, active: boolean) => 
-    api.post(`/search-engine-delisting/automation/rules/${ruleId}/toggle`, { active }),
-  
-  // Progress Tracking and Notifications
-  getRequestProgress: (requestId: string) => 
-    api.get(`/search-engine-delisting/requests/${requestId}/progress`),
-  
-  getProgressHistory: (requestId: string) => 
-    api.get(`/search-engine-delisting/requests/${requestId}/progress-history`),
-  
-  setProgressNotifications: (requestId: string, config: {
-    emailEnabled: boolean;
-    webhookEnabled: boolean;
-    webhookUrl?: string;
-    stages?: string[];
-  }) => api.post(`/search-engine-delisting/requests/${requestId}/notifications`, config),
-  
-  // Export and Reporting
-  exportDelistingData: (params: {
-    format: 'csv' | 'xlsx' | 'pdf' | 'json';
-    type: 'requests' | 'monitoring' | 'analytics' | 'all';
-    dateRange?: { start: string; end: string };
-    engines?: string[];
-    statuses?: string[];
-    includeDetails?: boolean;
-  }) => api.post('/search-engine-delisting/export', params),
-  
-  generateReport: (config: {
-    type: 'summary' | 'detailed' | 'compliance' | 'performance';
-    dateRange: { start: string; end: string };
-    engines?: string[];
-    regions?: string[];
-    format: 'pdf' | 'html';
-    includeCharts?: boolean;
-  }) => api.post('/search-engine-delisting/reports/generate', config),
-  
-  getReportHistory: (params?: {
-    type?: string;
-    status?: string;
-    page?: number;
-    per_page?: number;
-  }) => api.get('/search-engine-delisting/reports', { params }),
-  
-  getReport: (reportId: string) => api.get(`/search-engine-delisting/reports/${reportId}`),
-  
-  downloadReport: (reportId: string) => api.get(`/search-engine-delisting/reports/${reportId}/download`),
-  
-  // URL and Content Validation
-  validateUrls: (urls: string[]) => 
-    api.post('/search-engine-delisting/validate-urls', { urls }),
-  
-  checkUrlsIndexStatus: (data: {
-    urls: string[];
-    searchEngines: string[];
-    regions?: string[];
-  }) => api.post('/search-engine-delisting/check-index-status', data),
-  
-  estimateRemovalImpact: (data: {
-    urls: string[];
-    searchEngines: string[];
-    keywords?: string[];
-  }) => api.post('/search-engine-delisting/estimate-impact', data),
-  
-  // System Health and Monitoring
-  getSystemHealth: () => api.get('/search-engine-delisting/system/health'),
-  
-  getSystemMetrics: () => api.get('/search-engine-delisting/system/metrics'),
-  
-  getQueueStatus: () => api.get('/search-engine-delisting/system/queue-status'),
-  
-  getErrorLogs: (params?: {
-    level?: 'error' | 'warning' | 'info';
-    component?: string;
-    dateRange?: { start: string; end: string };
-    page?: number;
-    per_page?: number;
-  }) => api.get('/search-engine-delisting/system/logs', { params }),
-  
-  // Configuration and Settings
-  getSystemConfig: () => api.get('/search-engine-delisting/config'),
-  
-  updateSystemConfig: (config: {
-    defaultSettings?: Record<string, any>;
-    rateLimits?: Record<string, number>;
-    timeouts?: Record<string, number>;
-    retryConfig?: Record<string, any>;
-    notificationDefaults?: Record<string, any>;
-  }) => api.put('/search-engine-delisting/config', config),
-  
-  getRegionSettings: () => api.get('/search-engine-delisting/config/regions'),
-  
-  updateRegionSettings: (regionId: string, config: any) => 
-    api.put(`/search-engine-delisting/config/regions/${regionId}`, config),
+    date_from?: string;
+    date_to?: string;
+  }): Promise<{ data: PaginatedDelistingResponse<DelistingRequest> }> =>
+    api.get('/delisting/requests', { params }),
+  
+  // Request lifecycle management
+  cancelDelistingRequest: (requestId: string): Promise<{ data: DelistingRequestResponse }> =>
+    api.post(`/delisting/requests/${requestId}/cancel`),
+  
+  retryDelistingRequest: (requestId: string): Promise<{ data: DelistingRequestResponse }> =>
+    api.post(`/delisting/requests/${requestId}/retry`),
+  
+  // Analytics and statistics
+  getDelistingStatistics: (params?: {
+    date_from?: string;
+    date_to?: string;
+    search_engine?: string;
+  }): Promise<{ data: DelistingStatistics }> =>
+    api.get('/delisting/statistics', { params }),
+  
+  // Real-time dashboard data
+  getDashboardData: (): Promise<{ data: DashboardMetrics }> =>
+    api.get('/delisting/dashboard'),
+  
+  // Verification and monitoring
+  getVerificationResults: (requestId: string): Promise<{ data: DelistingVerificationResponse }> =>
+    api.get(`/delisting/requests/${requestId}/verification`),
+  
+  triggerVerification: (requestId: string): Promise<{ data: { message: string } }> =>
+    api.post(`/delisting/requests/${requestId}/verify`),
+  
+  // Bulk operations
+  bulkCancel: (requestIds: string[]): Promise<{ data: { cancelled: number; failed: number } }> =>
+    api.post('/delisting/bulk/cancel', { request_ids: requestIds }),
+  
+  bulkRetry: (requestIds: string[]): Promise<{ data: { retried: number; failed: number } }> =>
+    api.post('/delisting/bulk/retry', { request_ids: requestIds }),
+  
+  bulkUpdateStatus: (requestIds: string[], status: string): Promise<{ data: { updated: number } }> =>
+    api.post('/delisting/bulk/update-status', { 
+      request_ids: requestIds, 
+      status 
+    })
 };
 
 // Content Watermarking API endpoints
@@ -1989,6 +1726,132 @@ export const contentWatermarkingApi = {
     api.delete(`/content-watermarking/collections/${collectionId}/content`, {
       data: { content_ids: contentIds }
     }),
+};
+
+// DMCA Templates API endpoints
+export const templatesApi = {
+  // Template management
+  getTemplates: (params?: {
+    page?: number;
+    limit?: number;
+    category?: string;
+    search?: string;
+    is_active?: boolean;
+    language?: string;
+    jurisdiction?: string;
+    sort_by?: 'name' | 'created_at' | 'updated_at' | 'usage_count';
+    sort_order?: 'asc' | 'desc';
+    tags?: string[];
+  }) => api.get('/templates', { params }),
+  
+  getTemplate: (id: string) => api.get(`/templates/${id}`),
+  
+  createTemplate: (data: {
+    name: string;
+    description: string;
+    category: string;
+    content: string;
+    variables: Array<{
+      name: string;
+      label: string;
+      type: 'text' | 'email' | 'url' | 'date' | 'number' | 'textarea' | 'select';
+      required: boolean;
+      default_value?: string;
+      description?: string;
+      options?: string[];
+      validation_pattern?: string;
+      placeholder?: string;
+    }>;
+    tags?: string[];
+    language?: string;
+    jurisdiction?: string;
+    is_active?: boolean;
+  }) => api.post('/templates', data),
+  
+  updateTemplate: (id: string, data: any) => api.put(`/templates/${id}`, data),
+  
+  deleteTemplate: (id: string) => api.delete(`/templates/${id}`),
+  
+  duplicateTemplate: (id: string, name?: string) => 
+    api.post(`/templates/${id}/duplicate`, { name }),
+  
+  // Template categories
+  getCategories: () => api.get('/templates/categories'),
+  
+  createCategory: (data: { name: string; description: string; icon?: string; color?: string }) =>
+    api.post('/templates/categories', data),
+  
+  // Template preview
+  previewTemplate: (data: {
+    template_id?: string;
+    content?: string;
+    variables: Record<string, any>;
+  }) => api.post('/templates/preview', data),
+  
+  // Mock templates for development
+  getMockTemplates: () => api.get('/templates/mock'),
+  
+  // Template validation
+  validateTemplate: (content: string) => api.post('/templates/validate', { content }),
+  
+  // Template variables extraction
+  extractVariables: (content: string) => api.post('/templates/extract-variables', { content }),
+  
+  // Template usage analytics
+  getTemplateUsage: (id: string, params?: { 
+    start_date?: string; 
+    end_date?: string 
+  }) => api.get(`/templates/${id}/usage`, { params }),
+  
+  // Bulk operations
+  bulkActivate: (templateIds: string[]) => 
+    api.post('/templates/bulk/activate', { template_ids: templateIds }),
+  
+  bulkDeactivate: (templateIds: string[]) => 
+    api.post('/templates/bulk/deactivate', { template_ids: templateIds }),
+  
+  bulkDelete: (templateIds: string[]) => 
+    api.delete('/templates/bulk', { data: { template_ids: templateIds } }),
+  
+  // Template export/import
+  exportTemplate: (id: string, format: 'json' | 'html' | 'pdf') =>
+    api.get(`/templates/${id}/export`, { 
+      params: { format },
+      responseType: format === 'pdf' ? 'blob' : 'json'
+    }),
+  
+  exportTemplates: (templateIds: string[], format: 'json' | 'zip') =>
+    api.post('/templates/export', 
+      { template_ids: templateIds, format },
+      { responseType: format === 'zip' ? 'blob' : 'json' }
+    ),
+  
+  importTemplates: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/templates/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  
+  // Template history and versioning
+  getTemplateHistory: (id: string) => api.get(`/templates/${id}/history`),
+  
+  restoreTemplateVersion: (id: string, versionId: string) =>
+    api.post(`/templates/${id}/restore/${versionId}`),
+  
+  // Template search with advanced filters
+  searchTemplates: (query: string, filters?: {
+    categories?: string[];
+    languages?: string[];
+    jurisdictions?: string[];
+    tags?: string[];
+    content_type?: 'all' | 'system' | 'custom';
+  }) => api.get('/templates/search', { 
+    params: { query, ...filters }
+  }),
 };
 
 export default api;

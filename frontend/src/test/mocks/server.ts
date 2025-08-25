@@ -123,7 +123,7 @@ export const handlers = [
   }),
 
   // Profile endpoints
-  http.get('/api/v1/profiles', () => {
+  http.get('http://localhost:8080/api/v1/profiles', () => {
     return HttpResponse.json({
       items: [mockProfile],
       total: 1,
@@ -328,6 +328,349 @@ export const handlers = [
         ],
       },
     })
+  }),
+
+  // Submission endpoints
+  http.get('http://localhost:8080/api/v1/submissions', ({ request }) => {
+    const url = new URL(request.url)
+    const page = parseInt(url.searchParams.get('page') || '1')
+    const limit = parseInt(url.searchParams.get('limit') || '10')
+    const status = url.searchParams.get('status')
+    const type = url.searchParams.get('type')
+    const priority = url.searchParams.get('priority')
+
+    const mockSubmissions = [
+      {
+        id: '1',
+        user_id: 1,
+        profile_id: 1,
+        type: 'images',
+        priority: 'normal',
+        status: 'active',
+        title: 'Test Image Submission',
+        urls: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
+        files: [],
+        tags: ['photography', 'portrait'],
+        category: 'photography',
+        description: 'Test submission description',
+        progress_percentage: 75,
+        estimated_completion: '2024-01-01T15:00:00Z',
+        auto_monitoring: true,
+        notify_on_infringement: true,
+        total_urls: 2,
+        created_at: '2024-01-01T10:00:00Z',
+        updated_at: '2024-01-01T14:00:00Z'
+      },
+      {
+        id: '2',
+        user_id: 1,
+        profile_id: null,
+        type: 'videos',
+        priority: 'high',
+        status: 'processing',
+        title: 'Video Content Batch',
+        urls: ['https://example.com/video1.mp4'],
+        files: [],
+        tags: ['content'],
+        category: 'video_content',
+        description: 'Important video submission',
+        progress_percentage: 45,
+        estimated_completion: '2024-01-01T16:00:00Z',
+        auto_monitoring: false,
+        notify_on_infringement: true,
+        total_urls: 1,
+        created_at: '2024-01-01T11:00:00Z',
+        updated_at: '2024-01-01T14:30:00Z'
+      },
+      {
+        id: '3',
+        user_id: 1,
+        profile_id: 1,
+        type: 'documents',
+        priority: 'urgent',
+        status: 'failed',
+        title: 'Document Submission',
+        urls: ['https://example.com/doc1.pdf'],
+        files: [],
+        tags: ['legal'],
+        category: 'written_content',
+        description: 'Legal document',
+        progress_percentage: 0,
+        estimated_completion: null,
+        auto_monitoring: true,
+        notify_on_infringement: true,
+        total_urls: 1,
+        created_at: '2024-01-01T09:00:00Z',
+        updated_at: '2024-01-01T13:00:00Z'
+      }
+    ]
+
+    let filteredSubmissions = mockSubmissions
+
+    if (status) {
+      filteredSubmissions = filteredSubmissions.filter(s => s.status === status)
+    }
+    if (type) {
+      filteredSubmissions = filteredSubmissions.filter(s => s.type === type)
+    }
+    if (priority) {
+      filteredSubmissions = filteredSubmissions.filter(s => s.priority === priority)
+    }
+
+    const startIndex = (page - 1) * limit
+    const endIndex = startIndex + limit
+    const paginatedSubmissions = filteredSubmissions.slice(startIndex, endIndex)
+
+    return HttpResponse.json({
+      items: paginatedSubmissions,
+      total: filteredSubmissions.length,
+      page,
+      size: limit,
+      pages: Math.ceil(filteredSubmissions.length / limit)
+    })
+  }),
+
+  http.get('http://localhost:8080/api/v1/submissions/:id', ({ params }) => {
+    const submission = {
+      id: params.id,
+      user_id: 1,
+      profile_id: 1,
+      type: 'images',
+      priority: 'normal',
+      status: 'active',
+      title: 'Test Submission',
+      urls: ['https://example.com/image1.jpg'],
+      files: [],
+      tags: ['test'],
+      category: 'photography',
+      description: 'Test submission',
+      progress_percentage: 50,
+      estimated_completion: '2024-01-01T15:00:00Z',
+      auto_monitoring: true,
+      notify_on_infringement: true,
+      total_urls: 1,
+      created_at: '2024-01-01T10:00:00Z',
+      updated_at: '2024-01-01T14:00:00Z'
+    }
+
+    return HttpResponse.json(submission)
+  }),
+
+  http.post('http://localhost:8080/api/v1/submissions', async ({ request }) => {
+    const body = await request.json()
+    
+    const newSubmission = {
+      id: Date.now().toString(),
+      user_id: 1,
+      profile_id: body.profile_id || null,
+      type: body.type,
+      priority: body.priority,
+      status: 'pending',
+      title: body.title,
+      urls: body.urls || [],
+      files: [],
+      tags: body.tags || [],
+      category: body.category || null,
+      description: body.description || null,
+      progress_percentage: 0,
+      estimated_completion: null,
+      auto_monitoring: body.auto_monitoring ?? true,
+      notify_on_infringement: body.notify_on_infringement ?? true,
+      total_urls: (body.urls || []).length,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    return HttpResponse.json(newSubmission, { status: 201 })
+  }),
+
+  http.put('http://localhost:8080/api/v1/submissions/:id', async ({ params, request }) => {
+    const body = await request.json()
+    
+    const updatedSubmission = {
+      id: params.id,
+      user_id: 1,
+      profile_id: body.profile_id || 1,
+      type: body.type || 'images',
+      priority: body.priority || 'normal',
+      status: body.status || 'active',
+      title: body.title || 'Updated Submission',
+      urls: body.urls || ['https://example.com/image1.jpg'],
+      files: body.files || [],
+      tags: body.tags || ['updated'],
+      category: body.category || 'photography',
+      description: body.description || 'Updated submission',
+      progress_percentage: body.progress_percentage ?? 75,
+      estimated_completion: body.estimated_completion,
+      auto_monitoring: body.auto_monitoring ?? true,
+      notify_on_infringement: body.notify_on_infringement ?? true,
+      total_urls: (body.urls || ['https://example.com/image1.jpg']).length,
+      created_at: '2024-01-01T10:00:00Z',
+      updated_at: new Date().toISOString()
+    }
+
+    return HttpResponse.json(updatedSubmission)
+  }),
+
+  http.delete('http://localhost:8080/api/v1/submissions/:id', ({ params }) => {
+    return HttpResponse.json({ message: 'Submission deleted successfully' })
+  }),
+
+  http.post('http://localhost:8080/api/v1/submissions/:id/cancel', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      status: 'cancelled',
+      message: 'Submission cancelled successfully'
+    })
+  }),
+
+  http.post('http://localhost:8080/api/v1/submissions/:id/retry', ({ params }) => {
+    return HttpResponse.json({
+      id: params.id,
+      status: 'pending',
+      message: 'Submission retry initiated'
+    })
+  }),
+
+  http.get('http://localhost:8080/api/v1/submissions/:id/progress', ({ params }) => {
+    return HttpResponse.json({
+      submission_id: params.id,
+      progress_percentage: 65,
+      current_stage: 'Processing URLs',
+      total_stages: 5,
+      current_stage_number: 3,
+      estimated_completion: '2024-01-01T16:00:00Z',
+      processed_urls: 8,
+      total_urls: 12,
+      errors: []
+    })
+  }),
+
+  http.post('http://localhost:8080/api/v1/submissions/upload', async ({ request }) => {
+    const formData = await request.formData()
+    const files = formData.getAll('files') as File[]
+    
+    if (files.length === 0) {
+      return HttpResponse.json(
+        { detail: 'No files provided' },
+        { status: 400 }
+      )
+    }
+
+    // Simulate file size validation
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    const oversizedFiles = files.filter(file => file.size > maxSize)
+    if (oversizedFiles.length > 0) {
+      return HttpResponse.json(
+        { detail: `Files too large: ${oversizedFiles.map(f => f.name).join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Simulate file type validation
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/bmp', 'image/webp',
+      'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/mkv',
+      'application/pdf', 'application/msword', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ]
+    const invalidFiles = files.filter(file => !allowedTypes.includes(file.type))
+    if (invalidFiles.length > 0) {
+      return HttpResponse.json(
+        { detail: `Invalid file types: ${invalidFiles.map(f => f.name).join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Mock successful upload response
+    const fileUrls = files.map((file, index) => 
+      `https://cdn.example.com/uploads/${Date.now()}-${index}-${file.name}`
+    )
+
+    return HttpResponse.json({
+      file_urls: fileUrls,
+      upload_id: `upload_${Date.now()}`,
+      total_files: files.length,
+      total_size: files.reduce((sum, file) => sum + file.size, 0)
+    })
+  }),
+
+  http.post('http://localhost:8080/api/v1/submissions/validate-urls', async ({ request }) => {
+    const body = await request.json()
+    const urls = body.urls as string[]
+    
+    if (!urls || urls.length === 0) {
+      return HttpResponse.json(
+        { detail: 'No URLs provided' },
+        { status: 400 }
+      )
+    }
+
+    const validationResults = urls.map(url => {
+      try {
+        const urlObj = new URL(url)
+        const domain = urlObj.hostname
+        
+        // Simulate some invalid URLs for testing
+        const isValid = !url.includes('invalid.com') && !url.includes('blocked.site')
+        
+        return {
+          url,
+          is_valid: isValid,
+          domain,
+          error_message: isValid ? null : 'URL is not accessible or blocked'
+        }
+      } catch {
+        return {
+          url,
+          is_valid: false,
+          domain: 'unknown',
+          error_message: 'Invalid URL format'
+        }
+      }
+    })
+
+    return HttpResponse.json(validationResults)
+  }),
+
+  http.post('http://localhost:8080/api/v1/submissions/bulk', async ({ request }) => {
+    const body = await request.json()
+    const { submissions, apply_to_all } = body
+    
+    if (!submissions || submissions.length === 0) {
+      return HttpResponse.json(
+        { detail: 'No submissions provided' },
+        { status: 400 }
+      )
+    }
+
+    const createdSubmissions = submissions.map((submission: any, index: number) => ({
+      id: (Date.now() + index).toString(),
+      user_id: 1,
+      profile_id: submission.profile_id || apply_to_all?.profile_id || null,
+      type: submission.type,
+      priority: submission.priority || apply_to_all?.priority || 'normal',
+      status: 'pending',
+      title: submission.title,
+      urls: submission.urls || [],
+      files: [],
+      tags: submission.tags || apply_to_all?.tags || [],
+      category: submission.category || apply_to_all?.category || null,
+      description: submission.description || null,
+      progress_percentage: 0,
+      estimated_completion: null,
+      auto_monitoring: submission.auto_monitoring ?? apply_to_all?.auto_monitoring ?? true,
+      notify_on_infringement: submission.notify_on_infringement ?? apply_to_all?.notify_on_infringement ?? true,
+      total_urls: (submission.urls || []).length,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }))
+
+    return HttpResponse.json({
+      submissions: createdSubmissions,
+      total_created: createdSubmissions.length,
+      batch_id: `batch_${Date.now()}`
+    }, { status: 201 })
   }),
 
   // Error simulation endpoints for testing error handling

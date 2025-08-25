@@ -6,3 +6,4 @@ from .takedown import *
 from .subscription import *
 from .dashboard import *
 from .common import *
+from .dmca_template import *

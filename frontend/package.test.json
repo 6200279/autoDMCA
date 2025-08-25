@@ -1,0 +1,31 @@
+{
+  "name": "autodmca-frontend-testing",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:ui": "vitest --coverage --ui",
+    "test:templates": "vitest run --reporter=verbose src/components/templates/__tests__/**",
+    "test:templates:watch": "vitest src/components/templates/__tests__/**",
+    "test:templates:coverage": "vitest run --coverage --reporter=verbose src/components/templates/__tests__/**",
+    
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:ui": "playwright test --ui",
+    "e2e:debug": "playwright test --debug",
+    "e2e:templates": "playwright test template-workflows.spec.ts",
+    "e2e:report": "playwright show-report",
+    
+    "test:all": "npm run test:coverage && npm run e2e",
+    "test:templates:all": "npm run test:templates:coverage && npm run e2e:templates",
+    "test:ci": "npm run test:coverage -- --reporter=junit --outputFile=test-results/unit-results.xml && npm run e2e -- --reporter=junit --outputFile=test-results/e2e-results.xml",
+    
+    "lint:test": "eslint 'src/**/__tests__/**/*.{ts,tsx}' 'e2e/**/*.{ts,tsx}'",
+    "type-check:test": "tsc --noEmit --project tsconfig.test.json",
+    
+    "test:performance": "vitest run src/components/templates/__tests__/TemplatePerformanceAccessibility.test.tsx --reporter=verbose",
+    "test:accessibility": "vitest run src/components/templates/__tests__/TemplatePerformanceAccessibility.test.tsx --grep=\"Accessibility\" --reporter=verbose",
+    "test:integration": "vitest run src/components/templates/__tests__/TemplateIntegration.test.tsx --reporter=verbose"
+  }
+}

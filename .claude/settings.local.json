@@ -39,7 +39,10 @@
       "Bash(mkdir:*)",
       "mcp__serena__replace_symbol_body",
       "mcp__ide__getDiagnostics",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:medium.com)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm test)"
     ],
     "deny": [],
     "additionalDirectories": [
