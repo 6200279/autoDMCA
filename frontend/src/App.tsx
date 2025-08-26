@@ -2,6 +2,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
 
+// Design System Foundation
+import './styles/design-tokens.css';
+import './styles/global.css';
+
 // PrimeReact CSS (theme will be loaded dynamically)
 import 'primereact/resources/primereact.min.css';
 import 'primeicons/primeicons.css';
