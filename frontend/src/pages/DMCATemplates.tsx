@@ -4,7 +4,7 @@ import { ConfirmDialog } from 'primereact/confirmdialog';
 import { Dialog } from 'primereact/dialog';
 import { Button } from 'primereact/button';
 import { Divider } from 'primereact/divider';
-import { TemplateLibraryDashboard, TemplateCreationWizard, EnhancedTemplateEditor, TemplatePreview } from '../components/templates';
+import { EnhancedTemplateLibraryDashboard, TemplateCreationWizard, EnhancedTemplateEditor, TemplatePreview } from '../components/templates';
 import { DMCATemplate } from '../types/templates';
 import './DMCATemplates.css';
 
@@ -155,7 +155,7 @@ const DMCATemplates: React.FC = () => {
       <ConfirmDialog />
       
       {/* Main Dashboard */}
-      <TemplateLibraryDashboard
+      <EnhancedTemplateLibraryDashboard
         key={refreshTrigger} // Force refresh when templates change
         onTemplateCreate={handleCreateTemplate}
         onTemplateEdit={handleEditTemplate}

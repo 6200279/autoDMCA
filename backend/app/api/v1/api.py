@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, users, profiles, infringements, takedowns, subscriptions, dashboard, social_media, scanning, enhanced_scanning, delisting, gift_subscriptions, addons, stripe_webhooks, watermarking, dmca_templates
+from app.api.v1.endpoints import auth, users, profiles, infringements, takedowns, subscriptions, dashboard, social_media, scanning, enhanced_scanning, delisting, gift_subscriptions, addons, stripe_webhooks, watermarking, dmca_templates, content_upload, enhanced_billing, integrations, verification, analytics_dashboard, submissions
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
@@ -19,3 +19,11 @@ api_router.include_router(addons.router, prefix="/addons", tags=["addon-services
 api_router.include_router(stripe_webhooks.router, prefix="/webhooks", tags=["webhooks"])
 api_router.include_router(watermarking.router, prefix="/watermarking", tags=["content-watermarking"])
 api_router.include_router(dmca_templates.router, prefix="/templates", tags=["dmca-templates"])
+api_router.include_router(content_upload.router, prefix="/content", tags=["content-upload"])
+api_router.include_router(enhanced_billing.router, prefix="/billing-v2", tags=["enhanced-billing"])
+api_router.include_router(integrations.router, prefix="/integrations", tags=["third-party-integrations"])
+
+# New service endpoints
+api_router.include_router(verification.router, prefix="/verification", tags=["account-verification"])
+api_router.include_router(analytics_dashboard.router, prefix="/analytics", tags=["analytics-dashboard"]) 
+api_router.include_router(submissions.router, prefix="/submissions", tags=["manual-submissions"])

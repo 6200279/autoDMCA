@@ -1,5 +1,7 @@
 export { default as TemplateDashboard } from './TemplateDashboard';
 export { default as TemplateLibraryDashboard } from './TemplateLibraryDashboard';
+export { default as EnhancedTemplateLibraryDashboard } from './EnhancedTemplateLibraryDashboard';
+export { default as SimpleTemplateLibraryDashboard } from './SimpleTemplateLibraryDashboard';
 export { default as TemplateCard } from './TemplateCard';
 export { default as TemplateEditor } from './TemplateEditor';
 export { default as EnhancedTemplateEditor } from './EnhancedTemplateEditor';
@@ -18,3 +20,18 @@ export { EditorToolbar } from './editor/EditorToolbar';
 export { VariableInserter } from './editor/VariableInserter';
 export { LivePreviewPanel } from './editor/LivePreviewPanel';
 export { ValidationPanel } from './editor/ValidationPanel';
+
+// Export enhanced template library components
+export * from './components';
+
+// Export hooks
+export * from './hooks';
+
+// Export context
+export { TemplateLibraryProvider, useTemplateLibraryContext } from './context/TemplateLibraryContext';
+
+// Export types
+export * from './types/enhanced';
+
+// Export utilities
+export * from './utils/templateUtils';

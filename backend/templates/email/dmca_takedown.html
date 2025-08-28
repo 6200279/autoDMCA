@@ -1,0 +1,98 @@
+{% extends "email/base.html" %}
+
+{% block title %}DMCA Takedown Notice - {{ case_reference }}{% endblock %}
+
+{% block header_title %}DMCA TAKEDOWN NOTICE{% endblock %}
+{% block header_subtitle %}Case Reference: {{ case_reference }}{% endblock %}
+
+{% block content %}
+<div class="legal-notice">
+    <h3>Digital Millennium Copyright Act Notice</h3>
+    
+    <p><strong>To:</strong> {{ recipient_name }}</p>
+    <p><strong>From:</strong> {{ legal_representative }} ({{ legal_contact }})</p>
+    <p><strong>Date:</strong> {{ current_date }}</p>
+    <p><strong>Case Reference:</strong> {{ case_reference }}</p>
+    
+    <h3 style="margin-top: 30px;">Notice of Claimed Infringement</h3>
+    
+    <p>We are writing to notify you of claimed infringement of copyrighted material hosted on your platform. This notice is submitted in good faith under Section 512(c) of the Digital Millennium Copyright Act (DMCA).</p>
+    
+    <div class="info-box error">
+        <div class="title">Infringement Details</div>
+        <p><strong>Infringing Content URL:</strong> <br>{{ infringement_url }}</p>
+        <p><strong>Description of Infringement:</strong> <br>{{ infringement_description }}</p>
+        <p><strong>Platform:</strong> {{ platform_name }}</p>
+    </div>
+    
+    <div class="info-box">
+        <div class="title">Original Copyrighted Work</div>
+        <p><strong>Title:</strong> {{ original_work_title }}</p>
+        <p><strong>Copyright Owner:</strong> {{ copyright_owner }}</p>
+        <p><strong>Original Location:</strong> {{ original_work_url }}</p>
+    </div>
+    
+    <h3>Required Action</h3>
+    
+    <p>Under the DMCA, you are required to:</p>
+    <ol>
+        <li><strong>Remove or disable access</strong> to the infringing material identified above</li>
+        <li><strong>Notify the alleged infringer</strong> of the removal</li>
+        <li><strong>Respond to this notice</strong> within {{ takedown_deadline }}</li>
+    </ol>
+    
+    <div class="info-box warning">
+        <div class="title">Important Timeline</div>
+        <p><strong>Response Deadline:</strong> {{ takedown_deadline }}</p>
+        <p>Failure to respond within this timeframe may result in further legal action and potential liability under federal copyright law.</p>
+    </div>
+    
+    <h3>Legal Statements</h3>
+    
+    <p>I state UNDER PENALTY OF PERJURY that:</p>
+    <ul>
+        <li>I am authorized to act on behalf of the copyright owner of the exclusive rights that are allegedly infringed</li>
+        <li>I have a good faith belief that use of the material is not authorized by the copyright owner, its agent, or the law</li>
+        <li>The information in this notification is accurate</li>
+    </ul>
+    
+    <div class="cta-center">
+        <a href="{{ response_portal_url }}" class="cta-button">Respond to This Notice</a>
+    </div>
+    
+    <div class="legal-signature">
+        <p><strong>Digital Signature:</strong><br>
+        {{ legal_representative }}<br>
+        {{ legal_title }}<br>
+        {{ legal_organization }}<br>
+        {{ legal_contact }}</p>
+        
+        <p style="margin-top: 20px;"><strong>Date:</strong> {{ current_date }}</p>
+    </div>
+</div>
+
+<div class="info-box">
+    <div class="title">Questions or Concerns?</div>
+    <p>If you believe this notice was sent in error, you may file a counter-notification under Section 512(g) of the DMCA. For questions about this notice, please contact {{ legal_contact }}.</p>
+</div>
+
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .legal-notice ol, .legal-notice ul {
+        margin: 15px 0 15px 25px;
+        line-height: 1.8;
+    }
+    
+    .legal-notice li {
+        margin-bottom: 10px;
+    }
+    
+    .legal-signature {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-style: normal;
+        color: #2d3748;
+    }
+</style>
+{% endblock %}

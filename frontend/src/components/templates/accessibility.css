@@ -1,0 +1,405 @@
+/**
+ * Accessibility-focused CSS for DMCA Template Library Components
+ * Ensures WCAG AA+ compliance and enhanced user experience
+ */
+
+/* Screen Reader Only Content */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Skip Links */
+.skip-links {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  z-index: 1000;
+}
+
+.skip-link {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  background-color: var(--primary-color, #007ad9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  border: 2px solid transparent;
+}
+
+.skip-link:focus {
+  position: static;
+  left: auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+}
+
+.skip-link:hover,
+.skip-link:focus {
+  background-color: var(--primary-color-dark, #0056b3);
+  outline: 2px solid var(--focus-color, #fff);
+  outline-offset: 2px;
+}
+
+/* Focus Management */
+.focus-visible,
+*:focus-visible {
+  outline: 3px solid var(--focus-color, #005fcc) !important;
+  outline-offset: 2px !important;
+  border-radius: 4px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+  .enhanced-template-card {
+    border: 2px solid;
+    background-color: window;
+    color: windowtext;
+  }
+
+  .enhanced-template-card.selected {
+    background-color: highlight;
+    color: highlighttext;
+    border-color: highlighttext;
+  }
+
+  .enhanced-template-card.focused {
+    outline: 3px solid highlighttext;
+    outline-offset: 2px;
+  }
+
+  .template-card-content {
+    background-color: window;
+    color: windowtext;
+    border: 1px solid windowtext;
+  }
+
+  .search-input-field,
+  .filter-dropdown,
+  .p-button {
+    border: 2px solid windowtext;
+    background-color: window;
+    color: windowtext;
+  }
+
+  .p-button:hover,
+  .p-button:focus {
+    background-color: highlight;
+    color: highlighttext;
+    border-color: highlighttext;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .enhanced-template-card,
+  .search-autocomplete,
+  .filter-dropdown {
+    transition: none !important;
+  }
+}
+
+/* Enhanced Focus States */
+.enhanced-template-card:focus-within,
+.enhanced-template-card.focused {
+  outline: 3px solid var(--focus-color, #005fcc);
+  outline-offset: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+.search-autocomplete:focus-within {
+  outline: 3px solid var(--focus-color, #005fcc);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Grid Navigation */
+.template-grid-container[role="grid"]:focus {
+  outline: 2px solid var(--focus-color, #005fcc);
+  outline-offset: -2px;
+}
+
+.template-grid-container[role="grid"] .enhanced-template-card {
+  scroll-margin: 20px;
+}
+
+/* Selection States */
+.enhanced-template-card[aria-selected="true"] {
+  background-color: var(--selection-bg, #e3f2fd);
+  border-color: var(--selection-border, #1976d2);
+  box-shadow: 0 0 0 2px var(--selection-border, #1976d2);
+}
+
+.enhanced-template-card[aria-selected="true"] .template-card-content {
+  background-color: var(--selection-bg, #e3f2fd);
+}
+
+/* Loading States */
+.templates-loading-grid .template-skeleton {
+  background-color: var(--surface-200, #e9ecef);
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.templates-loading-grid .template-skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--surface-100, #f8f9fa),
+    transparent
+  );
+  animation: loading-shimmer 2s infinite;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Error States */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-color-secondary, #6c757d);
+}
+
+.error-icon {
+  font-size: 3rem;
+  color: var(--red-500, #dc3545);
+  margin-bottom: 1rem;
+}
+
+.error-container h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--text-color, #212529);
+}
+
+.error-container p {
+  margin: 0 0 1rem 0;
+  max-width: 400px;
+}
+
+.retry-btn:focus {
+  outline: 3px solid var(--focus-color, #005fcc);
+  outline-offset: 2px;
+}
+
+/* Search Component Accessibility */
+.search-operators-help {
+  background-color: var(--surface-100, #f8f9fa);
+  border: 1px solid var(--surface-300, #dee2e6);
+  border-radius: 6px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.operators-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.operator-item {
+  padding: 0.5rem;
+  background-color: var(--surface-0, #ffffff);
+  border: 1px solid var(--surface-300, #dee2e6);
+  border-radius: 4px;
+}
+
+.operator-example {
+  display: block;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background-color: var(--surface-200, #e9ecef);
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.operator-description {
+  color: var(--text-color-secondary, #6c757d);
+  font-size: 0.875rem;
+}
+
+/* Filter Component Accessibility */
+.filters-panel {
+  border: 1px solid var(--surface-300, #dee2e6);
+  border-radius: 6px;
+}
+
+.filter-group {
+  margin-bottom: 1.5rem;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--text-color, #212529);
+  gap: 0.5rem;
+}
+
+.filter-label i {
+  color: var(--text-color-secondary, #6c757d);
+}
+
+/* Pagination Accessibility */
+.enhanced-paginator .p-paginator-pages .p-paginator-page {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.enhanced-paginator .p-paginator-pages .p-paginator-page:focus {
+  outline: 3px solid var(--focus-color, #005fcc);
+  outline-offset: 2px;
+}
+
+.enhanced-paginator .p-paginator-pages .p-paginator-page.p-highlight {
+  background-color: var(--primary-color, #007ad9);
+  color: white;
+  font-weight: 600;
+}
+
+/* Mobile Responsive Accessibility */
+@media (max-width: 768px) {
+  .skip-links {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--surface-0, #ffffff);
+    border-bottom: 1px solid var(--surface-300, #dee2e6);
+    padding: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 1100;
+  }
+
+  .skip-link {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .mobile-filters-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mobile-filters-toggle:focus {
+    outline: 3px solid var(--focus-color, #005fcc);
+    outline-offset: 2px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .skip-links,
+  .mobile-filters-toggle,
+  .search-actions,
+  .card-actions,
+  .template-toolbar {
+    display: none !important;
+  }
+
+  .enhanced-template-card {
+    break-inside: avoid;
+    border: 1px solid #000;
+    margin-bottom: 1rem;
+  }
+
+  .template-card-content {
+    background-color: white !important;
+    color: black !important;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --focus-color: #4fc3f7;
+    --selection-bg: #1a237e;
+    --selection-border: #3f51b5;
+  }
+
+  .sr-only {
+    background-color: #000;
+    color: #fff;
+  }
+
+  .skip-link {
+    background-color: #1976d2;
+    color: white;
+  }
+
+  .skip-link:hover,
+  .skip-link:focus {
+    background-color: #1565c0;
+  }
+}
+
+/* Animation for announcements */
+.announcement-highlight {
+  animation: announce-flash 0.3s ease-in-out;
+}
+
+@keyframes announce-flash {
+  0% { background-color: transparent; }
+  50% { background-color: var(--primary-color-light, #bbdefb); }
+  100% { background-color: transparent; }
+}
+
+/* Live Region Positioning */
+#polite-announcements,
+#assertive-announcements {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

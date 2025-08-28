@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, desc, extract
 from datetime import datetime, timedelta
 
-from app.db.session import get_db
+from app.db.session import get_db, get_async_session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.user import User
 from app.db.models.profile import ProtectedProfile
 from app.db.models.infringement import Infringement
@@ -28,9 +29,164 @@ from app.schemas.dashboard import (
 )
 from app.schemas.common import StatusResponse
 from app.api.deps.auth import get_current_verified_user
+from app.core.container import container
 
 router = APIRouter()
 
+
+# =============================================================================
+# Real-time Dashboard Endpoints (Frontend Compatible)
+# =============================================================================
+
+@router.get("/stats")
+async def get_dashboard_stats_v2(
+    current_user: User = Depends(get_current_verified_user),
+    db: AsyncSession = Depends(get_async_session)
+) -> Any:
+    """Get dashboard statistics (compatible with frontend expectations)"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        stats = await dashboard_service.get_dashboard_stats(current_user.id, db)
+        return stats
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get dashboard stats: {str(e)}"
+        )
+
+
+@router.get("/activity")
+async def get_dashboard_activity_v2(
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_verified_user),
+    db: AsyncSession = Depends(get_async_session)
+) -> Any:
+    """Get recent activity (compatible with frontend expectations)"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        activity = await dashboard_service.get_recent_activity(current_user.id, db, limit)
+        return activity
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get dashboard activity: {str(e)}"
+        )
+
+
+@router.get("/analytics")
+async def get_dashboard_analytics_v2(
+    granularity: str = Query("day", regex="^(day|week|month)$"),
+    current_user: User = Depends(get_current_verified_user),
+    db: AsyncSession = Depends(get_async_session)
+) -> Any:
+    """Get analytics data for charts (compatible with frontend expectations)"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        analytics = await dashboard_service.get_analytics_data(current_user.id, db, granularity)
+        return analytics
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get dashboard analytics: {str(e)}"
+        )
+
+
+@router.get("/platform-distribution")
+async def get_platform_distribution_v2(
+    current_user: User = Depends(get_current_verified_user),
+    db: AsyncSession = Depends(get_async_session)
+) -> Any:
+    """Get platform distribution metrics"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        platforms = await dashboard_service.get_platform_distribution(current_user.id, db)
+        return platforms
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get platform distribution: {str(e)}"
+        )
+
+
+@router.get("/protection-metrics")
+async def get_protection_metrics_v2(
+    current_user: User = Depends(get_current_verified_user),
+    db: AsyncSession = Depends(get_async_session)
+) -> Any:
+    """Get protection effectiveness metrics"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        metrics = await dashboard_service.get_protection_metrics(current_user.id, db)
+        return metrics
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get protection metrics: {str(e)}"
+        )
+
+
+@router.get("/alerts")
+async def get_alert_summary_v2(
+    current_user: User = Depends(get_current_verified_user)
+) -> Any:
+    """Get alert summary"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        alerts = await dashboard_service.get_alert_summary(current_user.id)
+        
+        return alerts
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get alert summary: {str(e)}"
+        )
+
+
+@router.get("/system-health")
+async def get_system_health_v2(
+    current_user: User = Depends(get_current_verified_user)
+) -> Any:
+    """Get system health metrics for dashboard"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        health = await dashboard_service.get_system_health_for_dashboard()
+        
+        return health
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get system health: {str(e)}"
+        )
+
+
+@router.get("/overview-v2")
+async def get_dashboard_overview_v2(
+    current_user: User = Depends(get_current_verified_user)
+) -> Any:
+    """Get complete dashboard overview (real-time version)"""
+    try:
+        dashboard_service = await container.get('DashboardService')
+        overview = await dashboard_service.get_dashboard_overview(current_user.id)
+        
+        return overview
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get dashboard overview: {str(e)}"
+        )
+
+
+# =============================================================================
+# Legacy Dashboard Endpoints (for backward compatibility)
+# =============================================================================
 
 @router.get("/overview", response_model=DashboardOverview)
 async def get_dashboard_overview(

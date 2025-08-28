@@ -407,3 +407,82 @@
 .template-card-wrapper.compact .template-description {
   -webkit-line-clamp: 2;
 }
+
+/* Enhanced Card Design Integration */
+.template-card-wrapper {
+  backdrop-filter: blur(8px);
+}
+
+.template-card-wrapper.hovered {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15);
+}
+
+.template-card {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.template-card:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* Enhanced Header Gradient */
+.template-card-header {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-600) 50%, var(--primary-700) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.template-card-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.1) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+
+.template-card-wrapper:hover .template-card-header::before {
+  transform: translateX(100%);
+}
+
+/* Enhanced Typography */
+.template-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.template-description {
+  line-height: 1.5;
+}
+
+/* Enhanced Metadata Design */
+.template-metadata {
+  background: var(--surface-50);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.metadata-item {
+  background: var(--surface-card);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+/* Enhanced Footer */
+.template-card-footer {
+  background: linear-gradient(135deg, var(--surface-50) 0%, var(--surface-100) 100%);
+}
+
+/* Enhanced Interactive States */
+.template-favorite:hover,
+.template-quick-menu .p-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}

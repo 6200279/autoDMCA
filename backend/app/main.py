@@ -224,11 +224,21 @@ async def websocket_route(websocket: WebSocket, token: str, db: AsyncSession = D
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize application on startup with comprehensive database setup."""
+    """Initialize application on startup with comprehensive database setup and service container."""
     logger.info(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
     
     try:
-        # Initialize database with health checks
+        # Configure and register all services in the DI container
+        from app.core.service_registry import configure_services
+        await configure_services()
+        logger.info("Service container configuration completed")
+        
+        # Start the service container (initializes singletons and runs startup hooks)
+        from app.core.container import container
+        await container.start_services()
+        logger.info("Service container started successfully")
+        
+        # Initialize database with health checks (this may now be handled by service container)
         await initialize_database()
         logger.info("Database initialization completed successfully")
         
@@ -247,6 +257,13 @@ async def startup_event():
         else:
             logger.warning(f"Database health check failed: {health_info.get('error', 'Unknown error')}")
         
+        # Check service container health
+        service_health = await container.check_health()
+        if service_health["overall_healthy"]:
+            logger.info(f"Service container health check passed - {len(service_health['services'])} services healthy")
+        else:
+            logger.warning("Some services failed health check")
+        
         logger.info("Application startup complete")
         
     except Exception as e:
@@ -260,6 +277,11 @@ async def shutdown_event():
     logger.info("Application shutting down...")
     
     try:
+        # Stop the service container (runs shutdown hooks and cleans up services)
+        from app.core.container import container
+        await container.stop_services()
+        logger.info("Service container stopped successfully")
+        
         # Clean up database connections
         await cleanup_connections()
         logger.info("Database connections cleaned up")
@@ -283,42 +305,110 @@ async def root():
 
 @app.get("/health")
 async def health_check() -> Dict[str, Any]:
-    """Comprehensive health check endpoint with database status."""
+    """Comprehensive health check endpoint with integrated monitoring."""
     try:
-        # Get database health
-        db_health = await get_database_health()
+        from app.core.container import container
         
-        # Get system metrics
-        system_status = {
-            "status": "healthy" if db_health["healthy"] else "unhealthy",
-            "version": settings.VERSION,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "uptime": "unknown",  # Could be enhanced with actual uptime tracking
-            "environment": "development" if settings.DEBUG else "production"
-        }
-        
-        # Database status
-        database_status = {
-            "healthy": db_health["healthy"],
-            "response_time_ms": round(db_health["response_time"], 2),
-            "active_connections": db_health.get("active_connections", 0),
-            "pool_info": db_health.get("pool_info", {}),
-            "version": db_health.get("version", "unknown")[:50] if db_health.get("version") else "unknown"
-        }
-        
-        if db_health.get("error"):
-            database_status["error"] = str(db_health["error"])
+        # Get health monitor from container
+        health_monitor = await container.get('HealthMonitor')
+        health_summary = await health_monitor.get_health_summary()
         
         return {
-            "system": system_status,
-            "database": database_status
+            "status": health_summary.get("status", "unknown"),
+            "version": settings.VERSION,
+            "timestamp": health_summary.get("timestamp", datetime.utcnow().isoformat()),
+            "uptime_hours": health_summary.get("uptime_hours", 0),
+            "environment": "development" if settings.DEBUG else "production",
+            "services": health_summary.get("services", {}),
+            "system_metrics": health_summary.get("system_metrics", {}),
+            "alerts_triggered": health_summary.get("alerts_triggered", [])
         }
         
     except Exception as e:
         logger.error(f"Health check failed: {e}")
+        # Fallback to basic health check
+        try:
+            from app.core.container import container
+            service_health = await container.check_health()
+            db_health = await get_database_health()
+            
+            overall_healthy = db_health.get("healthy", False) and service_health.get("overall_healthy", False)
+            
+            return {
+                "status": "healthy" if overall_healthy else "unhealthy",
+                "version": settings.VERSION,
+                "timestamp": datetime.utcnow().isoformat(),
+                "environment": "development" if settings.DEBUG else "production",
+                "error": "Health monitor unavailable, using fallback",
+                "services": {
+                    "database": {"status": "healthy" if db_health.get("healthy", False) else "unhealthy"},
+                    "container": {"status": "healthy" if service_health.get("overall_healthy", False) else "unhealthy"}
+                }
+            }
+        except Exception as fallback_error:
+            logger.error(f"Fallback health check also failed: {fallback_error}")
+            raise HTTPException(
+                status_code=503,
+                detail={"status": "unhealthy", "error": str(e), "fallback_error": str(fallback_error)}
+            )
+
+
+@app.get("/health/detailed")
+async def detailed_health_check() -> Dict[str, Any]:
+    """Detailed health check with all metrics and service details."""
+    try:
+        from app.core.container import container
+        
+        health_monitor = await container.get('HealthMonitor')
+        detailed_report = await health_monitor.get_detailed_health_report()
+        
+        return detailed_report
+        
+    except Exception as e:
+        logger.error(f"Detailed health check failed: {e}")
         raise HTTPException(
             status_code=503,
             detail={"status": "unhealthy", "error": str(e)}
+        )
+
+
+@app.get("/health/performance")  
+async def performance_metrics() -> Dict[str, Any]:
+    """Get performance metrics from the monitoring system."""
+    try:
+        from app.core.container import container
+        
+        performance_monitor = await container.get('PerformanceMonitor')
+        performance_summary = performance_monitor.get_performance_summary()
+        
+        return performance_summary
+        
+    except Exception as e:
+        logger.error(f"Performance metrics check failed: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "error", "error": str(e)}
+        )
+
+
+@app.get("/services")
+async def service_registry_info() -> Dict[str, Any]:
+    """Get information about all registered services in the container."""
+    try:
+        from app.core.service_registry import get_service_registry_info
+        
+        service_info = get_service_registry_info()
+        return {
+            "total_services": len(service_info),
+            "timestamp": datetime.utcnow().isoformat(),
+            "services": service_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Service registry info failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "error": str(e)}
         )
 
 
@@ -350,6 +440,23 @@ async def api_info():
             "metrics": "/metrics"
         }
     }
+
+
+@app.get("/services")
+async def services_info() -> Dict[str, Any]:
+    """Get detailed information about all registered services."""
+    try:
+        from app.core.service_registry import get_service_registry_info
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "services": get_service_registry_info()
+        }
+    except Exception as e:
+        logger.error(f"Services info collection failed: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "Services info collection failed", "message": str(e)}
+        )
 
 
 @app.get("/metrics")

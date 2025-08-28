@@ -866,6 +866,197 @@ async def bulk_update_status(request_data: dict):
         "updated": len(request_ids)
     }
 
+# Submissions Mock Endpoints
+@app.get("/api/v1/submissions")
+async def get_submissions(page: int = 1, limit: int = 20):
+    """Mock submissions endpoint"""
+    mock_submissions = [
+        {
+            "id": f"sub_{i}",
+            "title": f"Content Submission {i}",
+            "description": f"Mock submission {i} for testing",
+            "content_type": ["image", "video", "audio", "text"][i % 4],
+            "status": ["pending", "processing", "completed", "failed"][i % 4],
+            "upload_date": "2024-01-01T00:00:00Z",
+            "file_count": 5 + i,
+            "profile_id": f"profile_{i % 3}",
+            "profile_name": f"Test Profile {i % 3}",
+            "progress": min(100, 20 * i),
+            "metadata": {
+                "total_files": 5 + i,
+                "processed_files": min(5 + i, int((5 + i) * 0.7)),
+                "failed_files": 0,
+                "estimated_completion": "2024-01-01T01:00:00Z"
+            }
+        }
+        for i in range(1, 16)
+    ]
+    
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_submissions = mock_submissions[start_idx:end_idx]
+    
+    return {
+        "submissions": paginated_submissions,
+        "total": len(mock_submissions),
+        "page": page,
+        "limit": limit,
+        "total_pages": (len(mock_submissions) + limit - 1) // limit
+    }
+
+@app.post("/api/v1/submissions")
+async def create_submission(submission_data: dict):
+    """Mock create submission endpoint"""
+    return {
+        "id": "sub_new",
+        "message": "Submission created successfully",
+        "status": "pending",
+        "upload_url": "https://mock-upload-url.com/upload"
+    }
+
+@app.get("/api/v1/submissions/{submission_id}")
+async def get_submission(submission_id: str):
+    """Mock get single submission endpoint"""
+    return {
+        "id": submission_id,
+        "title": f"Submission {submission_id}",
+        "description": f"Mock submission {submission_id}",
+        "content_type": "image",
+        "status": "completed",
+        "upload_date": "2024-01-01T00:00:00Z",
+        "file_count": 10,
+        "profile_id": "profile_1",
+        "profile_name": "Test Profile 1",
+        "progress": 100
+    }
+
+# Templates Mock Endpoints
+@app.get("/api/v1/templates")
+async def get_templates(
+    page: int = 1, 
+    limit: int = 20, 
+    sort_by: str = "updated_at", 
+    sort_order: str = "desc",
+    category: str = None
+):
+    """Mock templates endpoint"""
+    mock_templates = [
+        {
+            "id": f"tmpl_{i}",
+            "name": f"DMCA Template {i}",
+            "description": f"Professional DMCA takedown template {i}",
+            "category": ["standard", "image", "video", "audio", "social_media"][i % 5],
+            "content": f"This is the content of template {i}...",
+            "is_active": True,
+            "is_default": i == 1,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+            "usage_count": 50 - i * 2,
+            "success_rate": 85 + (i % 15),
+            "platform_specific": i % 2 == 0,
+            "supported_platforms": ["YouTube", "Instagram", "TikTok", "Facebook"][:i % 4 + 1],
+            "variables": [
+                {"name": "infringer_name", "description": "Name of the infringer"},
+                {"name": "infringement_url", "description": "URL of infringing content"},
+                {"name": "original_content", "description": "Description of original content"}
+            ]
+        }
+        for i in range(1, 26)
+    ]
+    
+    # Filter by category if provided
+    if category:
+        mock_templates = [t for t in mock_templates if t["category"] == category]
+    
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paginated_templates = mock_templates[start_idx:end_idx]
+    
+    return {
+        "templates": paginated_templates,
+        "total": len(mock_templates),
+        "page": page,
+        "limit": limit,
+        "total_pages": (len(mock_templates) + limit - 1) // limit
+    }
+
+@app.get("/api/v1/templates/categories")
+async def get_template_categories():
+    """Mock template categories endpoint"""
+    return [
+        {
+            "id": "standard",
+            "name": "Standard DMCA",
+            "description": "General purpose DMCA templates",
+            "template_count": 8
+        },
+        {
+            "id": "image", 
+            "name": "Image Copyright",
+            "description": "Templates for image copyright infringement",
+            "template_count": 5
+        },
+        {
+            "id": "video",
+            "name": "Video Copyright", 
+            "description": "Templates for video copyright infringement",
+            "template_count": 6
+        },
+        {
+            "id": "audio",
+            "name": "Audio Copyright",
+            "description": "Templates for audio copyright infringement", 
+            "template_count": 4
+        },
+        {
+            "id": "social_media",
+            "name": "Social Media",
+            "description": "Platform-specific social media templates",
+            "template_count": 7
+        }
+    ]
+
+@app.post("/api/v1/templates")
+async def create_template(template_data: dict):
+    """Mock create template endpoint"""
+    return {
+        "id": "tmpl_new",
+        "message": "Template created successfully",
+        **template_data
+    }
+
+@app.get("/api/v1/templates/{template_id}")
+async def get_template(template_id: str):
+    """Mock get single template endpoint"""
+    return {
+        "id": template_id,
+        "name": f"DMCA Template {template_id}",
+        "description": f"Professional template {template_id}",
+        "category": "standard",
+        "content": "Template content here...",
+        "is_active": True,
+        "variables": [
+            {"name": "infringer_name", "description": "Name of the infringer"},
+            {"name": "infringement_url", "description": "URL of infringing content"}
+        ]
+    }
+
+@app.put("/api/v1/templates/{template_id}")
+async def update_template(template_id: str, template_data: dict):
+    """Mock update template endpoint"""
+    return {
+        "id": template_id,
+        "message": "Template updated successfully",
+        **template_data
+    }
+
+@app.delete("/api/v1/templates/{template_id}")
+async def delete_template(template_id: str):
+    """Mock delete template endpoint"""
+    return {
+        "message": f"Template {template_id} deleted successfully"
+    }
+
 # Placeholder image endpoint for missing images
 @app.get("/api/placeholder/{width}/{height}")
 async def get_placeholder_image(width: int, height: int):
@@ -900,6 +1091,11 @@ if __name__ == "__main__":
     print("- GET /api/v1/profiles")
     print("- GET /api/v1/infringements")
     print("- GET /api/v1/takedowns")
+    print("- GET /api/v1/submissions")
+    print("- POST /api/v1/submissions")
+    print("- GET /api/v1/templates")
+    print("- POST /api/v1/templates")
+    print("- GET /api/v1/templates/categories")
     print("- GET /health")
     print("")
     print("Access at: http://localhost:8080")

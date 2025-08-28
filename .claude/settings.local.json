@@ -42,7 +42,8 @@
       "Bash(npm run dev:*)",
       "WebFetch(domain:medium.com)",
       "Bash(npm run type-check:*)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "Bash(tasklist)"
     ],
     "deny": [],
     "additionalDirectories": [

@@ -1,0 +1,223 @@
+{% extends "email/base.html" %}
+
+{% block title %}Daily Report - {{ report_date }}{% endblock %}
+
+{% block header_title %}📊 Daily Protection Report{% endblock %}
+{% block header_subtitle %}{{ report_date }} • {{ user_name }}{% endblock %}
+
+{% block content %}
+<h2>Good {{ time_of_day }} {{ user_name }},</h2>
+
+<p>Here's your daily content protection summary for <strong>{{ report_date }}</strong>.</p>
+
+{% if new_detections > 0 or active_takedowns > 0 %}
+<div class="info-box {% if new_detections > 5 %}warning{% else %}success{% endif %}">
+    <div class="title">🎯 Today's Activity</div>
+    <p>
+        {% if new_detections > 0 %}
+        <strong>{{ new_detections }}</strong> new infringement{{ new_detections|pluralize }} detected
+        {% endif %}
+        {% if new_detections > 0 and active_takedowns > 0 %} • {% endif %}
+        {% if active_takedowns > 0 %}
+        <strong>{{ active_takedowns }}</strong> takedown{{ active_takedowns|pluralize }} in progress
+        {% endif %}
+    </p>
+</div>
+{% else %}
+<div class="info-box success">
+    <div class="title">✨ All Clear!</div>
+    <p>No new infringements detected today. Your content is well protected!</p>
+</div>
+{% endif %}
+
+<!-- Statistics Grid -->
+<div class="stats-grid">
+    <div class="stat-item">
+        <div class="stat-number">{{ new_detections }}</div>
+        <div class="stat-label">New Detections</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ successful_takedowns }}</div>
+        <div class="stat-label">Successful Takedowns</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ scanning_hours }}</div>
+        <div class="stat-label">Hours Monitored</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ protected_content_count }}</div>
+        <div class="stat-label">Protected Items</div>
+    </div>
+</div>
+
+{% if new_detections > 0 %}
+<h3>🚨 New Infringements Detected</h3>
+
+<div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+    {% for detection in recent_detections %}
+    <div style="border-bottom: 1px solid #e2e8f0; padding: 15px 0; {% if forloop.last %}border-bottom: none;{% endif %}">
+        <div style="display: table; width: 100%;">
+            <div style="display: table-cell; vertical-align: top; width: 100px;">
+                <div style="background-color: #667eea; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; text-align: center; margin-bottom: 5px;">
+                    {{ detection.confidence }}% Match
+                </div>
+                <div style="font-size: 12px; color: #718096;">{{ detection.detected_time }}</div>
+            </div>
+            <div style="display: table-cell; vertical-align: top; padding-left: 15px;">
+                <div style="font-weight: 600; color: #2d3748; margin-bottom: 5px;">{{ detection.platform }}</div>
+                <div style="font-size: 14px; color: #4a5568; margin-bottom: 8px;">{{ detection.profile_name }}</div>
+                <a href="{{ detection.url }}" style="font-size: 12px; color: #667eea; word-break: break-all;">{{ detection.display_url }}</a>
+                {% if detection.auto_takedown_sent %}
+                <div style="background-color: #48bb78; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 8px; display: inline-block;">
+                    ⚡ Auto-takedown sent
+                </div>
+                {% else %}
+                <div style="background-color: #ed8936; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 8px; display: inline-block;">
+                    ⏱️ Action required
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if manual_review_needed > 0 %}
+<div class="cta-center">
+    <a href="{{ dashboard_url }}" class="cta-button">Review Detections ({{ manual_review_needed }})</a>
+</div>
+{% endif %}
+{% endif %}
+
+{% if takedown_updates %}
+<h3>📈 Takedown Progress Updates</h3>
+
+<div style="margin: 20px 0;">
+    {% for update in takedown_updates %}
+    <div style="display: table; width: 100%; margin-bottom: 15px; padding: 15px; background-color: {% if update.status == 'completed' %}#f0fff4{% elif update.status == 'in_progress' %}#fffaf0{% else %}#fed7d7{% endif %}; border-radius: 6px;">
+        <div style="display: table-cell; width: 30px; vertical-align: middle;">
+            {% if update.status == 'completed' %}
+            <div style="color: #38a169; font-size: 18px;">✅</div>
+            {% elif update.status == 'in_progress' %}
+            <div style="color: #ed8936; font-size: 18px;">⏳</div>
+            {% else %}
+            <div style="color: #e53e3e; font-size: 18px;">❌</div>
+            {% endif %}
+        </div>
+        <div style="display: table-cell; vertical-align: middle; padding-left: 15px;">
+            <div style="font-weight: 600; color: #2d3748; font-size: 14px;">{{ update.platform }}</div>
+            <div style="font-size: 12px; color: #718096;">{{ update.status_text }} • {{ update.updated_time }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if weekly_comparison %}
+<h3>📊 Weekly Comparison</h3>
+
+<div style="display: table; width: 100%; background-color: #f7fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
+    <div style="display: table-row;">
+        <div style="display: table-cell; padding: 10px; text-align: center; border-right: 1px solid #e2e8f0;">
+            <div style="font-size: 24px; font-weight: 700; color: {% if weekly_comparison.detections_change > 0 %}#e53e3e{% else %}#38a169{% endif %};">
+                {{ weekly_comparison.detections_change|floatformat:0 }}%
+            </div>
+            <div style="font-size: 12px; color: #718096; text-transform: uppercase;">
+                {% if weekly_comparison.detections_change > 0 %}↗ MORE{% else %}↘ FEWER{% endif %} DETECTIONS
+            </div>
+        </div>
+        <div style="display: table-cell; padding: 10px; text-align: center; border-right: 1px solid #e2e8f0;">
+            <div style="font-size: 24px; font-weight: 700; color: {% if weekly_comparison.takedowns_change > 0 %}#38a169{% else %}#e53e3e{% endif %};">
+                {{ weekly_comparison.takedowns_change|floatformat:0 }}%
+            </div>
+            <div style="font-size: 12px; color: #718096; text-transform: uppercase;">
+                {% if weekly_comparison.takedowns_change > 0 %}↗ MORE{% else %}↘ FEWER{% endif %} TAKEDOWNS
+            </div>
+        </div>
+        <div style="display: table-cell; padding: 10px; text-align: center;">
+            <div style="font-size: 24px; font-weight: 700; color: #667eea;">
+                {{ weekly_comparison.success_rate }}%
+            </div>
+            <div style="font-size: 12px; color: #718096; text-transform: uppercase;">SUCCESS RATE</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if recommendations %}
+<h3>💡 Personalized Recommendations</h3>
+
+<div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+    {% for recommendation in recommendations %}
+    <div style="margin-bottom: 15px; {% if not forloop.last %}border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;{% endif %}">
+        <div style="font-weight: 600; color: #2d3748; margin-bottom: 5px;">{{ recommendation.title }}</div>
+        <div style="color: #4a5568; font-size: 14px; margin-bottom: 8px;">{{ recommendation.description }}</div>
+        {% if recommendation.action_url %}
+        <a href="{{ recommendation.action_url }}" style="color: #667eea; font-size: 13px; text-decoration: none;">{{ recommendation.action_text }} →</a>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div style="margin: 40px 0; text-align: center;">
+    <a href="{{ dashboard_url }}" class="cta-button">View Full Dashboard</a>
+    <div style="margin-top: 20px;">
+        <a href="{{ reports_url }}" style="color: #667eea; text-decoration: none; margin: 0 15px;">📊 Detailed Reports</a>
+        <a href="{{ settings_url }}" style="color: #667eea; text-decoration: none; margin: 0 15px;">⚙️ Update Settings</a>
+    </div>
+</div>
+
+<div class="info-box">
+    <div class="title">🎯 Quick Actions</div>
+    <p>
+        • <a href="{{ bulk_review_url }}" style="color: #667eea;">Review all pending detections</a><br>
+        • <a href="{{ auto_takedown_settings_url }}" style="color: #667eea;">Configure auto-takedown settings</a><br>
+        • <a href="{{ add_content_url }}" style="color: #667eea;">Add more content to protect</a><br>
+        • <a href="{{ platform_settings_url }}" style="color: #667eea;">Manage platform monitoring</a>
+    </p>
+</div>
+
+{% if subscription_info %}
+<div style="margin-top: 30px; padding: 15px; background-color: #f7fafc; border-radius: 6px; font-size: 14px; color: #4a5568;">
+    <strong>{{ subscription_info.plan_name }} Plan</strong> • 
+    {{ subscription_info.scans_used }}/{{ subscription_info.scans_limit }} scans used this month
+    {% if subscription_info.usage_percentage > 80 %}
+    • <a href="{{ upgrade_url }}" style="color: #667eea;">Consider upgrading</a>
+    {% endif %}
+</div>
+{% endif %}
+
+<p style="margin-top: 30px; font-size: 14px; color: #718096;">
+    This report was automatically generated based on your monitoring preferences. 
+    <a href="{{ email_settings_url }}" style="color: #667eea;">Manage email preferences</a>
+</p>
+
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    @media only screen and (max-width: 600px) {
+        .stats-grid {
+            display: block !important;
+        }
+        
+        .stat-item {
+            display: block !important;
+            margin: 10px 0 !important;
+            padding: 15px !important;
+        }
+        
+        .detection-item, .takedown-item {
+            display: block !important;
+        }
+        
+        .detection-item div, .takedown-item div {
+            display: block !important;
+            width: 100% !important;
+            padding: 0 !important;
+            margin-bottom: 10px;
+        }
+    }
+</style>
+{% endblock %}

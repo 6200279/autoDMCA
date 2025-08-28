@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Badge } from 'primereact/badge';
@@ -18,8 +18,11 @@ import { Message } from 'primereact/message';
 import { Chip } from 'primereact/chip';
 import { Timeline } from 'primereact/timeline';
 import { Divider } from 'primereact/divider';
+import { ToggleButton } from 'primereact/togglebutton';
+import { Accordion, AccordionTab } from 'primereact/accordion';
 import { useDashboardRealtime } from '../../contexts/WebSocketContext';
 import { infringementApi, profileApi } from '../../services/api';
+import { automationService, SmartGrouping, ActionRequired } from '../../services/automationService';
 import './ContentProtectionWorkbench.enhanced.css';
 
 // Types for the unified workbench
@@ -91,6 +94,13 @@ const ContentProtectionWorkbench: React.FC = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [activeView, setActiveView] = useState('kanban');
+  const [smartGroupings, setSmartGroupings] = useState<SmartGrouping[]>([]);
+  const [actionRequiredItems, setActionRequiredItems] = useState<ActionRequired[]>([]);
+  const [hideActionNotRequired, setHideActionNotRequired] = useState(false);
+  const [userExperienceLevel, setUserExperienceLevel] = useState<'basic' | 'intermediate' | 'advanced'>('intermediate');
+  const [autoMoveAnimations, setAutoMoveAnimations] = useState<{ [taskId: string]: { fromLane: string; toLane: string } }>({});
+  const [dailyDigest, setDailyDigest] = useState<string>('');
+  const [showSmartGrouping, setShowSmartGrouping] = useState(true);
   const toast = useRef<Toast>(null);
   
   // Real-time updates
@@ -130,7 +140,7 @@ const ContentProtectionWorkbench: React.FC = () => {
     return score;
   };
 
-  // AI-powered task prioritization
+  // AI-powered task prioritization with action-required filtering
   const prioritizedTasks = useMemo(() => {
     return tasks
       .filter(task => {
@@ -139,17 +149,37 @@ const ContentProtectionWorkbench: React.FC = () => {
         if (filters.priority.length > 0 && !filters.priority.includes(task.priority)) return false;
         if (filters.platform.length > 0 && !filters.platform.includes(task.platform)) return false;
         if (task.confidence < filters.confidence[0] || task.confidence > filters.confidence[1]) return false;
+        
+        // Action required filter
+        if (hideActionNotRequired) {
+          const requiresAction = (
+            task.type === 'new_detection' || 
+            task.priority === 'critical' || 
+            task.suggestedAction === 'manual_review' ||
+            (task.takedownRequest?.expectedResponseDate && 
+             new Date(task.takedownRequest.expectedResponseDate).getTime() - Date.now() < 24 * 60 * 60 * 1000)
+          );
+          if (!requiresAction) return false;
+        }
+        
         return true;
       })
       .sort((a, b) => {
-        // AI prioritization algorithm
+        // AI prioritization algorithm with auto-move animation priority
+        const aHasAnimation = autoMoveAnimations[a.id];
+        const bHasAnimation = autoMoveAnimations[b.id];
+        
+        // Prioritize animated tasks
+        if (aHasAnimation && !bHasAnimation) return -1;
+        if (!aHasAnimation && bHasAnimation) return 1;
+        
         const aPriorityScore = calculatePriorityScore(a);
         const bPriorityScore = calculatePriorityScore(b);
         return bPriorityScore - aPriorityScore;
       });
-  }, [tasks, searchTerm, filters]);
+  }, [tasks, searchTerm, filters, hideActionNotRequired, autoMoveAnimations]);
 
-  // Enhanced Task Card Component
+  // Enhanced Task Card Component with Auto-Move Animation
   const EnhancedTaskCard: React.FC<{
     task: WorkbenchTask;
     selected: boolean;
@@ -170,9 +200,11 @@ const ContentProtectionWorkbench: React.FC = () => {
       return `${Math.floor(hours / 24)} days ago`;
     };
 
+    const isAutoMoving = autoMoveAnimations[task.id];
+    
     return (
       <div 
-        className={`task-card ${selected ? 'selected' : ''}`}
+        className={`task-card ${selected ? 'selected' : ''} ${isAutoMoving ? 'auto-moving' : ''}`}
         role="listitem"
         tabIndex={0}
         onClick={() => onSelect(task.id, !selected)}
@@ -182,8 +214,25 @@ const ContentProtectionWorkbench: React.FC = () => {
             onSelect(task.id, !selected);
           }
         }}
+        style={isAutoMoving ? {
+          animation: 'task-auto-move 2s ease-in-out',
+          border: '2px solid var(--color-info-500)',
+          boxShadow: '0 0 20px rgba(14, 165, 233, 0.3)'
+        } : {}}
       >
         <div className={`task-priority-indicator ${task.priority}`} aria-hidden="true" />
+        
+        {/* Auto-move notification */}
+        {isAutoMoving && (
+          <div className="auto-move-notification">
+            <div className="flex align-items-center gap-2 p-2 bg-blue-50 border-round mb-2">
+              <i className="pi pi-arrow-right text-blue-600" />
+              <span className="text-xs text-blue-700">
+                AI moved from {isAutoMoving.fromLane.replace('_', ' ')} to {isAutoMoving.toLane.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+        )}
         
         <div className="task-header">
           <Checkbox
@@ -302,10 +351,49 @@ const ContentProtectionWorkbench: React.FC = () => {
     ];
   }, [prioritizedTasks]);
 
-  // Load initial data
+  // Load initial data and initialize automation
   useEffect(() => {
     loadWorkbenchData();
+    automationService.loadConfig();
+    
+    // Set user experience level from localStorage
+    const savedExperience = localStorage.getItem('userExperienceLevel');
+    if (savedExperience) {
+      setUserExperienceLevel(savedExperience as any);
+    }
   }, []);
+
+  // Auto-move tasks and update groupings
+  useEffect(() => {
+    if (tasks.length > 0) {
+      const autoMovedTasks = automationService.autoMoveTasks(tasks);
+      const groupings = automationService.findSmartGroupings(autoMovedTasks);
+      const actionItems = automationService.getActionRequiredItems(autoMovedTasks);
+      const digest = automationService.getDailyDigest(autoMovedTasks);
+      
+      // Track auto-moves for animations
+      const movements: typeof autoMoveAnimations = {};
+      autoMovedTasks.forEach((task, index) => {
+        if (task.type !== tasks[index]?.type) {
+          movements[task.id] = {
+            fromLane: tasks[index]?.type || 'new_detection',
+            toLane: task.type
+          };
+        }
+      });
+      
+      setTasks(autoMovedTasks);
+      setSmartGroupings(groupings);
+      setActionRequiredItems(actionItems);
+      setDailyDigest(digest);
+      setAutoMoveAnimations(movements);
+      
+      // Clear animations after delay
+      if (Object.keys(movements).length > 0) {
+        setTimeout(() => setAutoMoveAnimations({}), 3000);
+      }
+    }
+  }, [tasks.length]); // Only when tasks change count, not on every update
 
   const loadWorkbenchData = async () => {
     try {
@@ -434,9 +522,70 @@ const ContentProtectionWorkbench: React.FC = () => {
     return icons[platform.toLowerCase()] || 'pi pi-globe';
   };
 
+  // Select all high-confidence tasks
+  const handleSelectHighConfidence = useCallback(() => {
+    const highConfidenceTasks = tasks.filter(task => task.confidence > 90).map(task => task.id);
+    setSelectedTasks(highConfidenceTasks);
+    
+    toast.current?.show({
+      severity: 'info',
+      summary: 'High Confidence Selected',
+      detail: `${highConfidenceTasks.length} tasks with >90% confidence selected`,
+      life: 3000
+    });
+  }, [tasks]);
+
+  // Handle smart grouping selection
+  const handleSelectSmartGroup = useCallback((grouping: SmartGrouping) => {
+    setSelectedTasks(grouping.taskIds);
+    
+    toast.current?.show({
+      severity: 'info',
+      summary: 'Smart Group Selected',
+      detail: grouping.reason,
+      life: 3000
+    });
+  }, []);
+
+  // Progressive disclosure controls
+  const getVisibleFeatures = useCallback(() => {
+    switch (userExperienceLevel) {
+      case 'basic':
+        return {
+          showAdvancedFilters: false,
+          showBatchActions: true,
+          showSmartGrouping: true,
+          showAutomationSettings: false,
+          maxGroupingSuggestions: 2
+        };
+      case 'intermediate':
+        return {
+          showAdvancedFilters: true,
+          showBatchActions: true,
+          showSmartGrouping: true,
+          showAutomationSettings: false,
+          maxGroupingSuggestions: 3
+        };
+      case 'advanced':
+        return {
+          showAdvancedFilters: true,
+          showBatchActions: true,
+          showSmartGrouping: true,
+          showAutomationSettings: true,
+          maxGroupingSuggestions: 5
+        };
+    }
+  }, [userExperienceLevel]);
+
   // Action handlers
   const handleTaskAction = async (taskId: string, action: string) => {
     try {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        // Learn from user action
+        automationService.learnFromAction(task, action);
+      }
+
       // Implementation for task actions
       toast.current?.show({
         severity: 'success',
@@ -650,62 +799,157 @@ const ContentProtectionWorkbench: React.FC = () => {
       <Toast ref={toast} />
       <ConfirmDialog />
       
-      {/* Header Section */}
+      {/* Header Section with Daily Digest */}
       <div className="workbench-header">
-        <h1 className="workbench-title">Content Protection Workbench</h1>
-        <p className="workbench-subtitle">
-          AI-powered unified workflow for efficient content protection management
-        </p>
+        <div className="flex align-items-start justify-content-between">
+          <div>
+            <h1 className="workbench-title">Content Protection Workbench</h1>
+            <p className="workbench-subtitle">
+              AI-powered unified workflow for efficient content protection management
+            </p>
+          </div>
+          <div className="experience-level-selector">
+            <Dropdown
+              value={userExperienceLevel}
+              options={[
+                { label: 'Basic', value: 'basic', icon: 'pi pi-user' },
+                { label: 'Intermediate', value: 'intermediate', icon: 'pi pi-cog' },
+                { label: 'Advanced', value: 'advanced', icon: 'pi pi-wrench' }
+              ]}
+              onChange={(e) => {
+                setUserExperienceLevel(e.value);
+                localStorage.setItem('userExperienceLevel', e.value);
+              }}
+              itemTemplate={(option) => (
+                <div className="flex align-items-center gap-2">
+                  <i className={option.icon} />
+                  <span>{option.label}</span>
+                </div>
+              )}
+              placeholder="Experience Level"
+            />
+          </div>
+        </div>
+        
+        {/* Daily Digest */}
+        {dailyDigest && (
+          <div className="daily-digest mt-4">
+            <Card className="border-left-3 border-primary-500">
+              <div className="flex align-items-start gap-3">
+                <i className="pi pi-calendar-plus text-primary-600 text-xl mt-1" />
+                <div>
+                  <h4 className="m-0 mb-2 text-primary-700">Today's Summary</h4>
+                  <div className="white-space-pre-line text-600" style={{ fontSize: '0.9rem' }}>
+                    {dailyDigest}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
 
-      {/* Smart Batch Suggestions */}
-      {getBatchSuggestions().length > 0 && (
-        <div className="smart-suggestions mb-4">
-          <Card className="border-left-3 border-blue-500">
-            <div className="flex align-items-center gap-2 mb-3">
-              <i className="pi pi-lightbulb text-blue-500 text-xl" />
-              <div>
-                <div className="font-semibold text-blue-700">AI Batch Suggestions</div>
-                <div className="text-600 text-sm">Optimize your workflow with these smart recommendations</div>
-              </div>
-            </div>
-            
-            <div className="grid">
-              {getBatchSuggestions().slice(0, 3).map((suggestion, index) => (
-                <div key={index} className="col-12 md:col-4">
-                  <Card className="h-full border-1 border-blue-200 bg-blue-50">
-                    <div className="flex align-items-start gap-2">
-                      <div className="flex-1">
-                        <div className="flex align-items-center gap-2 mb-2">
-                          <Tag 
-                            value={`${suggestion.confidence}% confidence`} 
-                            severity="info" 
-                            icon="pi pi-chart-line"
-                          />
-                          <Badge value={suggestion.taskIds.length} />
-                        </div>
-                        <div className="text-sm line-height-3 mb-3">
-                          {suggestion.reason}
-                        </div>
-                        <Button
-                          label={`${suggestion.action === 'approve' ? 'Approve' : suggestion.action === 'reject' ? 'Reject' : 'Process'} All`}
-                          icon={`pi pi-${suggestion.action === 'approve' ? 'check' : suggestion.action === 'reject' ? 'times' : 'send'}`}
-                          size="small"
-                          className="w-full"
-                          severity={suggestion.action === 'approve' ? 'success' : suggestion.action === 'reject' ? 'secondary' : 'warning'}
-                          onClick={() => handleBatchAction(suggestion.taskIds, suggestion.action)}
-                        />
-                      </div>
-                    </div>
-                  </Card>
+      {/* Enhanced Smart Grouping Panel */}
+      {showSmartGrouping && smartGroupings.length > 0 && getVisibleFeatures().showSmartGrouping && (
+        <div className="smart-grouping-panel mb-4">
+          <Accordion activeIndex={0}>
+            <AccordionTab 
+              header={
+                <div className="flex align-items-center gap-2">
+                  <i className="pi pi-brain text-primary-500" />
+                  <span className="font-semibold">AI Smart Grouping Suggestions</span>
+                  <Badge value={smartGroupings.length} />
                 </div>
-              ))}
-            </div>
-          </Card>
+              }
+            >
+              <div className="grid">
+                {smartGroupings.slice(0, getVisibleFeatures().maxGroupingSuggestions).map((grouping, index) => (
+                  <div key={grouping.id} className="col-12 md:col-6 xl:col-4">
+                    <Card 
+                      className={`smart-grouping-card h-full cursor-pointer transition-all duration-200 ${
+                        selectedTasks.some(id => grouping.taskIds.includes(id)) ? 'border-primary-500 bg-primary-50' : 'border-200 hover:border-primary-300'
+                      }`}
+                      onClick={() => handleSelectSmartGroup(grouping)}
+                    >
+                      <div className="flex align-items-start gap-3">
+                        <div className="flex-shrink-0">
+                          <div className="w-3rem h-3rem bg-primary-100 border-round flex align-items-center justify-content-center">
+                            <i className={`pi pi-${grouping.suggestedAction === 'batch_takedown' ? 'send' : 'sitemap'} text-primary-600 text-lg`} />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex align-items-center gap-2 mb-2">
+                            <Tag 
+                              value={`${grouping.confidence}% confidence`} 
+                              severity="success"
+                              icon="pi pi-chart-line"
+                            />
+                            <Badge value={`${grouping.taskIds.length} tasks`} severity="info" />
+                          </div>
+                          <div className="text-sm line-height-3 mb-3 text-700">
+                            {grouping.reason}
+                          </div>
+                          
+                          {/* Common attributes */}
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {grouping.commonAttributes.platform && (
+                              <Chip label={grouping.commonAttributes.platform} className="p-chip-sm" />
+                            )}
+                            {grouping.commonAttributes.profile && (
+                              <Chip label={grouping.commonAttributes.profile} className="p-chip-sm" />
+                            )}
+                            {grouping.commonAttributes.contentType && (
+                              <Chip label={grouping.commonAttributes.contentType} className="p-chip-sm" />
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button
+                              label="Select Group"
+                              icon="pi pi-check"
+                              size="small"
+                              className="flex-1"
+                              severity="info"
+                              outlined
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSelectSmartGroup(grouping);
+                              }}
+                            />
+                            <Button
+                              label="Process"
+                              icon="pi pi-cog"
+                              size="small"
+                              severity="success"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleBatchAction(grouping.taskIds, grouping.suggestedAction);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                ))}
+              </div>
+              
+              {smartGroupings.length > getVisibleFeatures().maxGroupingSuggestions && (
+                <div className="text-center mt-3">
+                  <Button
+                    label={`Show ${smartGroupings.length - getVisibleFeatures().maxGroupingSuggestions} More Suggestions`}
+                    icon="pi pi-angle-down"
+                    link
+                    onClick={() => setShowSmartGrouping(false)}
+                  />
+                </div>
+              )}
+            </AccordionTab>
+          </Accordion>
         </div>
       )}
 
-      {/* Workbench Controls */}
+      {/* Enhanced Workbench Controls */}
       <div className="workbench-controls mb-4">
         <div className="workbench-toolbar">
           <div className="toolbar-row">
@@ -734,6 +978,75 @@ const ContentProtectionWorkbench: React.FC = () => {
                   <span>{option.label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+          
+          {/* Automation Controls Row */}
+          <div className="toolbar-row">
+            <div className="automation-controls flex align-items-center gap-4 flex-wrap">
+              {/* Quick Action Buttons */}
+              <div className="quick-actions-group">
+                <Button
+                  label="Select All High-Confidence"
+                  icon="pi pi-star"
+                  size="small"
+                  severity="success"
+                  outlined
+                  onClick={handleSelectHighConfidence}
+                  disabled={tasks.filter(t => t.confidence > 90).length === 0}
+                />
+                
+                {selectedTasks.length > 0 && (
+                  <Button
+                    label={`Process ${selectedTasks.length} Selected`}
+                    icon="pi pi-cog"
+                    size="small"
+                    severity="info"
+                    className="ml-2"
+                    onClick={() => {
+                      // Determine best action for selected tasks
+                      const selectedTasksData = tasks.filter(t => selectedTasks.includes(t.id));
+                      const highConfidence = selectedTasksData.filter(t => t.confidence > 90);
+                      const action = highConfidence.length > selectedTasksData.length / 2 ? 'approve' : 'review';
+                      handleBatchAction(selectedTasks, action);
+                    }}
+                  />
+                )}
+              </div>
+              
+              {/* Action Required Filter */}
+              <div className="filter-controls">
+                <ToggleButton
+                  checked={hideActionNotRequired}
+                  onChange={(e) => setHideActionNotRequired(e.value)}
+                  onLabel="Show Action Required Only"
+                  offLabel="Show All Tasks"
+                  onIcon="pi pi-filter"
+                  offIcon="pi pi-list"
+                  className="p-button-sm"
+                />
+              </div>
+              
+              {/* Progressive Disclosure Toggle */}
+              {getVisibleFeatures().showAutomationSettings && (
+                <div className="automation-settings">
+                  <Button
+                    icon="pi pi-cog"
+                    label="Automation Settings"
+                    size="small"
+                    text
+                    onClick={() => {
+                      // Open automation settings modal (would implement separately)
+                      toast.current?.show({
+                        severity: 'info',
+                        summary: 'Automation Settings',
+                        detail: 'Advanced automation settings coming soon',
+                        life: 3000
+                      });
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

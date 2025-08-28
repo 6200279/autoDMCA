@@ -1,0 +1,355 @@
+/* SmartOnboarding Styles */
+.smart-onboarding {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.onboarding-header h2 {
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+/* Progress Section */
+.progress-section .p-progressbar {
+  border-radius: 10px;
+  height: 8px;
+}
+
+.step-indicators {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.step-indicator.active {
+  opacity: 1;
+  color: var(--primary-color);
+}
+
+.step-indicator i {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.step-indicator span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Industry Selection */
+.industry-selection {
+  text-align: center;
+}
+
+.industry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.industry-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.industry-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.industry-card.selected {
+  border-color: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color-text) 0%, rgba(var(--primary-color-rgb), 0.1) 100%);
+}
+
+.industry-icon {
+  font-size: 3rem;
+  color: var(--primary-color);
+  margin-bottom: 1rem;
+}
+
+.industry-card h4 {
+  margin: 1rem 0 0.5rem 0;
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.industry-card p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.preset-preview {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* Content Analysis */
+.content-analysis .upload-section {
+  margin-bottom: 1.5rem;
+}
+
+.upload-section .p-fileupload {
+  border: 2px dashed var(--surface-border);
+  border-radius: 12px;
+  background: var(--surface-ground);
+}
+
+.uploaded-files h5 {
+  color: var(--text-color);
+  margin-bottom: 1rem;
+}
+
+.file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.analysis-progress {
+  background: linear-gradient(135deg, var(--blue-50) 0%, var(--blue-100) 100%);
+  border: none;
+}
+
+.analysis-results {
+  background: var(--surface-card);
+  border-left: 4px solid var(--green-500);
+}
+
+.analysis-metric {
+  margin-bottom: 1rem;
+}
+
+.analysis-metric label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-color-secondary);
+}
+
+.keyword-chips,
+.platform-chips,
+.value-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.social-handles-section {
+  background: var(--surface-card);
+}
+
+.social-handles-section label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--text-color-secondary);
+}
+
+/* Configuration Preview */
+.configuration-preview .p-tabview-nav {
+  background: var(--surface-card);
+  border-radius: 8px 8px 0 0;
+}
+
+.config-section {
+  padding: 1rem 0;
+}
+
+.config-section h5 {
+  color: var(--text-color);
+  margin-bottom: 1rem;
+  font-weight: 600;
+}
+
+.social-accounts {
+  background: var(--surface-ground);
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.social-account-item {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.social-account-item:last-child {
+  border-bottom: none;
+}
+
+.customization-panel {
+  background: var(--surface-ground);
+  border-left: 4px solid var(--orange-500);
+}
+
+/* Final Setup */
+.final-setup .setup-summary {
+  background: linear-gradient(135deg, var(--green-50) 0%, var(--green-100) 100%);
+  border: none;
+}
+
+.summary-stat {
+  text-align: center;
+  padding: 1rem;
+}
+
+.stat-number {
+  display: block;
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-color-secondary);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.activation-options {
+  margin-top: 2rem;
+}
+
+/* Navigation */
+.onboarding-navigation {
+  padding-top: 2rem;
+}
+
+/* Content Cards */
+.onboarding-content {
+  background: var(--surface-card);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  min-height: 600px;
+  padding: 2rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .smart-onboarding {
+    padding: 1rem;
+  }
+  
+  .industry-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .industry-card {
+    min-height: 150px;
+  }
+  
+  .step-indicators {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .step-indicator {
+    flex: 0 1 calc(50% - 0.5rem);
+  }
+  
+  .onboarding-content {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .industry-icon {
+    font-size: 2.5rem;
+  }
+  
+  .industry-card h4 {
+    font-size: 1rem;
+  }
+  
+  .stat-number {
+    font-size: 1.5rem;
+  }
+  
+  .step-indicator {
+    flex: 0 1 100%;
+  }
+  
+  .step-indicator span {
+    font-size: 0.75rem;
+  }
+}
+
+/* Animation enhancements */
+.industry-card,
+.analysis-results,
+.customization-panel {
+  animation: slideInUp 0.5s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading states */
+.analysis-progress .p-progressbar-indeterminate .p-progressbar-value {
+  background: linear-gradient(45deg, var(--primary-color), var(--blue-400));
+}
+
+/* Interactive elements */
+.industry-card:focus,
+.p-button:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Success states */
+.p-chip.success {
+  background: var(--green-100);
+  color: var(--green-900);
+}
+
+.p-tag.p-tag-success {
+  background: var(--green-500);
+  color: white;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .industry-card.selected {
+    background: linear-gradient(135deg, rgba(var(--primary-color-rgb), 0.2) 0%, rgba(var(--primary-color-rgb), 0.05) 100%);
+  }
+  
+  .analysis-progress {
+    background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-800) 100%);
+  }
+  
+  .setup-summary {
+    background: linear-gradient(135deg, var(--green-900) 0%, var(--green-800) 100%);
+  }
+}

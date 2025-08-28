@@ -1,0 +1,206 @@
+{% extends "email/base.html" %}
+
+{% block title %}Subscription Confirmed - {{ plan_name }}{% endblock %}
+
+{% block header_title %}🎉 Subscription Confirmed!{% endblock %}
+{% block header_subtitle %}{{ plan_name }} Plan • {{ user_name }}{% endblock %}
+
+{% block content %}
+<h2>Congratulations {{ user_name }}!</h2>
+
+<p>Your <strong>{{ plan_name }}</strong> subscription has been successfully activated. You now have access to all the premium features for protecting your content!</p>
+
+<div class="info-box success">
+    <div class="title">💳 Billing Details</div>
+    <p><strong>Plan:</strong> {{ plan_name }}</p>
+    <p><strong>Amount:</strong> ${{ billing_amount }}/{{ billing_interval }}</p>
+    <p><strong>Next billing date:</strong> {{ next_billing_date }}</p>
+    {% if promo_applied %}
+    <p><strong>Promotion:</strong> {{ promo_description }} ({{ promo_discount }}% off)</p>
+    {% endif %}
+</div>
+
+<h3>🚀 What's included in your {{ plan_name }} plan:</h3>
+
+<div style="background-color: #f8f9fa; border-radius: 8px; padding: 25px; margin: 25px 0;">
+    {% for feature in plan_features %}
+    <div style="display: table; width: 100%; margin-bottom: 15px;">
+        <div style="display: table-cell; width: 30px; vertical-align: top;">
+            <div style="color: #38a169; font-size: 18px; font-weight: 700;">✓</div>
+        </div>
+        <div style="display: table-cell; vertical-align: top; padding-left: 10px;">
+            <div style="font-weight: 600; color: #2d3748; margin-bottom: 3px;">{{ feature.title }}</div>
+            {% if feature.description %}
+            <div style="color: #4a5568; font-size: 14px;">{{ feature.description }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if plan_name == "Professional" %}
+<div class="info-box">
+    <div class="title">⭐ Professional Plan Benefits</div>
+    <p>As a Professional subscriber, you get:</p>
+    <ul style="margin: 10px 0; padding-left: 20px;">
+        <li>Priority support with dedicated account manager</li>
+        <li>Advanced AI detection algorithms</li>
+        <li>Bulk content upload and management</li>
+        <li>API access for integration</li>
+        <li>Custom takedown templates</li>
+        <li>Advanced analytics and reporting</li>
+    </ul>
+</div>
+{% endif %}
+
+<div class="stats-grid">
+    <div class="stat-item">
+        <div class="stat-number">{{ monthly_scan_limit }}</div>
+        <div class="stat-label">Scans per Month</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ max_protected_items }}</div>
+        <div class="stat-label">Protected Items</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ platforms_monitored }}</div>
+        <div class="stat-label">Platforms Monitored</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">24/7</div>
+        <div class="stat-label">Monitoring</div>
+    </div>
+</div>
+
+<div class="cta-center">
+    <a href="{{ dashboard_url }}" class="cta-button">Access Your Dashboard</a>
+</div>
+
+<h3>🎯 Next Steps</h3>
+
+<div style="background-color: #f0f8ff; border-radius: 8px; padding: 20px; margin: 20px 0;">
+    <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: #2d3748; margin-bottom: 8px;">1. 📤 Upload your content</div>
+        <p style="margin: 0; color: #4a5568; font-size: 14px;">Start protecting your photos, videos, and other media by uploading them to your account.</p>
+        <a href="{{ upload_content_url }}" style="color: #667eea; font-size: 13px;">Upload content →</a>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: #2d3748; margin-bottom: 8px;">2. ⚙️ Configure auto-takedown</div>
+        <p style="margin: 0; color: #4a5568; font-size: 14px;">Enable automatic DMCA takedowns for faster content protection.</p>
+        <a href="{{ auto_takedown_settings_url }}" style="color: #667eea; font-size: 13px;">Configure settings →</a>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: #2d3748; margin-bottom: 8px;">3. 🎯 Select platforms to monitor</div>
+        <p style="margin: 0; color: #4a5568; font-size: 14px;">Choose which platforms you want us to monitor for infringement.</p>
+        <a href="{{ platform_settings_url }}" style="color: #667eea; font-size: 13px;">Manage platforms →</a>
+    </div>
+    
+    {% if plan_name == "Professional" %}
+    <div>
+        <div style="font-weight: 600; color: #2d3748; margin-bottom: 8px;">4. 🔧 Explore advanced features</div>
+        <p style="margin: 0; color: #4a5568; font-size: 14px;">Discover API access, bulk operations, and advanced analytics.</p>
+        <a href="{{ advanced_features_url }}" style="color: #667eea; font-size: 13px;">View features →</a>
+    </div>
+    {% endif %}
+</div>
+
+{% if onboarding_bonus %}
+<div class="info-box success">
+    <div class="title">🎁 Welcome Bonus!</div>
+    <p>As a thank you for subscribing, we've added <strong>{{ onboarding_bonus.extra_scans }} bonus scans</strong> to your account and enabled <strong>{{ onboarding_bonus.free_trial_days }} days of premium monitoring</strong> at no extra cost!</p>
+</div>
+{% endif %}
+
+<h3>💬 Need help getting started?</h3>
+
+<div style="display: table; width: 100%; margin: 20px 0;">
+    <div style="display: table-cell; width: 50%; padding: 15px; vertical-align: top;">
+        <div style="background-color: #f7fafc; border-radius: 8px; padding: 20px; height: 100%;">
+            <div style="font-weight: 600; color: #2d3748; margin-bottom: 10px;">📚 Resources</div>
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #4a5568;">
+                <a href="{{ help_center_url }}" style="color: #667eea;">Help Center</a><br>
+                <a href="{{ video_tutorials_url }}" style="color: #667eea;">Video Tutorials</a><br>
+                <a href="{{ faq_url }}" style="color: #667eea;">FAQ</a>
+            </p>
+        </div>
+    </div>
+    <div style="display: table-cell; width: 50%; padding: 15px; vertical-align: top;">
+        <div style="background-color: #f7fafc; border-radius: 8px; padding: 20px; height: 100%;">
+            <div style="font-weight: 600; color: #2d3748; margin-bottom: 10px;">💬 Support</div>
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #4a5568;">
+                Email: <a href="mailto:{{ support_email }}" style="color: #667eea;">{{ support_email }}</a><br>
+                Chat: Available 24/7 in dashboard<br>
+                Phone: {{ support_phone }}
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="info-box">
+    <div class="title">🔒 Billing & Security</div>
+    <p>Your subscription is secure and can be managed anytime through your account dashboard. All billing is handled securely through Stripe.</p>
+    <p><a href="{{ billing_portal_url }}" style="color: #667eea;">Manage subscription</a> • <a href="{{ download_invoice_url }}" style="color: #667eea;">Download invoice</a></p>
+</div>
+
+<div style="text-align: center; margin: 40px 0;">
+    <p style="color: #4a5568; font-size: 16px; margin-bottom: 20px;">Ready to protect your content?</p>
+    <a href="{{ get_started_url }}" class="cta-button">Get Started Now</a>
+</div>
+
+<p style="margin-top: 30px;">Thank you for choosing AutoDMCA to protect your valuable content. We're here to ensure your creative work is safe and you get the recognition and revenue you deserve!</p>
+
+<p style="color: #667eea; font-weight: 600;">Welcome to premium protection!</p>
+<p style="margin: 5px 0;">The AutoDMCA Team</p>
+
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .feature-checkmark {
+        color: #38a169;
+        font-size: 18px;
+        font-weight: 700;
+        margin-right: 10px;
+    }
+    
+    .feature-grid {
+        display: table;
+        width: 100%;
+        margin: 20px 0;
+    }
+    
+    .feature-item {
+        display: table-row;
+        margin-bottom: 15px;
+    }
+    
+    .feature-check, .feature-content {
+        display: table-cell;
+        vertical-align: top;
+    }
+    
+    .feature-check {
+        width: 30px;
+        padding-right: 10px;
+    }
+    
+    @media only screen and (max-width: 600px) {
+        .feature-grid, .help-grid {
+            display: block !important;
+        }
+        
+        .feature-item, .help-item {
+            display: block !important;
+            margin-bottom: 20px;
+        }
+        
+        .feature-check, .feature-content, .help-content {
+            display: block !important;
+            width: 100% !important;
+            padding: 0 !important;
+        }
+    }
+</style>
+{% endblock %}

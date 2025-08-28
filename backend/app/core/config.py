@@ -110,6 +110,37 @@ class Settings:
         self.DATABASE_MAX_RETRIES = int(os.getenv("DATABASE_MAX_RETRIES", "3"))
         self.DATABASE_RETRY_DELAY = int(os.getenv("DATABASE_RETRY_DELAY", "5"))
         
+        # SendGrid Configuration
+        self.SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+        self.SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
+        self.SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME")
+        
+        # SendGrid Template IDs
+        self.SENDGRID_DMCA_TEMPLATE_ID = os.getenv("SENDGRID_DMCA_TEMPLATE_ID")
+        self.SENDGRID_ALERT_TEMPLATE_ID = os.getenv("SENDGRID_ALERT_TEMPLATE_ID") 
+        self.SENDGRID_WELCOME_TEMPLATE_ID = os.getenv("SENDGRID_WELCOME_TEMPLATE_ID")
+        self.SENDGRID_VERIFICATION_TEMPLATE_ID = os.getenv("SENDGRID_VERIFICATION_TEMPLATE_ID")
+        self.SENDGRID_PASSWORD_RESET_TEMPLATE_ID = os.getenv("SENDGRID_PASSWORD_RESET_TEMPLATE_ID")
+        self.SENDGRID_SUBSCRIPTION_TEMPLATE_ID = os.getenv("SENDGRID_SUBSCRIPTION_TEMPLATE_ID")
+        self.SENDGRID_BILLING_REMINDER_TEMPLATE_ID = os.getenv("SENDGRID_BILLING_REMINDER_TEMPLATE_ID")
+        
+        # Google Vision API Configuration
+        self.GOOGLE_VISION_API_KEY = os.getenv("GOOGLE_VISION_API_KEY")
+        self.GOOGLE_VISION_CREDENTIALS_PATH = os.getenv("GOOGLE_VISION_CREDENTIALS_PATH")
+        self.GOOGLE_VISION_CREDENTIALS_JSON = os.getenv("GOOGLE_VISION_CREDENTIALS_JSON")
+        
+        # PayPal Configuration
+        self.PAYPAL_CLIENT_ID = os.getenv("PAYPAL_CLIENT_ID")
+        self.PAYPAL_CLIENT_SECRET = os.getenv("PAYPAL_CLIENT_SECRET")
+        self.PAYPAL_WEBHOOK_ID = os.getenv("PAYPAL_WEBHOOK_ID")
+        self.PAYPAL_ENVIRONMENT = os.getenv("PAYPAL_ENVIRONMENT", "sandbox")  # 'sandbox' or 'live'
+        
+        # Frontend URL for redirects
+        self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        
+        # Support Configuration
+        self.SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@autodmca.com")
+        
         # Development
         self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 

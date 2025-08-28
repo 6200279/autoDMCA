@@ -377,40 +377,86 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
     { label: 'Category', value: 'category_asc' }
   ];
 
+  const renderBreadcrumb = () => {
+    return (
+      <div className="template-breadcrumb-section">
+        <nav className="template-breadcrumb" aria-label="Breadcrumb navigation">
+          <div className="breadcrumb-list">
+            <Button
+              icon="pi pi-home"
+              className="p-button-text breadcrumb-home"
+              onClick={() => window.location.href = '/'}
+              tooltip="Go to Dashboard"
+              aria-label="Navigate to Dashboard"
+            />
+            <i className="pi pi-chevron-right breadcrumb-separator"></i>
+            <span className="breadcrumb-current">
+              <i className="pi pi-file-text"></i>
+              Template Library
+            </span>
+          </div>
+        </nav>
+      </div>
+    );
+  };
+
   const renderSearchBar = () => (
     <div className="template-search-section" id="search-section">
       <div className="search-bar-container">
-        <span className="p-input-icon-left p-input-icon-right search-input">
-          <i className="pi pi-search" />
-          <AutoComplete
-            value={filters.search}
-            suggestions={searchSuggestions}
-            completeMethod={() => {}}
-            onChange={(e) => handleSearchChange(e.value)}
-            onSelect={(e) => handleSearchChange(e.value)}
-            placeholder="Search templates, categories, or tags..."
-            className="w-full"
-            inputClassName="search-input-field"
-            panelClassName="search-suggestions"
-            aria-label="Search templates"
-            role="searchbox"
-          />
-          {filters.search && (
-            <i 
-              className="pi pi-times cursor-pointer" 
-              onClick={() => handleSearchChange('')}
-              role="button"
-              tabIndex={0}
-              aria-label="Clear search"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleSearchChange('');
-                }
-              }}
+        <div className="search-header">
+          <h2 className="search-title">Find Your Perfect Template</h2>
+          <p className="search-subtitle">Search through {totalRecords} professional DMCA templates</p>
+        </div>
+        <div className="search-input-wrapper">
+          <span className="p-input-icon-left p-input-icon-right search-input">
+            <i className="pi pi-search search-icon" />
+            <AutoComplete
+              value={filters.search}
+              suggestions={searchSuggestions}
+              completeMethod={() => {}}
+              onChange={(e) => handleSearchChange(e.value)}
+              onSelect={(e) => handleSearchChange(e.value)}
+              placeholder="Search by name, category, or keywords..."
+              className="w-full"
+              inputClassName="search-input-field"
+              panelClassName="search-suggestions"
+              aria-label="Search templates"
+              role="searchbox"
             />
+            {filters.search && (
+              <i 
+                className="pi pi-times search-clear" 
+                onClick={() => handleSearchChange('')}
+                role="button"
+                tabIndex={0}
+                aria-label="Clear search"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSearchChange('');
+                  }
+                }}
+              />
+            )}
+          </span>
+          
+          {/* Quick Search Tags */}
+          {!filters.search && (
+            <div className="quick-search-tags">
+              <span className="quick-search-label">Quick search:</span>
+              <div className="quick-search-items">
+                {['Copyright', 'Takedown', 'DMCA Notice', 'Content Removal'].map((tag, index) => (
+                  <Chip
+                    key={index}
+                    label={tag}
+                    className="quick-search-chip"
+                    onClick={() => handleSearchChange(tag)}
+                  />
+                ))}
+              </div>
+            </div>
           )}
-        </span>
+        </div>
         
         {/* Search History */}
         {searchHistory.length > 0 && !filters.search && (
@@ -435,78 +481,123 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
   const renderFilters = () => (
     <EnhancedCard className="filters-card" variant="outlined" id="filters-section">
       <div className="filters-header">
-        <h3 className="filters-title">Filters</h3>
+        <div className="filters-title-section">
+          <h3 className="filters-title">
+            <i className="pi pi-filter filters-icon"></i>
+            Filter Templates
+          </h3>
+          <p className="filters-subtitle">Narrow down your search</p>
+        </div>
         <Button
-          label="Clear All"
-          icon="pi pi-times"
-          className="p-button-text p-button-sm"
+          label="Reset"
+          icon="pi pi-refresh"
+          className="p-button-text p-button-sm clear-filters-btn"
           onClick={clearAllFilters}
           disabled={Object.values(filters).every(v => !v || (Array.isArray(v) && v.length === 0))}
+          tooltip="Clear all filters"
         />
       </div>
       
-      <div className="filters-grid">
-        <div className="filter-group">
-          <label>Category</label>
-          <Dropdown
-            value={filters.category}
-            onChange={(e) => handleFilterChange('category', e.value)}
-            options={[
-              { label: 'All Categories', value: '' },
-              ...categories.map(cat => ({ 
-                label: `${cat.name} (${cat.template_count})`, 
-                value: cat.name 
-              }))
-            ]}
-            placeholder="Select category"
-            className="w-full"
-            showClear
-          />
+      <div className="filters-content">
+        <div className="filters-grid">
+          <div className="filter-group enhanced">
+            <label className="filter-label">
+              <i className="pi pi-tag"></i>
+              Category
+            </label>
+            <Dropdown
+              value={filters.category}
+              onChange={(e) => handleFilterChange('category', e.value)}
+              options={[
+                { label: 'All Categories', value: '', icon: 'pi pi-list' },
+                ...categories.map(cat => ({ 
+                  label: `${cat.name}`, 
+                  value: cat.name,
+                  icon: 'pi pi-tag',
+                  template: (option: any) => (
+                    <div className="category-option">
+                      <i className={option.icon}></i>
+                      <span>{option.label}</span>
+                      <Badge value={cat.template_count} className="ml-auto" />
+                    </div>
+                  )
+                }))
+              ]}
+              placeholder="Choose category"
+              className="w-full filter-dropdown"
+              showClear
+              filter
+            />
+          </div>
+
+          <div className="filter-group enhanced">
+            <label className="filter-label">
+              <i className="pi pi-circle"></i>
+              Status
+            </label>
+            <Dropdown
+              value={filters.status}
+              onChange={(e) => handleFilterChange('status', e.value)}
+              options={[
+                { label: 'All Templates', value: 'all', icon: 'pi pi-list' },
+                { label: 'Active Templates', value: 'active', icon: 'pi pi-check-circle' },
+                { label: 'Inactive Templates', value: 'inactive', icon: 'pi pi-times-circle' },
+                { label: 'My Favorites', value: 'favorites', icon: 'pi pi-heart-fill' }
+              ]}
+              className="w-full filter-dropdown"
+              optionLabel="label"
+            />
+          </div>
+
+          <div className="filter-group enhanced">
+            <label className="filter-label">
+              <i className="pi pi-globe"></i>
+              Language
+            </label>
+            <Dropdown
+              value={filters.language}
+              onChange={(e) => handleFilterChange('language', e.value)}
+              options={[
+                { label: 'All Languages', value: '', icon: 'pi pi-globe' },
+                ...SUPPORTED_LANGUAGES.map(lang => ({ ...lang, icon: 'pi pi-flag' }))
+              ]}
+              placeholder="Select language"
+              className="w-full filter-dropdown"
+              showClear
+              filter
+            />
+          </div>
+
+          <div className="filter-group enhanced">
+            <label className="filter-label">
+              <i className="pi pi-map"></i>
+              Jurisdiction
+            </label>
+            <Dropdown
+              value={filters.jurisdiction}
+              onChange={(e) => handleFilterChange('jurisdiction', e.value)}
+              options={[
+                { label: 'All Jurisdictions', value: '', icon: 'pi pi-map' },
+                ...JURISDICTIONS.map(jur => ({ ...jur, icon: 'pi pi-map-marker' }))
+              ]}
+              placeholder="Select jurisdiction"
+              className="w-full filter-dropdown"
+              showClear
+              filter
+            />
+          </div>
         </div>
 
-        <div className="filter-group">
-          <label>Status</label>
-          <Dropdown
-            value={filters.status}
-            onChange={(e) => handleFilterChange('status', e.value)}
-            options={[
-              { label: 'All Templates', value: 'all' },
-              { label: 'Active Only', value: 'active' },
-              { label: 'Inactive Only', value: 'inactive' },
-              { label: 'Favorites', value: 'favorites', icon: 'pi pi-heart' }
-            ]}
-            className="w-full"
-          />
-        </div>
-
-        <div className="filter-group">
-          <label>Language</label>
-          <Dropdown
-            value={filters.language}
-            onChange={(e) => handleFilterChange('language', e.value)}
-            options={[
-              { label: 'All Languages', value: '' },
-              ...SUPPORTED_LANGUAGES
-            ]}
-            placeholder="Select language"
-            className="w-full"
-            showClear
-          />
-        </div>
-
-        <div className="filter-group">
-          <label>Jurisdiction</label>
-          <Dropdown
-            value={filters.jurisdiction}
-            onChange={(e) => handleFilterChange('jurisdiction', e.value)}
-            options={[
-              { label: 'All Jurisdictions', value: '' },
-              ...JURISDICTIONS
-            ]}
-            placeholder="Select jurisdiction"
-            className="w-full"
-            showClear
-          />
+        {/* Filter Statistics */}
+        <div className="filter-stats">
+          <div className="stat-item">
+            <span className="stat-number">{totalRecords}</span>
+            <span className="stat-label">Total Templates</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-number">{favorites.length}</span>
+            <span className="stat-label">Favorites</span>
+          </div>
         </div>
       </div>
 
@@ -562,102 +653,145 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
   );
 
   const renderToolbar = () => (
-    <Toolbar
-      className="template-toolbar"
-      start={() => (
-        <div className="toolbar-start">
-          <h1 className="page-title">Template Library</h1>
-          <Badge value={totalRecords} className="ml-2" />
-          
-          {selectedTemplates.length > 0 && (
-            <div className="bulk-selection-info ml-4">
-              <Badge value={selectedTemplates.length} severity="info" />
-              <span className="ml-2">selected</span>
+    <div className="template-toolbar-container">
+      {/* Breadcrumb */}
+      {renderBreadcrumb()}
+      
+      <Toolbar
+        className="template-toolbar"
+        start={() => (
+          <div className="toolbar-start">
+            <div className="page-header">
+              <div className="page-header-content">
+                <h1 className="page-title">
+                  <i className="pi pi-file-text page-title-icon"></i>
+                  Template Library
+                </h1>
+                <div className="page-stats">
+                  <Badge value={totalRecords} className="templates-count" />
+                  <span className="templates-label">templates available</span>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-      )}
-      center={() => (
-        <div className="toolbar-center">
-          {/* View Controls */}
-          <div className="view-controls">
-            <Button
-              icon={viewMode === 'grid' ? 'pi pi-list' : 'pi pi-th-large'}
-              className="p-button-outlined"
-              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-              tooltip={`Switch to ${viewMode === 'grid' ? 'list' : 'grid'} view`}
-            />
             
-            {viewMode === 'grid' && (
+            {selectedTemplates.length > 0 && (
+              <div className="bulk-selection-info">
+                <div className="selection-indicator">
+                  <Badge value={selectedTemplates.length} severity="info" className="selection-count" />
+                  <span className="selection-text">selected</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        center={() => (
+          <div className="toolbar-center">
+            {/* Enhanced View Controls */}
+            <div className="view-controls-group">
+              <div className="view-mode-toggle">
+                <Button
+                  icon="pi pi-th-large"
+                  className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                  onClick={() => setViewMode('grid')}
+                  tooltip="Grid view"
+                  size="small"
+                />
+                <Button
+                  icon="pi pi-list"
+                  className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                  onClick={() => setViewMode('list')}
+                  tooltip="List view"
+                  size="small"
+                />
+              </div>
+              
+              {viewMode === 'grid' && (
+                <div className="grid-size-control">
+                  <Dropdown
+                    value={gridSize}
+                    onChange={(e) => setGridSize(e.value)}
+                    options={[
+                      { label: 'Compact', value: 'small', icon: 'pi pi-th-large' },
+                      { label: 'Comfortable', value: 'medium', icon: 'pi pi-stop' },
+                      { label: 'Spacious', value: 'large', icon: 'pi pi-circle' }
+                    ]}
+                    optionLabel="label"
+                    className="grid-size-dropdown"
+                    placeholder="Card size"
+                  />
+                </div>
+              )}
+              
+              <div className="filter-toggle">
+                <Button
+                  icon={showFilters ? 'pi pi-filter-slash' : 'pi pi-filter'}
+                  className={`filter-toggle-btn ${showFilters ? 'active' : ''}`}
+                  onClick={() => setShowFilters(!showFilters)}
+                  tooltip={`${showFilters ? 'Hide' : 'Show'} filters`}
+                  size="small"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        end={() => (
+          <div className="toolbar-end">
+            {/* Enhanced Sort Controls */}
+            <div className="sort-control-group">
+              <label className="sort-label">Sort by:</label>
               <Dropdown
-                value={gridSize}
-                onChange={(e) => setGridSize(e.value)}
-                options={[
-                  { label: 'Small', value: 'small' },
-                  { label: 'Medium', value: 'medium' },
-                  { label: 'Large', value: 'large' }
-                ]}
-                className="ml-2"
+                value={`${sortBy}_${sortOrder}`}
+                onChange={(e) => {
+                  const [field, order] = e.value.split('_');
+                  setSortBy(field);
+                  setSortOrder(order);
+                }}
+                options={sortOptions.map(opt => ({ ...opt, icon: 'pi pi-sort-alt' }))}
+                className="sort-dropdown"
+                placeholder="Sort options"
               />
+            </div>
+            
+            {/* Bulk Action Buttons */}
+            {selectedTemplates.length > 0 && (
+              <div className="bulk-actions-group">
+                <Button
+                  label="Delete Selected"
+                  icon="pi pi-trash"
+                  severity="danger"
+                  size="small"
+                  className="bulk-action-btn"
+                  onClick={() => {
+                    setBulkAction('delete');
+                    setConfirmVisible(true);
+                  }}
+                />
+                <Button
+                  label="Export"
+                  icon="pi pi-download"
+                  className="p-button-outlined bulk-action-btn"
+                  size="small"
+                  onClick={() => {
+                    setBulkAction('export');
+                    setExportDialogVisible(true);
+                  }}
+                />
+              </div>
             )}
             
-            <Button
-              icon={showFilters ? 'pi pi-filter-slash' : 'pi pi-filter'}
-              className="p-button-outlined ml-2"
-              onClick={() => setShowFilters(!showFilters)}
-              tooltip={`${showFilters ? 'Hide' : 'Show'} filters`}
-            />
-          </div>
-        </div>
-      )}
-      end={() => (
-        <div className="toolbar-end">
-          {/* Sort Controls */}
-          <Dropdown
-            value={`${sortBy}_${sortOrder}`}
-            onChange={(e) => {
-              const [field, order] = e.value.split('_');
-              setSortBy(field);
-              setSortOrder(order);
-            }}
-            options={sortOptions}
-            className="sort-dropdown mr-3"
-          />
-          
-          {/* Action Buttons */}
-          {selectedTemplates.length > 0 && (
-            <div className="bulk-actions mr-3">
-              <Button
-                label="Delete"
-                icon="pi pi-trash"
-                severity="danger"
-                size="small"
-                onClick={() => {
-                  setBulkAction('delete');
-                  setConfirmVisible(true);
-                }}
-              />
-              <Button
-                label="Export"
-                icon="pi pi-download"
-                className="p-button-outlined ml-2"
-                size="small"
-                onClick={() => {
-                  setBulkAction('export');
-                  setExportDialogVisible(true);
-                }}
+            {/* Primary Action */}
+            <div className="primary-action">
+              <EnhancedButton
+                label="Create Template"
+                icon="pi pi-plus"
+                onClick={onTemplateCreate}
+                className="create-template-btn"
               />
             </div>
-          )}
-          
-          <EnhancedButton
-            label="Create Template"
-            icon="pi pi-plus"
-            onClick={onTemplateCreate}
-          />
-        </div>
-      )}
-    />
+          </div>
+        )}
+      />
+    </div>
   );
 
   const renderTemplatesGrid = () => {
@@ -761,40 +895,58 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
         reject={() => setConfirmVisible(false)}
       />
 
-      {/* Main Layout */}
-      <div className="dashboard-layout">
+      {/* Enhanced Main Layout */}
+      <div className="dashboard-layout enhanced">
         {renderToolbar()}
         
-        <div className="dashboard-content">
+        <div className="dashboard-content enhanced">
           {showFilters ? (
-            <Splitter>
-              <SplitterPanel size={20} minSize={15} maxSize={30}>
-                <div className="filters-panel">
+            <Splitter className="enhanced-splitter" layout="horizontal">
+              <SplitterPanel size={22} minSize={18} maxSize={35} className="filters-panel-container">
+                <div className="filters-panel enhanced">
                   {renderSearchBar()}
                   {renderFilters()}
                 </div>
               </SplitterPanel>
-              <SplitterPanel size={80}>
-                <div className="templates-panel" id="templates-section">
+              <SplitterPanel size={78} className="templates-panel-container">
+                <div className="templates-panel enhanced" id="templates-section">
                   {selectedTemplates.length > 0 && (
-                    <div className="bulk-actions-bar">
-                      <div className="bulk-selection-controls">
-                        <Checkbox
-                          checked={selectedTemplates.length === templates.length}
-                          onChange={(e) => handleSelectAll(e.checked || false)}
-                        />
-                        <span className="ml-2">
-                          Select all ({selectedTemplates.length} of {templates.length} selected)
-                        </span>
+                    <div className="bulk-actions-bar enhanced">
+                      <div className="bulk-selection-header">
+                        <div className="bulk-selection-controls">
+                          <Checkbox
+                            checked={selectedTemplates.length === templates.length}
+                            onChange={(e) => handleSelectAll(e.checked || false)}
+                            className="select-all-checkbox"
+                          />
+                          <div className="selection-info">
+                            <span className="selection-text">
+                              {selectedTemplates.length === templates.length ? 'All' : selectedTemplates.length} of {templates.length} selected
+                            </span>
+                            <Button
+                              label="Clear Selection"
+                              icon="pi pi-times"
+                              className="p-button-text p-button-sm"
+                              onClick={() => setSelectedTemplates([])}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
                   
-                  {renderTemplatesGrid()}
+                  <div className="templates-content-area">
+                    {renderTemplatesGrid()}
+                  </div>
                   
-                  {/* Pagination */}
+                  {/* Enhanced Pagination */}
                   {totalRecords > rows && (
-                    <div className="template-pagination">
+                    <div className="template-pagination enhanced">
+                      <div className="pagination-info">
+                        <span className="pagination-summary">
+                          Showing {first + 1} to {Math.min(first + rows, totalRecords)} of {totalRecords} templates
+                        </span>
+                      </div>
                       <Paginator
                         first={first}
                         rows={rows}
@@ -802,7 +954,7 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
                         rowsPerPageOptions={[12, 20, 36, 48]}
                         onPageChange={handlePageChange}
                         template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
-                        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} templates"
+                        className="enhanced-paginator"
                       />
                     </div>
                   )}
@@ -810,30 +962,48 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
               </SplitterPanel>
             </Splitter>
           ) : (
-            <div className="templates-full-panel">
-              <div className="search-bar-inline mb-4">
+            <div className="templates-full-panel enhanced">
+              <div className="search-bar-inline enhanced">
                 {renderSearchBar()}
               </div>
               
               {selectedTemplates.length > 0 && (
-                <div className="bulk-actions-bar">
-                  <div className="bulk-selection-controls">
-                    <Checkbox
-                      checked={selectedTemplates.length === templates.length}
-                      onChange={(e) => handleSelectAll(e.checked || false)}
-                    />
-                    <span className="ml-2">
-                      Select all ({selectedTemplates.length} of {templates.length} selected)
-                    </span>
+                <div className="bulk-actions-bar enhanced">
+                  <div className="bulk-selection-header">
+                    <div className="bulk-selection-controls">
+                      <Checkbox
+                        checked={selectedTemplates.length === templates.length}
+                        onChange={(e) => handleSelectAll(e.checked || false)}
+                        className="select-all-checkbox"
+                      />
+                      <div className="selection-info">
+                        <span className="selection-text">
+                          {selectedTemplates.length === templates.length ? 'All' : selectedTemplates.length} of {templates.length} selected
+                        </span>
+                        <Button
+                          label="Clear Selection"
+                          icon="pi pi-times"
+                          className="p-button-text p-button-sm"
+                          onClick={() => setSelectedTemplates([])}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
               
-              {renderTemplatesGrid()}
+              <div className="templates-content-area">
+                {renderTemplatesGrid()}
+              </div>
               
-              {/* Pagination */}
+              {/* Enhanced Pagination */}
               {totalRecords > rows && (
-                <div className="template-pagination">
+                <div className="template-pagination enhanced">
+                  <div className="pagination-info">
+                    <span className="pagination-summary">
+                      Showing {first + 1} to {Math.min(first + rows, totalRecords)} of {totalRecords} templates
+                    </span>
+                  </div>
                   <Paginator
                     first={first}
                     rows={rows}
@@ -841,7 +1011,7 @@ const TemplateLibraryDashboard: React.FC<TemplateLibraryDashboardProps> = ({
                     rowsPerPageOptions={[12, 20, 36, 48]}
                     onPageChange={handlePageChange}
                     template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown"
-                    currentPageReportTemplate="Showing {first} to {last} of {totalRecords} templates"
+                    className="enhanced-paginator"
                   />
                 </div>
               )}

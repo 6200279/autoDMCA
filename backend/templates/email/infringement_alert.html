@@ -1,0 +1,102 @@
+{% extends "email/base.html" %}
+
+{% block title %}Infringement Alert - {{ platform_name }}{% endblock %}
+
+{% block header_title %}🚨 INFRINGEMENT DETECTED{% endblock %}
+{% block header_subtitle %}{{ platform_name }} • {{ detected_at }}{% endblock %}
+
+{% block content %}
+<h2>Hello {{ creator_name }},</h2>
+
+<p>We've detected potential infringement of your protected content. Our AI-powered monitoring system found unauthorized use with a <strong>{{ confidence_score }}</strong> confidence match.</p>
+
+<div class="info-box error">
+    <div class="title">🎯 Infringement Details</div>
+    <p><strong>Platform:</strong> {{ platform_name }}</p>
+    <p><strong>Infringing URL:</strong> <br><a href="{{ infringement_url }}" style="color: #e53e3e; word-break: break-all;">{{ infringement_url }}</a></p>
+    <p><strong>Profile/Channel:</strong> {{ profile_name }}</p>
+    <p><strong>Confidence Score:</strong> {{ confidence_score }}</p>
+    <p><strong>Detected:</strong> {{ detected_at }}</p>
+</div>
+
+{% if auto_takedown_enabled %}
+<div class="info-box success">
+    <div class="title">⚡ Auto-Takedown Activated</div>
+    <p>Your auto-takedown settings are enabled for this platform. We're automatically processing a DMCA takedown request for you. You'll receive updates as the process progresses.</p>
+</div>
+{% else %}
+<div class="info-box warning">
+    <div class="title">⏱️ Action Required</div>
+    <p>Auto-takedown is not enabled for this platform. Would you like to:</p>
+    <ul style="margin: 10px 0; padding-left: 20px;">
+        <li>Submit a DMCA takedown request</li>
+        <li>Enable auto-takedown for future detections</li>
+        <li>Mark this as a false positive</li>
+    </ul>
+</div>
+
+<div class="cta-center">
+    <a href="{{ dashboard_url }}" class="cta-button">Review & Take Action</a>
+</div>
+{% endif %}
+
+<div class="stats-grid" style="margin: 30px 0;">
+    <div class="stat-item">
+        <div class="stat-number">{{ confidence_score }}</div>
+        <div class="stat-label">Match Confidence</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ total_detections_today }}</div>
+        <div class="stat-label">Today's Detections</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number">{{ total_takedowns_month }}</div>
+        <div class="stat-label">This Month's Takedowns</div>
+    </div>
+</div>
+
+<h3>What happens next?</h3>
+
+<ol>
+    <li><strong>Review the detection</strong> in your dashboard to confirm it's legitimate infringement</li>
+    <li><strong>Submit a takedown request</strong> if you want to pursue removal</li>
+    <li><strong>Track progress</strong> as we handle the legal process for you</li>
+    <li><strong>Receive notifications</strong> when the content is removed</li>
+</ol>
+
+<div class="info-box">
+    <div class="title">💡 Pro Tip</div>
+    <p>Enable auto-takedown for platforms where you frequently find infringement. This saves time and ensures faster protection of your content.</p>
+</div>
+
+<div class="cta-center">
+    <a href="{{ dashboard_url }}" class="cta-button">View in Dashboard</a>
+    <br>
+    <a href="{{ settings_url }}" style="color: #667eea; font-size: 14px; text-decoration: none; margin-top: 15px; display: inline-block;">⚙️ Manage Alert Settings</a>
+</div>
+
+<p style="margin-top: 30px; font-size: 14px; color: #718096;">
+    <strong>Need help?</strong> Reply to this email or visit our <a href="{{ support_url }}" style="color: #667eea;">support center</a> for assistance with takedown requests.
+</p>
+
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .email-content ol {
+        background-color: #f8f9fa;
+        padding: 20px 20px 20px 45px;
+        border-radius: 8px;
+        margin: 20px 0;
+    }
+    
+    .email-content li {
+        margin-bottom: 12px;
+        line-height: 1.6;
+    }
+    
+    .confidence-high { color: #e53e3e; font-weight: 700; }
+    .confidence-medium { color: #ed8936; font-weight: 600; }
+    .confidence-low { color: #38a169; font-weight: 500; }
+</style>
+{% endblock %}

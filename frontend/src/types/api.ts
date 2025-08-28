@@ -1,6 +1,44 @@
 // Import DMCA template types
 import type { IDMCATemplate, TemplateCategoryType } from './dmca';
 
+// Onboarding types
+export interface OnboardingConfiguration {
+  industry?: string;
+  contentTypes: string[];
+  platforms: string[];
+  keywords: string[];
+  exclusions: string[];
+  scanFrequency: string;
+  priority: string;
+  watermarkEnabled: boolean;
+  autoTakedown: boolean;
+  socialHandles: Record<string, string>;
+  contentSamples: File[];
+  customSettings: Record<string, any>;
+}
+
+export interface AnalysisResult {
+  contentType: string;
+  confidence: number;
+  suggestedKeywords: string[];
+  detectedPlatforms: string[];
+  riskAssessment: string;
+  recommendations: string[];
+}
+
+export interface IndustryPreset {
+  name: string;
+  icon: string;
+  description: string;
+  contentTypes: string[];
+  defaultKeywords: string[];
+  exclusions: string[];
+  platforms: string[];
+  scanFrequency: string;
+  priority: string;
+  watermarkRecommended: boolean;
+}
+
 // User types
 export interface User {
   id: number;

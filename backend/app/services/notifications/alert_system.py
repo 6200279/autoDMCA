@@ -664,4 +664,7 @@ Daily Summary:
         return True
 
 
+# Global alert system instance (compatible with service registry)
+alert_system = RealTimeAlertSystem()
+
 import os

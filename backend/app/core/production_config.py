@@ -586,5 +586,164 @@ server {
         }
 
 
+def validate_production_environment() -> Dict[str, Any]:
+    """
+    Validate production environment and configuration.
+    
+    Returns:
+        Dict containing validation results and recommendations
+    """
+    validation_results = {
+        "valid": True,
+        "errors": [],
+        "warnings": [],
+        "recommendations": []
+    }
+    
+    # Required environment variables for production
+    required_vars = [
+        "DATABASE_URL",
+        "REDIS_URL", 
+        "SECRET_KEY",
+        "STRIPE_SECRET_KEY",
+        "SENDGRID_API_KEY"
+    ]
+    
+    # Check required variables
+    for var in required_vars:
+        if not os.getenv(var):
+            validation_results["errors"].append(f"Missing required environment variable: {var}")
+            validation_results["valid"] = False
+    
+    # Check for weak configurations
+    if os.getenv("SECRET_KEY") == "dev-secret-key-change-in-production":
+        validation_results["errors"].append("SECRET_KEY is using default development value")
+        validation_results["valid"] = False
+    
+    if os.getenv("DEBUG", "false").lower() == "true":
+        validation_results["warnings"].append("DEBUG mode is enabled in production")
+    
+    # Check database configuration
+    db_url = os.getenv("DATABASE_URL", "")
+    if "localhost" in db_url or "127.0.0.1" in db_url:
+        validation_results["warnings"].append("Database appears to be running locally")
+    
+    # Check Redis configuration
+    redis_url = os.getenv("REDIS_URL", "")
+    if "localhost" in redis_url or "127.0.0.1" in redis_url:
+        validation_results["warnings"].append("Redis appears to be running locally")
+    
+    # Performance recommendations
+    if int(os.getenv("DB_POOL_SIZE", "20")) < 30:
+        validation_results["recommendations"].append("Consider increasing DB_POOL_SIZE for better performance")
+    
+    if int(os.getenv("API_MAX_WORKERS", "4")) < 8:
+        validation_results["recommendations"].append("Consider increasing API_MAX_WORKERS for better throughput")
+    
+    return validation_results
+
+
+def setup_production_environment():
+    """Initialize production environment with optimized settings."""
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Setting up production environment...")
+    
+    # Validate environment first
+    validation = validate_production_environment()
+    if not validation["valid"]:
+        logger.error("Production environment validation failed:")
+        for error in validation["errors"]:
+            logger.error(f"  - {error}")
+        raise RuntimeError("Production environment is not properly configured")
+    
+    # Log warnings and recommendations
+    for warning in validation["warnings"]:
+        logger.warning(f"  - {warning}")
+    
+    for recommendation in validation["recommendations"]:
+        logger.info(f"  - {recommendation}")
+    
+    # Apply production-specific settings
+    os.environ.setdefault("ENVIRONMENT", "production")
+    os.environ.setdefault("DEBUG", "false")
+    os.environ.setdefault("LOG_LEVEL", "INFO")
+    
+    # Setup directories
+    import pathlib
+    required_dirs = ["logs", "uploads", "temp", "static"]
+    for dir_name in required_dirs:
+        pathlib.Path(dir_name).mkdir(exist_ok=True)
+    
+    logger.info("Production environment setup completed successfully")
+    return True
+
+
+def get_deployment_checklist() -> Dict[str, List[str]]:
+    """
+    Get a comprehensive deployment checklist for production.
+    
+    Returns:
+        Dict organized by category with checklist items
+    """
+    return {
+        "Environment Variables": [
+            "✓ SECRET_KEY is set to a secure random value",
+            "✓ DATABASE_URL points to production database",
+            "✓ REDIS_URL points to production Redis instance", 
+            "✓ STRIPE_SECRET_KEY is set for payment processing",
+            "✓ SENDGRID_API_KEY is set for email delivery",
+            "✓ DEBUG is set to false",
+            "✓ LOG_LEVEL is set to INFO or WARNING"
+        ],
+        "Database": [
+            "✓ Database migrations have been applied",
+            "✓ Database indexes are optimized",
+            "✓ Connection pooling is configured",
+            "✓ SSL/TLS is enabled for database connections",
+            "✓ Backup strategy is in place"
+        ],
+        "Security": [
+            "✓ HTTPS/SSL certificates are valid and installed",
+            "✓ Security headers are configured in reverse proxy",
+            "✓ Rate limiting is enabled",
+            "✓ CORS origins are restricted to allowed domains",
+            "✓ API keys and secrets are not exposed in logs"
+        ],
+        "Performance": [
+            "✓ API server workers are optimized for load",
+            "✓ Database connection pool size is appropriate",
+            "✓ Redis memory policy is configured",
+            "✓ Static file serving is optimized", 
+            "✓ Compression is enabled"
+        ],
+        "Monitoring": [
+            "✓ Application metrics are being collected",
+            "✓ Log aggregation is configured",
+            "✓ Health check endpoints are responding",
+            "✓ Error tracking is enabled",
+            "✓ Performance monitoring dashboards are set up"
+        ],
+        "Scaling": [
+            "✓ Load balancer is configured",
+            "✓ Auto-scaling policies are defined",
+            "✓ Container resource limits are set",
+            "✓ Database read replicas are configured (if needed)",
+            "✓ CDN is configured for static assets"
+        ]
+    }
+
+
 # Global production settings instance
 production_settings = ProductionSettings()
+
+# Export key functions
+__all__ = [
+    "ProductionSettings",
+    "PerformanceConfig", 
+    "production_settings",
+    "validate_production_environment",
+    "setup_production_environment",
+    "get_deployment_checklist"
+]

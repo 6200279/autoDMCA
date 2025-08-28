@@ -25,6 +25,7 @@ import { Column } from 'primereact/column';
 import { Tag } from 'primereact/tag';
 import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../services/api';
+import { AutomationSettings } from '../components/settings';
 
 // TypeScript interfaces
 interface UserSettings {
@@ -1135,6 +1136,11 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </Card>
+          </TabPanel>
+
+          {/* Automation Settings */}
+          <TabPanel header="Automation" leftIcon="pi pi-cog">
+            <AutomationSettings />
           </TabPanel>
 
           {/* API Settings */}

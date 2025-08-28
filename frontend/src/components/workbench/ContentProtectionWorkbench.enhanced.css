@@ -564,6 +564,94 @@
   border-color: var(--color-primary-700);
 }
 
+/* Auto-move Animations */
+@keyframes task-auto-move {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  25% {
+    transform: scale(1.05) translateY(-5px);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.02) translateX(10px);
+    opacity: 0.95;
+  }
+  75% {
+    transform: scale(1.01) translateX(-5px);
+    opacity: 0.98;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.task-card.auto-moving {
+  position: relative;
+  z-index: 10;
+}
+
+.auto-move-notification {
+  animation: slide-down 0.3s ease-out;
+}
+
+@keyframes slide-down {
+  from {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+  }
+  to {
+    max-height: 50px;
+    opacity: 1;
+    margin-bottom: 8px;
+  }
+}
+
+/* Smart Grouping Panel */
+.smart-grouping-panel .p-accordion-header a {
+  padding: 1rem 1.5rem;
+}
+
+.smart-grouping-card {
+  transition: all 0.2s ease;
+}
+
+.smart-grouping-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Experience Level Selector */
+.experience-level-selector .p-dropdown {
+  min-width: 150px;
+}
+
+/* Automation Controls */
+.automation-controls {
+  border-top: 1px solid var(--color-neutral-200);
+  padding-top: var(--spacing-4);
+  margin-top: var(--spacing-4);
+}
+
+.quick-actions-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.filter-controls .p-togglebutton {
+  font-size: var(--font-size-sm);
+}
+
+/* Daily Digest */
+.daily-digest .white-space-pre-line {
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
 /* Loading States */
 .workbench-loading {
   display: flex;

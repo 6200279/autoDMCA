@@ -70,6 +70,9 @@ const AddonServices = lazy(() => import('./pages/AddonServices'));
 // Workbench Components
 const ContentProtectionWorkbench = lazy(() => import('./components/workbench/ContentProtectionWorkbench'));
 
+// Onboarding Components
+const SmartOnboardingDemo = lazy(() => import('./components/onboarding/SmartOnboardingDemo'));
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -266,6 +269,18 @@ function AppRoutes() {
               <Layout>
                 <LazyRoute>
                   <Settings />
+                </LazyRoute>
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/onboarding" 
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <LazyRoute>
+                  <SmartOnboardingDemo />
                 </LazyRoute>
               </Layout>
             </ProtectedRoute>

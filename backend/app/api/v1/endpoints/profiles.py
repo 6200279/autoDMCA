@@ -1,9 +1,10 @@
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from app.db.session import get_db
+from app.db.session import get_db, get_async_session
 from app.db.models.user import User
 from app.db.models.profile import ProtectedProfile
 from app.db.models.infringement import Infringement
@@ -24,6 +25,12 @@ from app.api.deps.common import (
     PaginationParams, 
     validate_owner_access
 )
+from app.core.config import settings
+from app.services.billing.subscription_tier_enforcement import (
+    enforce_profile_limit,
+    subscription_enforcement
+)
+from app.services.scanning.automated_scheduler import automated_scheduler
 
 router = APIRouter()
 
@@ -124,39 +131,60 @@ async def create_profile(
     current_user: User = Depends(get_current_verified_user),
     db: Session = Depends(get_db)
 ) -> Any:
-    """Create new protected profile."""
-    # Mock profile creation for local testing
+    """
+    Create new protected profile with subscription tier enforcement.
+    
+    PRD Requirements:
+    - Basic Plan: Maximum 1 profile
+    - Professional Plan: Maximum 5 profiles
+    """
     from datetime import datetime
     
-    # Check subscription limits (mock)
-    existing_profiles = 3  # Mock existing profile count
-    max_profiles = 10  # This should come from user's subscription
-    if existing_profiles >= max_profiles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Profile limit reached. Maximum {max_profiles} profiles allowed."
+    # Convert to async session for subscription enforcement
+    async with get_async_session() as async_db:
+        # Check subscription tier limits before creating profile
+        allowed, info = await subscription_enforcement.check_profile_limit(
+            async_db, current_user.id, requested_profiles=1
         )
-    
-    # Mock profile creation response
-    new_profile = {
-        "id": 4,  # Mock new profile ID
-        "user_id": current_user.id,
-        "name": profile_data.name,
-        "stage_name": profile_data.stage_name,
-        "real_name": profile_data.real_name,
-        "bio": profile_data.bio,
-        "profile_image_url": None,
-        "is_active": True,
-        "monitoring_enabled": True,
-        "notification_settings": {"email": True, "push": True},
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
-    }
-    
-    # In a real implementation, would schedule initial scan
-    # background_tasks.add_task(schedule_profile_scan, new_profile["id"])
-    
-    return new_profile
+        
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "error": "subscription_limit_exceeded",
+                    "message": f"Profile limit exceeded. You have {info['current_profiles']} of {info['max_profiles']} profiles.",
+                    "current_profiles": info["current_profiles"],
+                    "max_profiles": info["max_profiles"],
+                    "tier": info["tier"],
+                    "upgrade_url": f"{settings.FRONTEND_URL}/billing/upgrade" if info["tier"] == "basic" else None
+                }
+            )
+        
+        # Mock profile creation response (with subscription context)
+        new_profile = {
+            "id": 4,  # Mock new profile ID
+            "user_id": current_user.id,
+            "name": profile_data.name,
+            "stage_name": profile_data.stage_name,
+            "real_name": profile_data.real_name,
+            "bio": profile_data.bio,
+            "profile_image_url": None,
+            "is_active": True,
+            "monitoring_enabled": True,
+            "notification_settings": {"email": True, "push": True},
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Schedule initial scan for new profile (PRD requirement)
+        # "Find leaks immediately or within hours of signup"
+        background_tasks.add_task(
+            automated_scheduler.schedule_initial_scan_for_new_user,
+            async_db,
+            current_user.id
+        )
+        
+        return new_profile
 
 
 @router.get("/{profile_id}", response_model=ProfileWithStats)

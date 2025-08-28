@@ -1,0 +1,177 @@
+{% extends "email/base.html" %}
+
+{% block title %}Welcome to AutoDMCA - {{ user_name }}{% endblock %}
+
+{% block header_title %}Welcome to AutoDMCA! 🎉{% endblock %}
+{% block header_subtitle %}Your content protection journey starts now{% endblock %}
+
+{% block content %}
+<h2>Hello {{ user_name }},</h2>
+
+<p>Welcome to AutoDMCA! We're excited to help you protect your valuable content with our AI-powered monitoring and automated DMCA takedown system.</p>
+
+<div class="info-box success">
+    <div class="title">✅ Your account is ready!</div>
+    <p>You can now start protecting your content across major platforms including YouTube, Instagram, TikTok, OnlyFans, and many more.</p>
+</div>
+
+<div class="cta-center">
+    <a href="{{ dashboard_url }}" class="cta-button">Access Your Dashboard</a>
+</div>
+
+<h3>🚀 Get started in 4 simple steps:</h3>
+
+<div style="background-color: #f8f9fa; padding: 25px; border-radius: 8px; margin: 25px 0;">
+    <div style="display: table; width: 100%;">
+        <div style="display: table-row;">
+            <div style="display: table-cell; width: 60px; vertical-align: top; padding-right: 20px;">
+                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; margin-bottom: 15px;">1</div>
+            </div>
+            <div style="display: table-cell; vertical-align: top;">
+                <h4 style="margin: 0 0 8px 0; color: #2d3748; font-size: 18px;">Complete your profile</h4>
+                <p style="margin: 0 0 20px 0; color: #4a5568; font-size: 15px;">Add your personal information and verify your identity to strengthen your DMCA takedown requests.</p>
+            </div>
+        </div>
+        
+        <div style="display: table-row;">
+            <div style="display: table-cell; width: 60px; vertical-align: top; padding-right: 20px;">
+                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; margin-bottom: 15px;">2</div>
+            </div>
+            <div style="display: table-cell; vertical-align: top;">
+                <h4 style="margin: 0 0 8px 0; color: #2d3748; font-size: 18px;">Upload your content</h4>
+                <p style="margin: 0 0 20px 0; color: #4a5568; font-size: 15px;">Add photos, videos, or other media you want to protect. Our AI will create a unique fingerprint for detection.</p>
+            </div>
+        </div>
+        
+        <div style="display: table-row;">
+            <div style="display: table-cell; width: 60px; vertical-align: top; padding-right: 20px;">
+                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; margin-bottom: 15px;">3</div>
+            </div>
+            <div style="display: table-cell; vertical-align: top;">
+                <h4 style="margin: 0 0 8px 0; color: #2d3748; font-size: 18px;">Configure monitoring</h4>
+                <p style="margin: 0 0 20px 0; color: #4a5568; font-size: 15px;">Choose which platforms to monitor and set up auto-takedown for faster protection.</p>
+            </div>
+        </div>
+        
+        <div style="display: table-row;">
+            <div style="display: table-cell; width: 60px; vertical-align: top; padding-right: 20px;">
+                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 18px; margin-bottom: 15px;">4</div>
+            </div>
+            <div style="display: table-cell; vertical-align: top;">
+                <h4 style="margin: 0 0 8px 0; color: #2d3748; font-size: 18px;">Relax and let us work</h4>
+                <p style="margin: 0 0 20px 0; color: #4a5568; font-size: 15px;">Our system will continuously scan for infringement and handle takedowns automatically!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3>🎯 What makes AutoDMCA special?</h3>
+
+<div style="margin: 25px 0;">
+    <div style="display: table; width: 100%; margin-bottom: 20px;">
+        <div style="display: table-cell; width: 50px; vertical-align: top; padding-right: 15px;">
+            <div style="font-size: 24px;">🤖</div>
+        </div>
+        <div style="display: table-cell; vertical-align: top;">
+            <h4 style="margin: 0 0 5px 0; color: #2d3748;">AI-Powered Detection</h4>
+            <p style="margin: 0; color: #4a5568; font-size: 15px;">Advanced machine learning algorithms detect even modified versions of your content.</p>
+        </div>
+    </div>
+    
+    <div style="display: table; width: 100%; margin-bottom: 20px;">
+        <div style="display: table-cell; width: 50px; vertical-align: top; padding-right: 15px;">
+            <div style="font-size: 24px;">⚡</div>
+        </div>
+        <div style="display: table-cell; vertical-align: top;">
+            <h4 style="margin: 0 0 5px 0; color: #2d3748;">Automated Takedowns</h4>
+            <p style="margin: 0; color: #4a5568; font-size: 15px;">We handle the entire DMCA process for you, from detection to removal confirmation.</p>
+        </div>
+    </div>
+    
+    <div style="display: table; width: 100%; margin-bottom: 20px;">
+        <div style="display: table-cell; width: 50px; vertical-align: top; padding-right: 15px;">
+            <div style="font-size: 24px;">🛡️</div>
+        </div>
+        <div style="display: table-cell; vertical-align: top;">
+            <h4 style="margin: 0 0 5px 0; color: #2d3748;">Anonymous Protection</h4>
+            <p style="margin: 0; color: #4a5568; font-size: 15px;">Your personal information stays private while we protect your content.</p>
+        </div>
+    </div>
+    
+    <div style="display: table; width: 100%; margin-bottom: 20px;">
+        <div style="display: table-cell; width: 50px; vertical-align: top; padding-right: 15px;">
+            <div style="font-size: 24px;">📊</div>
+        </div>
+        <div style="display: table-cell; vertical-align: top;">
+            <h4 style="margin: 0 0 5px 0; color: #2d3748;">Real-time Analytics</h4>
+            <p style="margin: 0; color: #4a5568; font-size: 15px;">Track infringements, takedown success rates, and protect your revenue.</p>
+        </div>
+    </div>
+</div>
+
+{% if subscription_plan %}
+<div class="info-box">
+    <div class="title">📋 Your {{ subscription_plan }} Plan</div>
+    <p>You're all set with our {{ subscription_plan }} plan! {{ plan_benefits }}</p>
+    {% if subscription_plan == "Basic" %}
+    <p><a href="{{ upgrade_url }}" style="color: #667eea;">Upgrade to Professional</a> for advanced features like bulk monitoring and priority support.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="cta-center" style="margin: 40px 0;">
+    <a href="{{ dashboard_url }}" class="cta-button">Start Protecting Your Content</a>
+    <br>
+    <div style="margin-top: 20px;">
+        <a href="{{ profile_url }}" style="color: #667eea; text-decoration: none; margin: 0 15px;">👤 Complete Profile</a>
+        <a href="{{ upload_url }}" style="color: #667eea; text-decoration: none; margin: 0 15px;">📤 Upload Content</a>
+        <a href="{{ settings_url }}" style="color: #667eea; text-decoration: none; margin: 0 15px;">⚙️ Configure Settings</a>
+    </div>
+</div>
+
+<div class="info-box">
+    <div class="title">💬 Need help getting started?</div>
+    <p>Our support team is here to help! Contact us at <a href="mailto:{{ support_email }}" style="color: #667eea;">{{ support_email }}</a> or check out our <a href="{{ help_center_url }}" style="color: #667eea;">help center</a> for guides and tutorials.</p>
+</div>
+
+<p style="margin-top: 30px;">Welcome to the AutoDMCA family! We're committed to protecting your creative work and ensuring you get the recognition and revenue you deserve.</p>
+
+<p style="color: #667eea; font-weight: 600;">Happy creating!</p>
+<p style="margin: 5px 0;">The AutoDMCA Team</p>
+
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .step-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 50%;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+    
+    @media only screen and (max-width: 600px) {
+        .step-container {
+            display: block !important;
+        }
+        
+        .step-number, .step-content {
+            display: block !important;
+            width: 100% !important;
+            padding: 0 !important;
+        }
+        
+        .step-number {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+    }
+</style>
+{% endblock %}
