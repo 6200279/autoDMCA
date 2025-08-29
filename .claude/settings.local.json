@@ -43,7 +43,14 @@
       "WebFetch(domain:medium.com)",
       "Bash(npm run type-check:*)",
       "Bash(npm test)",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "mcp__shadcn-ui__list_components",
+      "mcp__shadcn-ui__list_blocks",
+      "mcp__sequential-thinking__sequentialthinking",
+      "WebFetch(domain:www.rulta.com)",
+      "Read(C:\\Users\\stijn/**)",
+      "mcp__firecrawl-mcp__firecrawl_scrape",
+      "Bash(robocopy:*)"
     ],
     "deny": [],
     "additionalDirectories": [

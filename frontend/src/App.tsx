@@ -1,8 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 
 // Design System Foundation
+import './styles/tailwind.css';
 import './styles/design-tokens.css';
 import './styles/global.css';
 
@@ -66,6 +68,7 @@ const BrowserExtension = lazy(() => import('./pages/BrowserExtension'));
 const GiftSubscription = lazy(() => import('./pages/GiftSubscription'));
 const GiftRedemption = lazy(() => import('./pages/GiftRedemption'));
 const AddonServices = lazy(() => import('./pages/AddonServices'));
+const BlogPage = lazy(() => import('./pages/BlogPage'));
 
 // Workbench Components
 const ContentProtectionWorkbench = lazy(() => import('./components/workbench/ContentProtectionWorkbench'));
@@ -109,7 +112,31 @@ function AppRoutes() {
 
   return (
     <Routes>
-        {/* Public routes */}
+        {/* Root route - redirect based on auth status */}
+        <Route 
+          path="/" 
+          element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} 
+        />
+        
+        {/* Blog routes */}
+        <Route 
+          path="/blog" 
+          element={
+            <LazyRoute>
+              <BlogPage />
+            </LazyRoute>
+          } 
+        />
+        <Route 
+          path="/blog/:slug" 
+          element={
+            <LazyRoute>
+              <BlogPage />
+            </LazyRoute>
+          } 
+        />
+        
+        {/* Authentication routes */}
         <Route 
           path="/login" 
           element={user ? <Navigate to="/dashboard" replace /> : <Login />} 
@@ -371,9 +398,6 @@ function AppRoutes() {
           } 
         />
         
-        {/* Redirect root to dashboard */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        
         {/* 404 Not Found */}
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -400,20 +424,22 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <Router>
-          <AuthProvider>
-            <WebSocketProvider
-              autoConnect={true}
-              reconnectOnError={true}
-              maxReconnectAttempts={10}
-              debug={import.meta.env.DEV}
-            >
-              <AppContent />
-            </WebSocketProvider>
-          </AuthProvider>
-        </Router>
-      </QueryClientProvider>
+      <HelmetProvider>
+        <QueryClientProvider client={queryClient}>
+          <Router>
+            <AuthProvider>
+              <WebSocketProvider
+                autoConnect={true}
+                reconnectOnError={true}
+                maxReconnectAttempts={10}
+                debug={import.meta.env.DEV}
+              >
+                <AppContent />
+              </WebSocketProvider>
+            </AuthProvider>
+          </Router>
+        </QueryClientProvider>
+      </HelmetProvider>
     </ErrorBoundary>
   );
 }

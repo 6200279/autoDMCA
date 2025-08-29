@@ -16,7 +16,7 @@ Created a comprehensive test suite for the newly implemented Content Submissions
 
 ### 2. **API Service Tests** 
 **File:** `frontend/src/services/__tests__/submissionApi.test.ts`
-- ✅ All submission API endpoints (`getSubmissions`, `createSubmission`, etc.)
+
 - ✅ File upload with FormData handling
 - ✅ URL validation with various input scenarios
 - ✅ Bulk operations testing

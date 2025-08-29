@@ -110,6 +110,7 @@ async def test_service_container_integration():
 async def main():
     """Run all dashboard API tests"""
     print("AutoDMCA Dashboard API Integration Test")
+    
     print("="*60)
     print(f"Test started at: {datetime.now().isoformat()}")
     print()
